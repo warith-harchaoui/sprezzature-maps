@@ -10,9 +10,6 @@ build/
 *.png
 *.html
 *.svg
-!assets/svg-examples/*.svg
-!assets/landscape.svg
-!assets/paysage.svg
 
 .private/
 # Coverage reports
@@ -25,8 +22,5 @@ coverage.xml
 
 
 demo-data/
-
-
-.private/
 
 !assets/logo.png
