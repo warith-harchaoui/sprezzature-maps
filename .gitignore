@@ -25,3 +25,6 @@ coverage.xml
 
 
 demo-data/
+
+
+.private/

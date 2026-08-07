@@ -3,18 +3,18 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sprezzature-figures"
-version = "1.1.0"
-description = "Publication-quality data figures for the sprezzature stack: 126 hand-authored SVG chart types (no Vega), with a handful of matplotlib-based statistical outputs. Includes the Ralph Eyeball Loop for autonomous visual quality feedback."
+name = "sprezzature-maps"
+version = "0.1.0"
+description = "Hand-authored SVG world maps for the sprezzature stack: choropleth and layered areas-of-control situation maps, no Vega, no matplotlib. Depends on sprezzature-figures for shared rendering primitives."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 license = {text = "BSD-3-Clause"}
 authors = [
     {name = "Warith HARCHAOUI", email = "warith.harchaoui@gmail.com"},
 ]
-keywords = ["figures", "data-visualization", "charts", "sprezzature", "svg", "hand-authored-svg"]
+keywords = ["maps", "choropleth", "situation-map", "geospatial", "svg", "hand-authored-svg", "sprezzature"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
@@ -25,147 +25,41 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Scientific/Engineering :: GIS",
 ]
 dependencies = [
+    "sprezzature-figures>=1.1.0",
     "resvg-py>=0.3",
     "pillow>=10.0",
-    "numpy>=1.24",
-    "scipy>=1.11",
-    "pydantic>=2.7",
+    "pyproj>=3.6",
+    "shapely>=2.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-# Click twin of the always-installed argparse `make-figure` CLI
-cli = [
-    "click>=8.1",
-]
-# Sprezzature Studio: NiceGUI app, data ingest, LLM-driven chat editing,
-# and the Ralph visual-critique loop. `from sprezzature_figures import
-# make_figure` must keep working without this extra installed.
-studio = [
-    "nicegui",
-    "pandas>=2.0",
-    "openpyxl>=3.1",
-    "charset-normalizer>=3",
-    "best-engine-ai-helper>=0.4.0",
-    "os-helper>=1.8.0",
-    "langdetect>=1.0.9",
-]
-# Full dataviz stack (matplotlib, networkx, wordcloud, etc.)
-dataviz = [
-    "matplotlib>=3.7",
-    "networkx>=3.1",
-    "wordcloud>=1.9",
-    "scikit-learn>=1.3",
-    "pandas>=2.0",
-    "pyyaml>=6",
-    "shapely>=2",
-    "pyproj>=3.6",
-]
-# Causal inference (make_causal_estimate.py)
-causal = [
-    "dowhy>=0.11",
-    "econml>=0.14",
-]
-# Explainability (explain_model.py)
-explain = [
-    "shap>=0.44",
-    "shapash>=2.6",
-]
-# Local VLM critique (ralph_eyeball_loop.py --local mode). Every LLM/VLM
-# call across sprezzature-* routes through best_engine_ai_helper.llm.chat,
-# which itself defaults to a local Ollama backend -- no cloud API required.
-local = ["best-engine-ai-helper>=0.4.0"]
-# FastAPI HTTP surface (sprezzature_figures/api.py) -- GET /kinds,
-# GET /kinds/{kind}, POST /render/{kind}.
-api = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-]
-# MCP surface via fastapi-mcp (sprezzature_figures/mcp.py) -- mounts the
-# FastAPI app as MCP tools so any MCP-aware host can call them directly.
-mcp = [
-    "fastapi-mcp>=0.3",
-    # fastapi-mcp 0.4.0 (the latest as of 2026-08) declares mcp>=1.12.0 with
-    # no upper bound, but calls mcp's Server(name, description) positionally
-    # -- mcp 2.0.0 made `description` keyword-only, so an unconstrained
-    # resolve breaks FastApiMCP(...) at construction time (verified: pip
-    # happily installs mcp 2.0.0 alongside fastapi-mcp 0.4.0, and
-    # `sprezzature_figures.mcp` then raises TypeError on import). Pin below
-    # 2.0 until fastapi-mcp ships a fix.
-    "mcp<2.0",
-]
-# Developer extras
 dev = [
-    "pytest>=8",
-    "ruff",
-    "build",
-    "numpy>=1.24",
-    "matplotlib>=3.7",
-    # headless-Chromium checks: scripts/render_gapminder_og.py, the Ralph
-    # eyeball loop, gallery-interactivity verification. Needs a one-time
-    # `playwright install chromium` after this installs, pip can't do that part.
-    "playwright>=1.40",
+    "pytest>=8.0",
+    "ruff>=0.6",
 ]
 
 [project.scripts]
-sprezzature-figures = "sprezzature_figures.cli:main"
-make-figure = "sprezzature_figures.make_figure:main"
-sprezzature-studio = "sprezzature_figures.studio.cli:main"
-sprezzature-figures-mcp = "sprezzature_figures.mcp:main"
+make-map = "sprezzature_maps.cli:main"
 
 [project.urls]
 Homepage = "https://harchaoui.org/warith/sprezzature/"
-Repository = "https://github.com/warith-harchaoui/sprezzature-figures"
-Issues = "https://github.com/warith-harchaoui/sprezzature-figures/issues"
-Changelog = "https://github.com/warith-harchaoui/sprezzature-figures/blob/main/CHANGELOG.md"
+Repository = "https://github.com/warith-harchaoui/sprezzature-maps"
 
 [tool.setuptools]
 packages = [
-    "sprezzature_figures",
-    "sprezzature_figures.catalog",
-    "sprezzature_figures.core",
-    "sprezzature_figures.studio",
-    "sprezzature_figures.studio.ingest",
-    "sprezzature_figures.studio.assistant",
-    "sprezzature_figures.studio.ralph",
-    "sprezzature_figures.studio.pages",
-    "sprezzature_figures.studio.components",
-    "sprezzature_figures.studio.export",
-    "sprezzature_figures.studio.recommendation",
-    "sprezzature_figures_scripts",
-    "sprezzature_figures_fonts",
+    "sprezzature_maps",
+    "sprezzature_maps_scripts",
 ]
 
 [tool.setuptools.package-dir]
-"sprezzature_figures_scripts" = "scripts"
-"sprezzature_figures_fonts" = "assets/fonts"
-
-[tool.setuptools.package-data]
-"sprezzature_figures.catalog" = ["figures.json"]
-"sprezzature_figures_fonts" = ["*.ttf", "*.woff2", "OFL-*.txt"]
+"sprezzature_maps_scripts" = "scripts"
 
 [tool.pytest.ini_options]
-addopts = "-m 'not slow and not packaging and not llm and not vision'"
+addopts = "-m 'not slow'"
 markers = [
-    "slow: tests that render actual figures (may take several seconds)",
-    "packaging: builds a wheel and installs it in a fresh venv (network + several seconds)",
-    "llm: hits a live text LLM through best-engine-ai-helper (skips if unreachable; never run in CI)",
-    "vision: hits a live vision model / VLM through best-engine-ai-helper (skips if unreachable; never run in CI)",
+    "slow: marks tests as slow (network/rasterization-heavy)",
 ]
-
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-extend-exclude = ["assets", "tests", "scripts"]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
-ignore = [
-    "E501",
-    "B008",
-    "SIM108",
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011"]
