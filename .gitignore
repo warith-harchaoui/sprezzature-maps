@@ -19,6 +19,10 @@ build/
 # this exception the blanket *.png rule above silently drops them and a
 # fresh clone's relief layer breaks with no error, just a missing file.
 !assets/geo/*.png
+# doc/CARTOGRAPHY.tex's own figures (print resolution, regenerable via the
+# scripts/build_*_figures.py trio, but the .tex \includegraphics calls need
+# them present to compile without running those scripts first).
+!doc/img/*.png
 
 .private/
 # Coverage reports
@@ -34,9 +38,21 @@ demo-data/
 
 !assets/logo.png
 
-# CARTOGRAPHY.md is compiled locally with md2docx/md2pdf (see that file's
-# own header). The .docx is a disposable local artifact regenerated on
-# demand; the .pdf is the one meant to ship in the repo for readers who
-# don't have md2star installed, so it stays tracked despite the *.html
-# rule above having no equivalent blanket rule to except it from.
+# doc/CARTOGRAPHY.tex compiles locally with xelatex/biber (see that file's
+# own header). doc/CARTOGRAPHY.pdf is the one meant to ship in the repo for
+# readers without a LaTeX toolchain, so it stays tracked (via Git LFS, see
+# .gitattributes) despite the *.html rule above having no equivalent
+# blanket rule to except it from. Everything else here is disposable
+# build-tool output, regenerated on every compile.
 *.docx
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc

@@ -1,9 +1,9 @@
 """
-build_relief_exaggeration_figures — regenerate CARTOGRAPHY.md's exaggeration-strategy figures.
+build_relief_exaggeration_figures — regenerate doc/CARTOGRAPHY.tex's exaggeration-strategy figures.
 
 Module summary
 --------------
-``CARTOGRAPHY.md``'s "Relief exaggeration strategies" section illustrates
+``doc/CARTOGRAPHY.tex``'s "Relief exaggeration strategies" section illustrates
 the three knobs :func:`_relief._compute_terrain_shade` exposes (vertical
 exaggeration, texture shading's fractional order, the hillshade/texture
 blend weight) with real comparison renders, not a diagram. This script
@@ -12,7 +12,10 @@ regenerates those renders from the *actual* production shading function
 illustrative parameter values, on the same real elevation data every other
 figure in this repository uses -- no synthetic terrain, no matplotlib.
 
-Two composite PNGs are written to ``web/img/``:
+Two composite PNGs are written to ``doc/img/`` at print resolution (each
+panel ~1600px wide -- CARTOGRAPHY's LaTeX build is a printed/PDF document,
+not a web page, so these target a sharp result at a full-page-width
+placement rather than a screen thumbnail):
 
 - ``relief-exaggeration-vertical.png``: hillshade-only (texture weight 0),
   at true-scale (``vertical_exaggeration=1.0``) vs. the shipped default
@@ -65,8 +68,10 @@ _BBOX = (86.2, 27.5, 88.4, 28.7)
 #: Deliberately larger than any real render would need for this tiny bbox
 #: (see :func:`select_elevation_tier`'s docstring) -- forces the finest 30
 #: arc-second tier regardless of oversample, which is what a dramatic
-#: illustrative figure wants.
-_PLOT_W_PX, _PLOT_H_PX = 1800.0, 1000.0
+#: illustrative figure wants. Sized well above the print-resolution panel
+#: width below so the tier choice stays pinned to the finest tier even at
+#: that higher output size.
+_PLOT_W_PX, _PLOT_H_PX = 3600.0, 2000.0
 
 _CAPTION_FONT_CANDIDATES = (
     "/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
@@ -74,7 +79,7 @@ _CAPTION_FONT_CANDIDATES = (
 )
 _PANEL_BG = (250, 247, 240)
 _CAPTION_TEXT = (43, 41, 38)
-_GUTTER_PX = 10
+_GUTTER_PX = 26
 
 
 def _caption_font(size: int) -> ImageFont.ImageFont:
@@ -149,7 +154,7 @@ def _render_panel(
 
 
 def _compose_row(
-    panels: list[tuple[str, np.ndarray]], out_path: Path, *, panel_width: int = 620
+    panels: list[tuple[str, np.ndarray]], out_path: Path, *, panel_width: int = 1600
 ) -> None:
     """Lay out labeled panels in a single row with a captioned bar under each.
 
@@ -164,7 +169,7 @@ def _compose_row(
         cheaper but visibly blockier at this size jump; Pillow's default
         bicubic resample reads cleanly instead), preserving its own aspect
         ratio, so panels of a slightly different trimmed shape still line
-        up in one tidy row (default 620).
+        up in one tidy row (default 1600, print resolution).
 
     Examples
     --------
@@ -178,7 +183,7 @@ def _compose_row(
     ...     out.exists()
     True
     """
-    caption_h = 56
+    caption_h = 145
     resized = []
     for _, arr in panels:
         img = Image.fromarray(arr)
@@ -188,14 +193,14 @@ def _compose_row(
     total_w = panel_width * len(resized) + _GUTTER_PX * (len(resized) - 1)
     canvas = Image.new("RGB", (total_w, row_h + caption_h), _PANEL_BG)
     draw = ImageDraw.Draw(canvas)
-    font = _caption_font(20)
+    font = _caption_font(52)
     x = 0
     for (caption, _), img in zip(panels, resized):
         canvas.paste(img, (x, 0))
         bbox = draw.textbbox((0, 0), caption, font=font)
         text_w = bbox[2] - bbox[0]
         draw.text(
-            (x + (panel_width - text_w) / 2, row_h + 14),
+            (x + (panel_width - text_w) / 2, row_h + 36),
             caption,
             fill=_CAPTION_TEXT,
             font=font,
@@ -205,14 +210,15 @@ def _compose_row(
 
 
 def main() -> None:
-    """Render both exaggeration-strategy comparison figures and write them to ``web/img/``.
+    """Render both exaggeration-strategy comparison figures and write them to ``doc/img/``.
 
     Examples
     --------
     >>> callable(main)
     True
     """
-    out_dir = Path(__file__).resolve().parent.parent / "web" / "img"
+    out_dir = Path(__file__).resolve().parent.parent / "doc" / "img"
+    out_dir.mkdir(parents=True, exist_ok=True)
     west, south, east, north = _BBOX
     tier_path = select_elevation_tier(west, south, east, north, _PLOT_W_PX, _PLOT_H_PX)
     elevation, (pw, ps, pe, pn) = _elevation_window(west, south, east, north, path=tier_path)
@@ -256,7 +262,7 @@ def main() -> None:
             ("Blended (shipped)", blended),
         ],
         out_dir / "relief-exaggeration-blend.png",
-        panel_width=420,
+        panel_width=1000,
     )
     print(f"wrote {out_dir / 'relief-exaggeration-blend.png'}")
 
