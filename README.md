@@ -51,6 +51,12 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+See [`EXAMPLES.md`](EXAMPLES.md) for more recipes, including the HTTP API.
+See [`CARTOGRAPHY.md`](CARTOGRAPHY.md) for the methodology behind every
+projection, color ramp, and relief technique this repo draws with
+(math, citations, figures), also available as
+[`CARTOGRAPHY.pdf`](CARTOGRAPHY.pdf).
+
 ## Why a separate repo, not a chart type in sprezzature-figures
 
 Both generators used to live in `sprezzature-figures`' 126-kind catalogue.
@@ -66,13 +72,29 @@ demo data; the CLI renders both kinds to real SVG files). No CI yet, no
 PyPI release yet, no FIGURES.md-style catalogue doc yet (only two kinds,
 this README is the catalogue for now).
 
+`choropleth` carries: an Equal Earth (equal-area) projection, 50m Natural
+Earth borders, an OKLCH-interpolated sequential ramp plus an
+auto-detecting diverging ramp (both verified colour-vision-deficiency-safe,
+not just asserted), a 30-degree graticule, a legend with min/median/max,
+tooltips enriched with rank and share of total, and a reprojected Natural
+Earth hillshade composited under the vector layers. `situation_map`
+carries: an auto-centred Lambert Conformal Conic projection, a bathymetry
+halo, and (new) an automatic 10m-vs-50m basemap tier keyed to the region's
+zoom level.
+
+Surfaces: Python library, an argparse CLI (`make-map`, always installed),
+an HTTP API (`sprezzature-maps[api]`) with an OpenAPI schema and a small
+GUI gallery page at its root. A Click CLI and an MCP surface
+(`sprezzature-maps[cli]` / `[mcp]`) are next.
+
 ## Roadmap
 
-Frontières haute résolution, palette perceptuelle (OKLCH), relief/
-hillshade, restoring an equal-area projection (Equal Earth) for
-`choropleth` in place of its current plain equirectangular. Full plan
-currently lives in `sprezzature-figures`' private notes pending migration
-here.
+Relief/hillshade for `situation_map`'s Lambert Conformal Conic projection
+(the same technique `choropleth` already has, ported to a different
+projection's inverse). Optional, lower-priority items from the full
+cartography plan (ETOPO-based hypsometric relief, alternate editorial
+projections like Robinson/Mollweide, a shared TopoJSON decoder) are
+tracked but not scheduled.
 
 ## License
 

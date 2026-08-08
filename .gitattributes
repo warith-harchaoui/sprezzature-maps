@@ -1,0 +1,9 @@
+assets/geo/*.png filter=lfs diff=lfs merge=lfs -text
+# Compiled doc binaries (CARTOGRAPHY.pdf via md2docx/md2pdf): fully
+# regenerated on every restructure rather than incrementally diffed, and
+# PDF's own binary format (embedded fonts, timestamps) means two builds
+# of the "same" content rarely delta-compress well even when git tries --
+# same LFS rationale as the raster geo assets above, not a size threshold
+# (CARTOGRAPHY.pdf is under 1MB today; assets/logo.png stays plain git at
+# nearly 3MB because it is a static asset that essentially never changes).
+*.pdf filter=lfs diff=lfs merge=lfs -text
