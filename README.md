@@ -52,10 +52,10 @@ make-map situation_map --config my-region.yaml --out region.svg
 ```
 
 See [`EXAMPLES.md`](EXAMPLES.md) for more recipes, including the HTTP API.
-See [`CARTOGRAPHY.md`](CARTOGRAPHY.md) for the methodology behind every
-projection, color ramp, and relief technique this repo draws with
-(math, citations, figures), also available as
-[`CARTOGRAPHY.pdf`](CARTOGRAPHY.pdf).
+See [`doc/CARTOGRAPHY.tex`](doc/CARTOGRAPHY.tex) for the methodology
+behind every projection, color ramp, and relief technique this repo
+draws with (math, TikZ diagrams, citations, print-resolution figures),
+compiled with `xelatex`/`biber` to [`doc/CARTOGRAPHY.pdf`](doc/CARTOGRAPHY.pdf).
 
 ## Why a separate repo, not a chart type in sprezzature-figures
 

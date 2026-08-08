@@ -576,7 +576,7 @@ def _elevation_window(
 #: Shipped defaults for the three exaggeration knobs :func:`_compute_terrain_shade`
 #: exposes -- vertical exaggeration on the hillshade gradient, the fractional
 #: Laplacian's order in texture shading, and the hillshade/texture blend weight.
-#: Named here (not just inline literals) so :doc:`CARTOGRAPHY.md`'s illustrative
+#: Named here (not just inline literals) so :doc:`doc/CARTOGRAPHY.tex`'s illustrative
 #: comparison figures can render the *same* production code path at other
 #: values without duplicating the algorithm in a throwaway script.
 DEFAULT_VERTICAL_EXAGGERATION: float = 2.0
@@ -631,7 +631,7 @@ def _compute_terrain_shade(
     Two techniques, combined because each covers what the other misses --
     and each carries its own *exaggeration* knob, a deliberate departure
     from a physically literal render, not a bug to eventually remove. See
-    ``CARTOGRAPHY.md``'s "Relief exaggeration strategies" section for the
+    ``doc/CARTOGRAPHY.tex``'s "Relief exaggeration strategies" section for the
     illustrated version of this argument.
 
     - **Hillshade** (Lambertian, single light source, NW at 45 degrees
