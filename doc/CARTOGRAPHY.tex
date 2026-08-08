@@ -454,6 +454,7 @@ no equivalent reference implementation existed yet for its inverse.
 \end{figure}
 
 \subsection{Boundary tiering}
+\label{sec:boundary-tiering-numbers}
 
 Loading the full 1:10m Natural Earth tier for a whole-continent view
 spends detail the output cannot show, since individual harbor inlets
@@ -482,6 +483,108 @@ Western Europe, spanning roughly 41 degrees from Ireland to Poland,
 resolves to the coarser one, where the visible gain from finer
 coastline detail would not survive the render's own pixel density
 regardless.
+
+\subsection{Sub-national admin-1 tiering}
+\label{sec:admin1-tiering}
+
+Natural Earth's country boundaries stop at the national frontier: a
+situation map zoomed in far enough to fill its canvas with a single
+country shows no internal structure at all, an odd gap once the
+sub-1:10m detail from Section~\ref{sec:boundary-tiering-numbers} is
+already resolving individual coastal inlets. A fourth boundary tier,
+one level finer than Natural Earth's admin-0 (country) data, addresses
+this: administrative level 1 (admin-1), the first division below the
+national level, a state in the United States, a region in France, a
+canton in Switzerland. Three national sources were vendored as pilots
+for this tier, one per country, each exercising a genuinely different
+acquisition path rather than three copies of the same recipe.
+
+\paragraph{TIGER (United States).} The Census Bureau's
+Topologically Integrated Geographic Encoding and Referencing (TIGER)
+product \autocite{census-tiger} ships as an ordinary Shapefile, public
+domain as a U.S.\ government work. Fifty-six state and territory
+records (fifty states, the District of Columbia, and five inhabited
+territories) were simplified and quantized into a TopoJSON with the
+same \texttt{mapshaper} recipe as the admin-0 tiers, fifteen percent
+weighted Visvalingam simplification with shape preservation so small
+islands survive.
+
+\paragraph{ADMIN EXPRESS (France).} The French national mapping
+agency's (Institut Géographique National, IGN) administrative-boundary
+product, ADMIN EXPRESS \autocite{ign-adminexpress}, publishes under
+France's Licence Ouverte / Etalab 2.0, an attribution license without a
+share-alike clause. Eighteen region records (thirteen metropolitan
+regions plus five overseas) were fetched from the
+\texttt{gregoiredavid/france-geojson} mirror of this dataset, already
+in GeoJSON, and vendored through the same \texttt{mapshaper} recipe.
+
+\paragraph{OpenStreetMap (Switzerland).} The third source is
+OpenStreetMap itself \autocite{openstreetmap-odbl}, the first dataset
+this codebase vendors under the Open Database License (ODbL), and the
+one genuinely new acquisition path of the three: OpenStreetMap's
+administrative boundaries are not published as ready-made polygon
+files but as \emph{relations}, a graph of tagged way segments with
+\texttt{outer} and \texttt{inner} roles, queried here through the
+Overpass API's \texttt{out geom} mode, which returns each way's own
+coordinate list inline rather than a separate node index to resolve.
+Switzerland's twenty-six cantons were chosen as the pilot specifically
+because several of them, Appenzell Innerrhoden and Appenzell
+Ausserrhoden most notably, interleave into mutual enclaves rather than
+forming simple single-ring shapes, a real test of the assembly step
+rather than a token one. That assembly uses
+\texttt{shapely.ops.polygonize}: every \texttt{outer}-role way for a
+relation is treated as a graph edge, and \texttt{polygonize} finds the
+closed rings the edges form, with \texttt{inner}-role ways run through
+the same function and subtracted as holes. No OpenStreetMap PBF
+extract, no \texttt{osmium}, no GDAL: one Overpass query and a few
+lines of graph assembly.
+
+ODbL's central obligation is attribution on any \emph{produced work},
+a rendered map, that draws from it; it does not require the underlying
+database to be redistributed, but a vendored extract like
+\texttt{assets/geo/ch-cantons.json} \emph{is} itself a derivative
+database and therefore carries the same license onward. This codebase
+does not leave that obligation for a caller to remember:
+\texttt{\_attribution\_layer}
+(\texttt{scripts/make\_situation\_map.py}) checks whether the requested
+bounding box actually overlaps the vendored Swiss extent, using the
+same cheap bounds-overlap pre-check described below, and if so appends
+``© OpenStreetMap contributors (ODbL)'' to a small credit line in the
+plate's corner automatically, with no configuration required to get
+it right and no way to silently omit it while still drawing the
+layer.
+
+\subsubsection{The bbox pre-filter pattern}
+
+All three sources share one more piece of shared logic beyond the
+\texttt{mapshaper} vendoring recipe: a country boundary
+(\texttt{\_US\_STATES\_BOUNDS}, \texttt{\_FR\_REGIONS\_BOUNDS},
+\texttt{\_CH\_CANTONS\_BOUNDS}), checked against the requested region's
+bounding box before the corresponding TopoJSON file is even read from
+disk.
+
+\[
+\text{load\_source}(\text{bbox}) =
+\begin{cases}
+\text{decode and return features} & \text{bbox overlaps source's bounds} \\
+[\,] & \text{otherwise}
+\end{cases}
+\]
+
+This is a bounds overlap, not a true point-in-polygon test, so it is
+occasionally a false positive, a region box that touches a source's
+bounding rectangle without actually reaching any of its real
+geometry, but never a false negative, and the cost of a false positive
+is only one avoidable file read, not a wrong border on the plate: the
+per-feature intersection check that follows already discards anything
+that does not really overlap. The payoff is that
+\texttt{\_internal\_borders\_layer} can unconditionally query all
+three sources for every situation map, a Himalaya plate included, and
+pay nothing beyond three cheap tuple comparisons for the two that do
+not apply. The three loaders also share one more piece of code,
+\texttt{\_named\_polygons\_from\_topojson}, the arc-decoding and
+polygon-repair core factored out once these three sources existed,
+rather than duplicated a third and fourth time.
 
 \subsection{Regional relief}
 
@@ -748,19 +851,25 @@ Country and coastline boundaries (110m, 50m, 10m) & Natural Earth \autocite{natu
 World relief raster & Natural Earth ``Gray Earth'' & Public domain & \texttt{choropleth} \\
 Global elevation grid (GMTED2010, 30 arc-sec) & USGS/NGA \autocite{danielson-gmted2010} & Public domain (U.S.\ government work) & \texttt{situation\_map} \\
 Rivers and lake centerlines (1:50m) & Natural Earth & Public domain & \texttt{situation\_map} \\
+US state boundaries (TIGER/Line) & U.S.\ Census Bureau \autocite{census-tiger} & Public domain & \texttt{situation\_map} \\
+France region boundaries (ADMIN EXPRESS) & IGN, via \texttt{france-geojson} \autocite{ign-adminexpress} & Licence Ouverte / Etalab 2.0 & \texttt{situation\_map} \\
+Switzerland canton boundaries & OpenStreetMap \autocite{openstreetmap-odbl} & ODbL 1.0 (attribution required) & \texttt{situation\_map} \\
 \bottomrule
 \end{tabular}
 \caption{Every dataset this codebase vendors, its license, and which generator uses it.}
 \end{table}
 
-No dataset in this table requires attribution to use, though Natural
-Earth's own suggested short citation, ``Made with Natural Earth,'' is
-honored here regardless, since it costs nothing and this document
-already cites everything else. Nothing currently vendored carries a
-share-alike or attribution-required license. OpenStreetMap-derived
-data, licensed under the Open Database License (ODbL), would be the
-first such case if added; see the roadmap in
-Section~\ref{sec:roadmap}.
+Every dataset in this table above the three admin-1 boundary rows is
+usable with no attribution obligation, though Natural Earth's own
+suggested short citation, ``Made with Natural Earth,'' is honored here
+regardless, since it costs nothing and this document already cites
+everything else. The Switzerland canton row is the one exception, and
+the first dataset this codebase vendors under a share-alike or
+attribution-required license: OpenStreetMap's Open Database License
+requires attribution on any produced work that draws from it, which
+\texttt{\_attribution\_layer} adds automatically rather than leaving
+to a caller to remember, described in full in
+Section~\ref{sec:admin1-tiering}.
 
 \section{Storage: the vendored-raster pyramid and Git LFS}
 
@@ -777,8 +886,10 @@ LFS) rather than committed as ordinary blobs, through a single
 a clone only pulls the actual raster bytes when they are checked out or
 explicitly fetched. The same pattern, vendor once, keep a lightweight
 pyramid of derived tiers, pick a tier algorithmically at render time
-rather than by a hardcoded choice, is intended to extend to boundary
-data too; see the roadmap in Section~\ref{sec:roadmap}.
+rather than by a hardcoded choice, extends to boundary data too, the
+admin-0 country tiers already, and the admin-1 sources described in
+Section~\ref{sec:admin1-tiering} now as well; see the roadmap in
+Section~\ref{sec:roadmap} for how far that extension still has to go.
 
 \section{Validation methodology}
 \label{sec:validation}
@@ -806,36 +917,40 @@ a contract the eyeball pass already validated.
 \section{Roadmap}
 \label{sec:roadmap}
 
-Two items are explicitly planned but not yet implemented, listed here
-rather than left silently absent, on the principle that a document like
-this one should mark what is done and what is not with the same
-explicitness.
+The admin-1 boundary tier described in
+Section~\ref{sec:admin1-tiering}, TIGER for the United States, ADMIN
+EXPRESS for France, OpenStreetMap for Switzerland, closes what had
+been this document's longest-standing open item: a fourth boundary
+tier above Natural Earth's 1:10m, for renders zoomed in far enough to
+need sub-1:10m-scale accuracy, plus the licensing groundwork ODbL
+required, now in place and exercised by a real dataset rather than
+only discussed. What remains is the coverage this pilot deliberately
+left out, listed here rather than left silently implied, on the
+principle that a document like this one should mark what is done and
+what is not with the same explicitness.
 
 \begin{itemize}[leftmargin=1.4em]
-\item \textbf{OpenStreetMap-derived boundaries, plus national
-  high-precision sources}: the French national mapping agency's
-  administrative-boundary product (Institut Géographique National,
-  IGN) for France, and the United States Census Bureau's
-  administrative-boundary product (Topologically Integrated Geographic
-  Encoding and Referencing, TIGER) for the United States. These would
-  sit above Natural Earth's 1:10m tier in precision, the same way the
-  elevation pyramid's finest tier sits above its coarsest: a fourth
-  boundary tier for renders zoomed in far enough to need
-  sub-1:10m-scale accuracy. Unlike every dataset in the provenance
-  table above, OpenStreetMap data carries the ODbL license, which
-  requires attribution and share-alike redistribution of any derived
-  database; adopting it is a real licensing change for this
-  repository's data policy, not merely a new file to vendor. IGN and
-  TIGER each have their own separate licensing and file-format
-  particulars still to be worked through: IGN publishes under
-  France's Open License 2.0 in a format called BD TOPO, and TIGER
-  publishes as public domain shapefiles.
+\item \textbf{Coverage beyond the three pilot countries}: admin-1
+  boundaries exist today only for the United States, France, and
+  Switzerland, one source per source type rather than a general
+  worldwide layer. The OpenStreetMap/Overpass path in particular
+  generalizes directly, the same \texttt{outer}/\texttt{inner}
+  \texttt{polygonize} assembly works for any country's
+  \texttt{admin\_level=4} relations, a different admin level entirely
+  in countries where 4 is not the state-equivalent tier, so the next
+  country is a query and a vendoring pass, not new code.
+\item \textbf{A finer admin-2 tier} (US counties, French departments,
+  Swiss districts) below the admin-1 layer just added, for renders
+  zoomed in past a single state, region, or canton, the same
+  relationship admin-1 now has to Natural Earth's admin-0.
 \item \textbf{Applying this document's storage pattern}, vendor once,
   keep a multi-resolution pyramid, pick a tier algorithmically at
-  render time, to boundary data, generalizing what
-  \texttt{\_land\_topojson\_for\_bbox} already does with two tiers and
-  what \texttt{select\_elevation\_tier} does with six into one
-  consistent mechanism covering both vector and raster assets.
+  render time, more fully to boundary data: the bbox pre-filter
+  pattern in Section~\ref{sec:admin1-tiering} already picks
+  algorithmically \emph{which source} applies, US, France, or
+  Switzerland, but each individual source is still a single
+  resolution rather than its own pyramid the way
+  \texttt{select\_elevation\_tier} gives elevation six tiers.
 \end{itemize}
 
 \clearpage

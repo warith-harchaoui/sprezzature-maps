@@ -89,6 +89,53 @@ _LAND_TOPOJSON = _ASSETS / "countries-50m.json"
 # read visibly facetted/over-smoothed at zoom.
 _LAND_TOPOJSON_10M = _ASSETS / "countries-10m.json"
 _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
+# Sub-national (admin-1) tier, first of the national/regional cadastral
+# sources (task #31: TIGER/IGN/OSM) layered above Natural Earth's admin-0
+# atlases -- US Census TIGER/Line state boundaries, public domain, vendored
+# the same way (mapshaper, 15% weighted Visvalingam keep-shapes, quantized
+# TopoJSON). Only ever consulted when a region's bbox actually falls inside
+# the United States -- see _bbox_in_united_states -- so a France or Himalaya
+# situation map never pays to load it.
+_US_STATES_TOPOJSON = _ASSETS / "us-states.json"
+# The vendored file's own bounds (CONUS + Alaska + Hawaii + PR/Guam/USVI/
+# N. Mariana Is., i.e. every TIGER "state" record) -- used as a cheap bbox
+# pre-filter so non-US callers skip the TopoJSON load entirely.
+_US_STATES_BOUNDS = (-179.24, -14.61, 179.86, 71.44)
+
+# Second admin-1 source (task #31): France's 18 regions (13 metropolitan +
+# 5 overseas -- Guadeloupe, Martinique, Guyane, La Reunion, Mayotte), sourced
+# from IGN's ADMIN EXPRESS (the same national mapping-agency database TIGER
+# is for the US) via the community-maintained gregoiredavid/france-geojson
+# GeoJSON mirror, Licence Ouverte / Etalab 2.0. Vendored the same way as
+# every other tier here: mapshaper, 15% weighted Visvalingam keep-shapes,
+# quantized TopoJSON.
+_FR_REGIONS_TOPOJSON = _ASSETS / "fr-regions.json"
+# Metropolitan France plus every overseas region -- Guyane (South America)
+# pushes the west bound out to the Americas and La Reunion/Mayotte (Indian
+# Ocean) push the east bound past Africa, so this bbox is wide for the same
+# reason _US_STATES_BOUNDS is (a scattered national territory), not a bug.
+_FR_REGIONS_BOUNDS = (-61.81, -21.39, 55.84, 51.09)
+
+# Third admin-1 source (task #31): Switzerland's 26 cantons, sourced
+# directly from OpenStreetMap (c) OpenStreetMap contributors, ODbL 1.0 --
+# the first ODbL-licensed data this repo vendors, unlike TIGER (public
+# domain) and IGN/ADMIN-EXPRESS (Licence Ouverte 2.0). ODbL's share-alike
+# clause binds a *produced work* (a rendered map) only to attribution, not
+# redistribution of the underlying data under ODbL -- but the vendored
+# ch-cantons.json file below *is* a derivative database extracted from OSM,
+# so it is itself ODbL-licensed and must carry the same attribution; see
+# the provenance table in doc/CARTOGRAPHY.tex and the README credit.
+# Fetched via one Overpass API query (admin_level=4 boundary=administrative
+# relations inside CH, "out geom" so each way member carries its own
+# lon/lat geometry inline) -- no OSM PBF/osmium/GDAL needed. Assembled with
+# shapely.ops.polygonize (outer-role ways unioned, inner-role ways
+# subtracted as holes) since Overpass returns each multipolygon relation as
+# loose way segments, not ready-made rings; Switzerland was chosen as the
+# pilot specifically because its cantons include genuine mutual enclaves
+# (Appenzell Innerrhoden/Ausserrhoden, the Basel split) that exercise the
+# inner/outer assembly path, not just simple single-ring shapes.
+_CH_CANTONS_TOPOJSON = _ASSETS / "ch-cantons.json"
+_CH_CANTONS_BOUNDS = (5.96, 45.82, 10.49, 47.81)
 
 # A region bbox whose longer side is narrower than this many degrees reads as
 # "a single country or a small sub-region" rather than "a continent-scale
@@ -341,6 +388,203 @@ def load_countries(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, An
             continue
         out.append((name, poly))
     return out
+
+
+def _bbox_in_united_states(bbox: Optional[Iterable[float]]) -> bool:
+    """Cheaply test whether a region bbox falls inside the vendored TIGER extent.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None
+        ``(west, south, east, north)`` in degrees, or ``None`` (no region
+        context -- returns ``False``, matching how the other tier
+        selectors treat a missing bbox as "no info, do not opt in").
+
+    Returns
+    -------
+    bool
+        ``True`` when the bbox overlaps :data:`_US_STATES_BOUNDS`. A
+        bounds overlap, not a true point-in-polygon test: cheap, and the
+        caller (:func:`load_us_states`) already discards any state whose
+        real geometry does not intersect the region, so a false positive
+        here only costs one extra TopoJSON load, never a wrong border.
+    """
+    if bbox is None:
+        return False
+    west, south, east, north = bbox
+    us_west, us_south, us_east, us_north = _US_STATES_BOUNDS
+    return west <= us_east and east >= us_west and south <= us_north and north >= us_south
+
+
+def _named_polygons_from_topojson(topo: dict[str, Any], object_name: str) -> list[tuple[str, Any]]:
+    """Decode every feature of one TopoJSON object into ``(name, polygon)`` pairs.
+
+    Shared arc-decoding core for the admin-1 loaders (:func:`load_us_states`,
+    :func:`load_fr_regions`) -- each vendored the same way (mapshaper,
+    delta-encoded quantized arcs) but from a different national source, so the
+    stitching/repair logic is written once here rather than per source.
+
+    Parameters
+    ----------
+    topo : dict
+        Parsed TopoJSON topology.
+    object_name : str
+        Key inside ``topo["objects"]`` to decode.
+
+    Returns
+    -------
+    list of (str, shapely geometry)
+        Feature ``name`` property paired with its (repaired) polygon, WGS84
+        lon/lat. A feature whose geometry cannot be repaired is skipped
+        rather than failing the whole plate.
+    """
+    scale = topo["transform"]["scale"]
+    translate = topo["transform"]["translate"]
+    raw_arcs = topo["arcs"]
+
+    def decode_arc(index: int) -> list[list[float]]:
+        reverse = index < 0
+        arc = raw_arcs[~index if reverse else index]
+        pts: list[list[float]] = []
+        x = y = 0
+        for dx, dy in arc:
+            x += dx
+            y += dy
+            pts.append([x * scale[0] + translate[0], y * scale[1] + translate[1]])
+        return pts[::-1] if reverse else pts
+
+    def stitch(arc_indices: Iterable[int]) -> list[list[float]]:
+        ring: list[list[float]] = []
+        for j, idx in enumerate(arc_indices):
+            pts = decode_arc(idx)
+            ring.extend(pts if j == 0 else pts[1:])
+        return ring
+
+    out: list[tuple[str, Any]] = []
+    for geom in topo["objects"][object_name]["geometries"]:
+        name = geom.get("properties", {}).get("name", "")
+        try:
+            if geom["type"] == "Polygon":
+                rings = [stitch(part) for part in geom["arcs"]]
+                poly = make_valid(Polygon(rings[0], rings[1:]))
+            else:
+                polys = []
+                for part in geom["arcs"]:
+                    rings = [stitch(r) for r in part]
+                    polys.append(Polygon(rings[0], rings[1:]))
+                poly = make_valid(MultiPolygon(polys))
+        except Exception:  # skip a malformed geometry rather than fail the plate
+            continue
+        out.append((name, poly))
+    return out
+
+
+def load_us_states(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+    """Return ``(name, polygon)`` for every US state/territory that overlaps a bbox.
+
+    The admin-1 (sub-national) counterpart to :func:`load_countries`, from the
+    vendored TIGER/Line basemap -- lets a US-region situation map draw real
+    state boundaries instead of stopping at the national frontier.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees. When the bbox does not
+        overlap the vendored TIGER extent (see :func:`_bbox_in_united_states`),
+        the TopoJSON is not even loaded and an empty list is returned --
+        this is what makes calling it unconditionally cheap for non-US maps.
+
+    Returns
+    -------
+    list of (str, shapely geometry)
+        State/territory name paired with its (repaired) polygon, WGS84
+        lon/lat.
+    """
+    if not _bbox_in_united_states(bbox):
+        return []
+    topo = json.loads(_US_STATES_TOPOJSON.read_text())
+    return _named_polygons_from_topojson(topo, "states")
+
+
+def _bbox_in_france(bbox: Optional[Iterable[float]]) -> bool:
+    """Cheaply test whether a region bbox falls inside the vendored IGN extent.
+
+    Same bounds-overlap contract as :func:`_bbox_in_united_states`, against
+    :data:`_FR_REGIONS_BOUNDS` instead.
+    """
+    if bbox is None:
+        return False
+    west, south, east, north = bbox
+    fr_west, fr_south, fr_east, fr_north = _FR_REGIONS_BOUNDS
+    return west <= fr_east and east >= fr_west and south <= fr_north and north >= fr_south
+
+
+def load_fr_regions(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+    """Return ``(name, polygon)`` for every French region that overlaps a bbox.
+
+    The IGN/ADMIN-EXPRESS counterpart to :func:`load_us_states` -- lets a
+    France-region situation map draw real regional boundaries instead of
+    stopping at the national frontier.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees. When the bbox does not
+        overlap the vendored extent (see :func:`_bbox_in_france`), the
+        TopoJSON is not even loaded and an empty list is returned -- this is
+        what makes calling it unconditionally cheap for non-France maps.
+
+    Returns
+    -------
+    list of (str, shapely geometry)
+        Region name paired with its (repaired) polygon, WGS84 lon/lat.
+    """
+    if not _bbox_in_france(bbox):
+        return []
+    topo = json.loads(_FR_REGIONS_TOPOJSON.read_text())
+    return _named_polygons_from_topojson(topo, "regions")
+
+
+def _bbox_in_switzerland(bbox: Optional[Iterable[float]]) -> bool:
+    """Cheaply test whether a region bbox falls inside the vendored OSM extent.
+
+    Same bounds-overlap contract as :func:`_bbox_in_united_states`, against
+    :data:`_CH_CANTONS_BOUNDS` instead.
+    """
+    if bbox is None:
+        return False
+    west, south, east, north = bbox
+    ch_west, ch_south, ch_east, ch_north = _CH_CANTONS_BOUNDS
+    return west <= ch_east and east >= ch_west and south <= ch_north and north >= ch_south
+
+
+def load_ch_cantons(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+    """Return ``(name, polygon)`` for every Swiss canton that overlaps a bbox.
+
+    The OpenStreetMap counterpart to :func:`load_us_states` /
+    :func:`load_fr_regions` -- lets a Switzerland-region situation map draw
+    real cantonal boundaries instead of stopping at the national frontier.
+    Data (c) OpenStreetMap contributors, ODbL 1.0 -- any rendered map using
+    this layer must carry that attribution; :func:`_attribution_layer` adds
+    it automatically to any plate that actually draws from this source.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees. When the bbox does not
+        overlap the vendored extent (see :func:`_bbox_in_switzerland`), the
+        TopoJSON is not even loaded and an empty list is returned -- this is
+        what makes calling it unconditionally cheap for non-Swiss maps.
+
+    Returns
+    -------
+    list of (str, shapely geometry)
+        Canton name paired with its (repaired) polygon, WGS84 lon/lat.
+    """
+    if not _bbox_in_switzerland(bbox):
+        return []
+    topo = json.loads(_CH_CANTONS_TOPOJSON.read_text())
+    return _named_polygons_from_topojson(topo, "cantons")
 
 
 def load_rivers() -> list[tuple[Any, str, int]]:
@@ -845,6 +1089,9 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 3b. frontiers (international borders + neighbour labels) --------------- #
     layers.append(_frontiers_layer(cfg, proj, vp, region_box))
 
+    # 3c. internal-borders (US state lines, task #31's first admin-1 tier) --- #
+    layers.append(_internal_borders_layer(cfg, proj, vp, region_box))
+
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp))
 
@@ -884,6 +1131,9 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 10. legend ------------------------------------------------------------ #
     layers.append(_legend_layer(cfg, vp))
+
+    # 10b. attribution -------------------------------------------------------- #
+    layers.append(_attribution_layer(cfg, vp, bbox))
 
     # 11. frame ------------------------------------------------------------- #
     layers.append(
@@ -1068,6 +1318,77 @@ def _frontiers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
             labels.append(tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7",
                                        tracking=2.2, weight="600"))
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
+
+
+def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
+                            region_box: Any) -> str:
+    """Return sub-national admin-1 borders (US states, French regions) for covered areas.
+
+    A finer, lighter dashed line than :func:`_frontiers_layer`'s international
+    frontiers -- the cartographic convention for internal administrative
+    borders, which read as secondary to national ones. Draws from every
+    vendored admin-1 source whose bbox overlaps the region: TIGER
+    (:func:`load_us_states`, US), IGN/ADMIN-EXPRESS (:func:`load_fr_regions`,
+    France), and OpenStreetMap (:func:`load_ch_cantons`, Switzerland).
+    Silently a no-op wherever none of them cover the region: each loader
+    already skips its own TopoJSON load when the bbox does not overlap its
+    extent, so a situation map of, say, the Himalaya pays nothing for this
+    layer beyond three bounds checks.
+
+    The OSM source carries a real obligation the other two do not: ODbL
+    requires attribution on any produced work (a rendered map) that uses it.
+    :func:`_attribution_layer` adds that credit automatically whenever this
+    layer would actually draw Swiss cantons -- this function does not add it
+    itself, since it has no rendered text layer of its own to attach a
+    footer to.
+    """
+    ib = cfg.get("internal_borders", {})
+    if ib.get("show", True) is False:
+        return '<g id="internal-borders"></g>'
+    ts = vp["ts"]
+    color = ib.get("color", "#c7cbcf")
+    do_label = ib.get("label_names", False)
+    min_frac = float(ib.get("label_min_area_frac", 0.02))
+    region_area = region_box.area
+    lines: list[str] = []
+    labels: list[str] = []
+    admin1 = (
+        load_us_states(bbox=region_box.bounds)
+        + load_fr_regions(bbox=region_box.bounds)
+        + load_ch_cantons(bbox=region_box.bounds)
+    )
+    for name, poly in admin1:
+        try:
+            vis = poly.intersection(region_box)
+        except Exception:
+            continue
+        if vis.is_empty:
+            continue
+        # TIGER's self-touching rings near complex coastlines (observed on
+        # Texas, Oklahoma) make make_valid() return a GeometryCollection
+        # mixing the repaired polygon with degenerate point/line artifacts;
+        # a GeometryCollection has no well-defined .boundary (None in
+        # shapely), so extract just the polygonal part first.
+        boundary_source = poly
+        if poly.geom_type == "GeometryCollection":
+            polys = [g for g in poly.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+            if not polys:
+                continue
+            boundary_source = unary_union(polys)
+        gp = _project_geom(boundary_source.boundary.intersection(region_box), proj)
+        d = projected_geom_to_path(gp, vp, close=False)
+        if d:
+            lines.append(
+                f'<path d="{d}" fill="none" stroke="{color}" '
+                f'stroke-width="{0.6 * ts:.1f}" stroke-opacity="0.75" '
+                f'stroke-dasharray="{2.0 * ts:.1f} {1.8 * ts:.1f}"/>'
+            )
+        if do_label and name and vis.area >= min_frac * region_area:
+            pt = vis.representative_point()
+            x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
+            labels.append(tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf",
+                                       tracking=1.6, weight="500"))
+    return f'<g id="internal-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
 def _rivers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
@@ -1277,6 +1598,40 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         )
     out.append(scale_bar(26 * ts, H - 44 * ts, vp))
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
+
+
+def _attribution_layer(cfg: dict[str, Any], vp: dict[str, Any],
+                       bbox: Optional[Iterable[float]]) -> str:
+    """Return a small bottom-right credit line for any ODbL-licensed layer in view.
+
+    Natural Earth (public domain) and TIGER/IGN (public domain / Licence
+    Ouverte) need no runtime attribution, but OpenStreetMap's ODbL requires
+    one on any produced work -- so whenever :func:`load_ch_cantons` would
+    actually draw something for this ``bbox`` (see
+    :func:`_bbox_in_switzerland`), the required "(c) OpenStreetMap
+    contributors" credit is added automatically, rather than left for the
+    caller to remember. ``cfg["attribution"]`` (a string or list of strings)
+    appends further caller-supplied credits to the same line, for callers
+    who bring their own additional licensed sources.
+    """
+    credits: list[str] = []
+    if _bbox_in_switzerland(bbox) and cfg.get("internal_borders", {}).get("show", True) is not False:
+        credits.append("© OpenStreetMap contributors (ODbL)")
+    extra = cfg.get("attribution")
+    if isinstance(extra, str) and extra:
+        credits.append(extra)
+    elif extra:
+        credits.extend(str(c) for c in extra)
+    if not credits:
+        return '<g id="attribution"></g>'
+    ts = vp["ts"]
+    W, H = vp["width"], vp["height"]
+    text = " · ".join(credits)
+    return (
+        f'<g id="attribution"><text x="{W - 16 * ts:.1f}" y="{H - 12 * ts:.1f}" '
+        f'text-anchor="end" font-family="{_DEFAULT_FONT}" font-size="{8.5 * ts:.1f}" '
+        f'fill="#9aa0a6">{_esc(text)}</text></g>'
+    )
 
 
 def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
