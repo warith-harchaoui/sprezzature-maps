@@ -26,15 +26,46 @@ md2pdf CARTOGRAPHY.md --author "Warith Harchaoui" --bib assets/references.bib
 
 ## Contents
 
-1. [World scale: choropleth](#world-scale-choropleth)
-2. [Regional scale: situation_map](#regional-scale-situation_map)
-3. [Terrain shading (shared machinery)](#terrain-shading-shared-machinery)
-4. [Data provenance and licensing](#data-provenance-and-licensing)
-5. [Storage: the vendored-raster pyramid and Git LFS](#storage-the-vendored-raster-pyramid-and-git-lfs)
-6. [Validation methodology](#validation-methodology)
-7. [Roadmap](#roadmap)
+1. [Pipeline overview](#pipeline-overview)
+2. [World scale: choropleth](#world-scale-choropleth)
+3. [Regional scale: situation_map](#regional-scale-situation_map)
+4. [Terrain shading (shared machinery)](#terrain-shading-shared-machinery)
+5. [Data provenance and licensing](#data-provenance-and-licensing)
+6. [Storage: the vendored-raster pyramid and Git LFS](#storage-the-vendored-raster-pyramid-and-git-lfs)
+7. [Validation methodology](#validation-methodology)
+8. [Roadmap](#roadmap)
 
 ---
+
+## Pipeline overview
+
+Both generators share a shape (project, color, relief, composite to
+SVG) while differing in every specific: different projection, different
+boundary source, different relief technique. The diagram below is a map
+of this document, not a replacement for it; every box names the section
+that explains it in full, with the underlying math and citations.
+Color coding is consistent across every diagram in this document: blue
+is an input, green is a coordinate/format transform, purple is a named
+technique with its own dedicated section, orange is a final output.
+
+```mermaid
+flowchart TD
+    A["Tabular data + country codes"]:::input --> B["Equal Earth projection"]:::transform
+    A2["Region bounding box"]:::input --> B2["Lambert Conformal Conic"]:::transform
+    B --> C["OKLCH sequential / diverging ramp"]:::technique
+    B2 --> C2["50m / 10m boundary tier select"]:::transform
+    B2 --> C3["Elevation tier select + hillshade / texture blend"]:::technique
+    C --> D["World relief: greyscale to Imhof duotone"]:::technique
+    C3 --> D2["Regional relief: Imhof duotone"]:::technique
+    D --> E["Choropleth SVG"]:::output
+    C2 --> E2["Situation map SVG"]:::output
+    D2 --> E2
+
+    classDef input fill:#CCE4FF,stroke:#007AFF,stroke-width:2px,color:#003366
+    classDef transform fill:#D4F5D9,stroke:#28CD41,stroke-width:2px,color:#145214
+    classDef technique fill:#EFDCF8,stroke:#AF52DE,stroke-width:2px,color:#4B1868
+    classDef output fill:#FFEACC,stroke:#FF9500,stroke-width:2px,color:#7A3D00
+```
 
 ## World scale: choropleth
 
@@ -151,6 +182,22 @@ $$
 $$
 
 5. **OKLab → OKLCH**: $C = \sqrt{a^2+b^2}$, $H = \operatorname{atan2}(b, a)$.
+
+```mermaid
+flowchart TD
+    A["sRGB, 8-bit"]:::input --> B["Linear light"]:::transform
+    B --> C["LMS-like cone response"]:::transform
+    C --> D["Signed cube root"]:::transform
+    D --> E["OKLab: L, a, b"]:::technique
+    E --> F["OKLCH: L, C, H"]:::technique
+    F --> G["Interpolate: L, C linear; H shortest arc"]:::technique
+    G --> H["Hex color"]:::output
+
+    classDef input fill:#CCE4FF,stroke:#007AFF,stroke-width:2px,color:#003366
+    classDef transform fill:#D4F5D9,stroke:#28CD41,stroke-width:2px,color:#145214
+    classDef technique fill:#EFDCF8,stroke:#AF52DE,stroke-width:2px,color:#4B1868
+    classDef output fill:#FFEACC,stroke:#FF9500,stroke-width:2px,color:#7A3D00
+```
 
 Both matrices are inverted exactly (`_oklab_to_linear`,
 `scripts/_geo_colors.py:266`) to go back from OKLCH to a hex color once
@@ -435,6 +482,27 @@ where hillshade alone would show the overall light/dark massif but
 texture shading is what resolves individual ridgelines within it.*
 
 ![Situation map, Himalaya relief](web/img/situation-himalaya.png)
+
+The two techniques run independently on the same elevation crop and
+converge only at the blend step:
+
+```mermaid
+flowchart TD
+    A["GMTED2010 elevation crop"]:::input --> B["Gradient times exaggeration"]:::transform
+    B --> C["Lambertian hillshade"]:::technique
+    A --> D["Hann window, then FFT"]:::transform
+    D --> E["Multiply by frequency to the alpha"]:::technique
+    E --> F["Inverse FFT, normalize"]:::transform
+    C --> G["Blend: hillshade weight vs texture weight"]:::technique
+    F --> G
+    G --> H["Imhof OKLCH duotone"]:::technique
+    H --> I["RGBA relief layer"]:::output
+
+    classDef input fill:#CCE4FF,stroke:#007AFF,stroke-width:2px,color:#003366
+    classDef transform fill:#D4F5D9,stroke:#28CD41,stroke-width:2px,color:#145214
+    classDef technique fill:#EFDCF8,stroke:#AF52DE,stroke-width:2px,color:#4B1868
+    classDef output fill:#FFEACC,stroke:#FF9500,stroke-width:2px,color:#7A3D00
+```
 
 ### Relief exaggeration strategies
 
