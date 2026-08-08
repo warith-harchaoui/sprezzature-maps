@@ -45,6 +45,9 @@ import math
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+import numpy as np
+
+from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 
 try:
@@ -79,7 +82,59 @@ except ImportError as exc:  # pragma: no cover - dependency guard
 
 _ASSETS = Path(__file__).resolve().parent.parent / "assets" / "geo"
 _LAND_TOPOJSON = _ASSETS / "countries-50m.json"
+# 1:10m Natural Earth admin-0 countries, vendored the same way the 50m/110m
+# atlases were: downloaded once, simplified (mapshaper, weighted Visvalingam,
+# keep-shapes so small islands survive), quantized to TopoJSON. Only used for
+# small bboxes -- see _land_topojson_for_bbox -- where the 50m atlas would
+# read visibly facetted/over-smoothed at zoom.
+_LAND_TOPOJSON_10M = _ASSETS / "countries-10m.json"
 _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
+
+# A region bbox whose longer side is narrower than this many degrees reads as
+# "a single country or a small sub-region" rather than "a continent-scale
+# view" -- that is the cutoff where switching from 1:50m to the heavier
+# 1:10m basemap actually buys visible coastline/border fidelity instead of
+# just more file weight for detail no one will see at that zoom.
+_TEN_M_BBOX_DEGREES_THRESHOLD = 25.0
+
+
+def _land_topojson_for_bbox(bbox: Optional[Iterable[float]]) -> Path:
+    """Pick the 50m or 10m vendored basemap tier to match a region's bbox.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None
+        ``(west, south, east, north)`` in degrees. ``None`` means the
+        caller has no region context (e.g. a bare ``load_country`` call
+        with no surrounding map) -- falls back to the pre-existing 50m
+        default so that behaviour does not silently change for callers
+        written before this tier selection existed.
+
+    Returns
+    -------
+    pathlib.Path
+        :data:`_LAND_TOPOJSON_10M` when the bbox's longer side is
+        narrower than :data:`_TEN_M_BBOX_DEGREES_THRESHOLD`, otherwise
+        :data:`_LAND_TOPOJSON`.
+
+    Examples
+    --------
+    >>> _land_topojson_for_bbox((-5.0, 41.0, 10.0, 51.0)).name
+    'countries-10m.json'
+    >>> _land_topojson_for_bbox((-11.0, 35.0, 30.0, 60.0)).name
+    'countries-50m.json'
+    >>> _land_topojson_for_bbox(None).name
+    'countries-50m.json'
+    """
+    if bbox is None:
+        return _LAND_TOPOJSON
+    west, south, east, north = bbox
+    # The "longer side" (not the area) is what determines whether a
+    # viewer will actually zoom in far enough to see 10m-vs-50m detail --
+    # a very wide-but-short strip (e.g. a coastline survey) still reads
+    # as continent-scale on its long axis even if its short axis is small.
+    span_degrees = max(east - west, north - south)
+    return _LAND_TOPOJSON_10M if span_degrees < _TEN_M_BBOX_DEGREES_THRESHOLD else _LAND_TOPOJSON
 
 
 def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
@@ -143,13 +198,33 @@ def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
     return unary_union(fixed)
 
 
-def load_land() -> Any:
-    """Return the dissolved world land polygon (WGS84), from the vendored basemap."""
-    topo = json.loads(_LAND_TOPOJSON.read_text())
-    return _decode_topojson_object(topo, "land")
+def load_land(bbox: Optional[Iterable[float]] = None) -> Any:
+    """Return the dissolved world land polygon (WGS84), from the vendored basemap.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees of the region this land
+        polygon will be clipped to by the caller. Selects the 10m or 50m
+        basemap tier via :func:`_land_topojson_for_bbox`; ``None`` (the
+        default) keeps the pre-existing 50m behaviour.
+
+    Returns
+    -------
+    shapely geometry
+        The dissolved land polygon, WGS84 lon/lat.
+    """
+    topo_path = _land_topojson_for_bbox(bbox)
+    topo = json.loads(topo_path.read_text())
+    # The 50m/110m atlases carry a pre-dissolved "land" object; the 10m
+    # atlas only carries "countries" (dissolving 258 country polygons here
+    # gives the identical silhouette a dedicated "land" object would, so
+    # there is no need to vendor a second, redundant object for it).
+    object_name = "land" if "land" in topo["objects"] else "countries"
+    return _decode_topojson_object(topo, object_name)
 
 
-def load_country(name: str) -> Any:
+def load_country(name: str, bbox: Optional[Iterable[float]] = None) -> Any:
     """Return the polygon of a single country by Natural Earth ``name`` (WGS84).
 
     Lets a caller partition a *real* national outline into thematic zones — the
@@ -161,6 +236,10 @@ def load_country(name: str) -> Any:
     name : str
         Country name as spelled in the vendored ``countries`` object
         (e.g. ``"Ukraine"``, ``"France"``).
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees, forwarded to
+        :func:`_land_topojson_for_bbox` to pick the 10m or 50m tier.
+        ``None`` (the default) keeps the pre-existing 50m behaviour.
 
     Returns
     -------
@@ -172,7 +251,7 @@ def load_country(name: str) -> Any:
     KeyError
         If no country with that name exists in the basemap.
     """
-    topo = json.loads(_LAND_TOPOJSON.read_text())
+    topo = json.loads(_land_topojson_for_bbox(bbox).read_text())
     scale = topo["transform"]["scale"]
     translate = topo["transform"]["translate"]
     raw_arcs = topo["arcs"]
@@ -209,13 +288,20 @@ def load_country(name: str) -> Any:
     raise KeyError(f"country not found in basemap: {name!r}")
 
 
-def load_countries() -> list[tuple[str, Any]]:
+def load_countries(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every country in the vendored basemap (WGS84).
 
     Lets the map draw real international frontiers and label the neighbours, so a
     situation plate carries its surrounding geography instead of a lone outline.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees, forwarded to
+        :func:`_land_topojson_for_bbox` to pick the 10m or 50m tier.
+        ``None`` (the default) keeps the pre-existing 50m behaviour.
     """
-    topo = json.loads(_LAND_TOPOJSON.read_text())
+    topo = json.loads(_land_topojson_for_bbox(bbox).read_text())
     scale = topo["transform"]["scale"]
     translate = topo["transform"]["translate"]
     raw_arcs = topo["arcs"]
@@ -358,10 +444,24 @@ def make_viewport(
         sy = pad + (maxy - y) * scale  # flip: projected up -> SVG down
         return sx, sy
 
+    def to_world(sx: Any, sy: Any) -> tuple[Any, Any]:
+        """Invert :func:`to_svg`: SVG pixel(s) -> planar metres.
+
+        Exact algebraic inverse of ``to_svg`` (no iteration needed, unlike
+        Equal Earth's inverse projection in ``make_choropleth.py`` -- this
+        only undoes the *viewport* fit, not the map projection itself).
+        Accepts plain floats or numpy arrays -- the relief compositing in
+        :func:`build_map` calls this vectorised over a whole pixel grid.
+        """
+        x = minx + (sx - pad) / scale
+        y = maxy - (sy - pad) / scale
+        return x, y
+
     return {
         "width": width,
         "height": height,
         "to_svg": to_svg,
+        "to_world": to_world,
         "m_per_unit": 1.0 / scale,
         # Type scale: label/furniture sizes track the plate width so a large
         # plate does not end up with tiny print. Calibrated to a 1000-unit plate.
@@ -588,6 +688,86 @@ def north_arrow(x: float, y: float, ts: float = 1.0) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def _relief_layer(
+    vp: dict[str, Any],
+    proj: Transformer,
+    pad: float,
+    width: float,
+    height: float,
+    clip_path_d: str,
+    bbox: list[float],
+) -> str:
+    """Return a base64 ``<image>`` of real-elevation terrain shading, reprojected to this plate's LCC.
+
+    Computes a hillshade + fractional-Laplacian "texture shading" blend
+    (:func:`_relief.terrain_shade_for_bbox`) from the vendored GMTED2010
+    elevation grid, on the *region's own* equirectangular window -- not the
+    pre-rendered world raster ``make_choropleth.py`` samples -- then
+    reprojects that into this plate's Lambert Conformal Conic. LCC has an
+    exact analytic inverse (``pyproj`` provides it directly), unlike Equal
+    Earth, which needed Newton-Raphson (see ``_equal_earth_invert_batch`` in
+    ``make_choropleth.py``). Every point in the plotted rectangle is also
+    guaranteed valid (a real (lon, lat) exists) since LCC is well-behaved
+    across any bounded region near its own centre -- no validity mask is
+    needed the way Equal Earth's curved world outline required one.
+
+    Parameters
+    ----------
+    vp : dict
+        The viewport record from :func:`make_viewport` (uses ``to_world``).
+    proj : pyproj.Transformer
+        The same lon/lat -> planar-metres transformer the rest of the plate
+        uses, inverted here via ``direction="INVERSE"``.
+    pad : float
+        Panel padding in SVG units -- the relief image is placed inside it,
+        matching where ``basemap-sea``/``basemap-land`` are drawn.
+    width, height : float
+        The plate's full SVG canvas size (``vp["width"]``/``vp["height"]``).
+    clip_path_d : str
+        SVG path ``d`` string for the projected region bbox (the same
+        shape ``basemap-sea``'s fill would cover if there were no land).
+        LCC's meridians fan out from its cone apex, so a rectangular pixel
+        grid covers a *wider* area than the requested bbox -- without
+        clipping, the relief image bleeds into the plate's corner
+        triangles that ``basemap-sea``/``basemap-land`` deliberately leave
+        blank (caught via the Ralph Eyeball Loop: those corners rendered
+        as a flagrant flat grey rectangle poking out past the plate's
+        trapezoid on the first pass).
+    bbox : list of float
+        ``[west, south, east, north]`` -- the region this plate covers,
+        forwarded to :func:`_relief.terrain_shade_for_bbox` to select and
+        shade the matching elevation window.
+
+    Returns
+    -------
+    str
+        A ``<defs>`` clip-path definition plus a clipped ``<g id="relief">``
+        wrapping one ``<image>`` element.
+    """
+    plot_w = int(width - 2 * pad)
+    plot_h = int(height - 2 * pad)
+    # Build the pixel grid once, offset by pad so it lines up exactly with
+    # where the <image> element gets placed below.
+    grid_sx, grid_sy = np.meshgrid(
+        np.arange(plot_w) + pad, np.arange(plot_h) + pad
+    )
+    world_x, world_y = vp["to_world"](grid_sx, grid_sy)
+    # pyproj's Transformer.transform accepts numpy arrays directly and
+    # applies the exact inverse LCC formula element-wise -- no iterative
+    # solve needed, unlike Equal Earth's forward-only closed form.
+    lon_grid, lat_grid = proj.transform(world_x, world_y, direction="INVERSE")
+    valid_grid = np.ones_like(lon_grid, dtype=bool)
+    shade, shade_bounds = terrain_shade_for_bbox(*bbox, plot_w, plot_h)
+    relief_rgba = sample_terrain_shade(lon_grid, lat_grid, valid_grid, shade, shade_bounds)
+    return (
+        '<defs><clipPath id="relief-clip">'
+        f'<path d="{clip_path_d}"/></clipPath></defs>'
+        f'<g id="relief" clip-path="url(#relief-clip)">'
+        f'<image x="{pad:.1f}" y="{pad:.1f}" width="{plot_w}" height="{plot_h}" '
+        f'href="{rgba_to_data_uri(relief_rgba)}" preserveAspectRatio="none"/></g>'
+    )
+
+
 def build_map(cfg: dict[str, Any]) -> str:
     """Assemble the full layered situation-map SVG from a config dict.
 
@@ -614,12 +794,22 @@ def build_map(cfg: dict[str, Any]) -> str:
     coast_color = basemap.get("coast_color", "#7f97a8")
 
     region_box = box(bbox[0], bbox[1], bbox[2], bbox[3])
-    land = load_land().intersection(region_box)
+    # bbox already carries the region's real extent -- reuse it to pick the
+    # 10m/50m basemap tier instead of re-deriving it from region_box.
+    land = load_land(bbox=bbox).intersection(region_box)
     land_proj = _project_geom(land, proj)
     region_proj = _project_geom(region_box, proj)
     sea_proj = region_proj.difference(land_proj)
 
     layers: list[str] = []
+
+    # 0. relief --------------------------------------------------------------
+    # Drawn first (bottom of the stack) so the sea and land fills paint over
+    # it -- basemap-land's fill-opacity below is what lets it peek through.
+    if basemap.get("relief", True):
+        layers.append(
+            _relief_layer(vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox)
+        )
 
     # 1. basemap-sea -------------------------------------------------------- #
     layers.append(
@@ -631,10 +821,25 @@ def build_map(cfg: dict[str, Any]) -> str:
     bath = basemap.get("bathymetry", {"rings": 7, "step_km": None})
     layers.append(_bathymetry_layer(land_proj, sea_proj, vp, bath))
 
-    # 3. basemap-land ------------------------------------------------------- #
+    # 3. basemap-land --------------------------------------------------------
+    # fill-opacity < 1 (not the default opaque fill) lets the relief layer
+    # underneath read as terrain texture -- same technique as
+    # make_choropleth.py's country fills, but tuned to a *lower* opacity
+    # (more peek-through) here: 0.7 (choropleth's value) washed out almost
+    # completely on an all-land, mountain-only plate (Himalaya test render)
+    # -- land_color is a light neutral cream (~248 luminance), and the same
+    # relief delta reads as much smaller near-white than it does against
+    # choropleth's darker data ramp (Weber-Fechner: identical luminance
+    # deltas are less perceptible closer to white). There is also no data
+    # ramp here for stronger relief to visually compete with, so there is
+    # more headroom to let it dominate. 0.45 was the empirical sweet spot
+    # (0.55 was still muted; the Himalaya ridge line only became clearly
+    # legible at 0.45).
+    land_fill_opacity = 0.45 if basemap.get("relief", True) else 1.0
     layers.append(
         f'<g id="basemap-land">'
-        f'<path d="{projected_geom_to_path(land_proj, vp)}" fill="{land_color}"/></g>'
+        f'<path d="{projected_geom_to_path(land_proj, vp)}" fill="{land_color}" '
+        f'fill-opacity="{land_fill_opacity}"/></g>'
     )
 
     # 3b. frontiers (international borders + neighbour labels) --------------- #
@@ -839,7 +1044,10 @@ def _frontiers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
     region_area = region_box.area
     lines: list[str] = []
     labels: list[str] = []
-    for name, poly in load_countries():
+    # region_box.bounds is (minx, miny, maxx, maxy) == (west, south, east,
+    # north) -- exactly the bbox shape _land_topojson_for_bbox expects, so
+    # the frontier layer picks the same 10m/50m tier the basemap itself did.
+    for name, poly in load_countries(bbox=region_box.bounds):
         try:
             vis = poly.intersection(region_box)
         except Exception:

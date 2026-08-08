@@ -10,6 +10,15 @@ build/
 *.png
 *.html
 *.svg
+# EXAMPLES.md/README.md embed these two as <img> -- keep them trackable so
+# the images aren't broken links on GitHub.
+!assets/svg-examples/*.svg
+# Vendored relief/elevation rasters make_choropleth.py and
+# make_situation_map.py load at render time (relief-lowres.png,
+# elevation-30arcsec.png) -- data assets, not generated output; without
+# this exception the blanket *.png rule above silently drops them and a
+# fresh clone's relief layer breaks with no error, just a missing file.
+!assets/geo/*.png
 
 .private/
 # Coverage reports
@@ -24,3 +33,10 @@ coverage.xml
 demo-data/
 
 !assets/logo.png
+
+# CARTOGRAPHY.md is compiled locally with md2docx/md2pdf (see that file's
+# own header). The .docx is a disposable local artifact regenerated on
+# demand; the .pdf is the one meant to ship in the repo for readers who
+# don't have md2star installed, so it stays tracked despite the *.html
+# rule above having no equivalent blanket rule to except it from.
+*.docx

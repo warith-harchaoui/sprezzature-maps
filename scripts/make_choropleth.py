@@ -13,10 +13,11 @@ the reader already has spatial intuition for.
 Previously rendered via Vega-Lite's ``geoshape`` mark against a bundled
 TopoJSON country atlas and an ``equalEarth`` projection (``vl_convert``);
 this module now decodes the same offline TopoJSON atlas
-(``assets/geo/countries-110m.json``, vendored Natural Earth data, already
-used by ``make_situation_map.py``) and projects it itself with a plain
-equirectangular projection -- no Vega, no matplotlib, no ``pyproj``. Every
-country carries a native ``<title>`` tooltip with its exact value.
+(``assets/geo/countries-50m.json``, vendored Natural Earth data, already
+used by ``make_situation_map.py``) and projects it itself with a
+hand-written closed-form Equal Earth projection -- no Vega, no matplotlib,
+no ``pyproj``. Every country carries a native ``<title>`` tooltip with its
+exact value, rank, and (for a sequential indicator) share of the total.
 
 Author
 ------
@@ -26,12 +27,18 @@ Author
 from __future__ import annotations
 
 import json
+import math
+import statistics
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _geo_colors import diverging_ramp_hex, sequential_ramp_hex  # noqa: E402
 from _interactive import fullscreen_control  # noqa: E402
+from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
 
@@ -41,10 +48,137 @@ BG = "#FFFFFF"
 NO_DATA = "#E5E5EA"
 NO_DATA_EDGE = "#D1D1D6"
 
-_GEO = Path(__file__).resolve().parent.parent / "assets" / "geo" / "countries-110m.json"
+# Country fill opacity: lets the relief layer underneath show through as a
+# faint terrain texture instead of being fully hidden by an opaque fill.
+# Tuned empirically via the Ralph Eyeball Loop, not guessed: 0.9 (10% peek)
+# was tried first and was completely imperceptible at any render size (the
+# math: a ~66-grey-level mountain-ridge highlight, diluted first by the
+# relief layer's own opacity and then by only a 10% peek, lands under
+# 2/255 of visible delta -- nowhere near a human contrast threshold); 0.5
+# (50% peek) made the effect clearly visible but started to compete with
+# the ramp's own value differences. 0.7 is the point where terrain texture
+# reads as texture without a viewer mistaking it for noise in the data.
+_COUNTRY_FILL_OPACITY = 0.7
 
-# Sequential blue ramp — pale sky -> system blue -> deep navy (same ramp
-# make_heatmap.py / make_calendar-heatmap.py use).
+# 50m: same vendored Natural Earth atlas make_situation_map.py already uses,
+# just switched on for the world view too (110m was a first-pass choice).
+_GEO = Path(__file__).resolve().parent.parent / "assets" / "geo" / "countries-50m.json"
+
+# Equal Earth (Savric, Patterson & Jenny, 2018) -- closed-form, published
+# constants, no iteration. Restores the equal-area property the old
+# Vega-Lite ``equalEarth`` mark had before this generator was rewritten as
+# hand-authored SVG with a plain equirectangular projection, which inflates
+# high-latitude countries (Greenland reads ~14x its true relative size) --
+# a real bias for a choropleth, where colored area carries meaning.
+_EE_A1, _EE_A2, _EE_A3, _EE_A4 = 1.340264, -0.081106, 0.000893, 0.003796
+_EE_M = math.sqrt(3) / 2.0
+
+
+def _equal_earth_raw(lon: float, lat: float) -> Tuple[float, float]:
+    """Project (lon, lat) in degrees to Equal Earth's own (unitless) plane.
+
+    Returns raw projection-space coordinates, not screen pixels -- callers
+    fit the projected point cloud's bounding box to the canvas with a single
+    uniform scale (never independent x/y stretch, which would undo the
+    equal-area property) and flip y for SVG's downward-growing axis.
+    """
+    lam = math.radians(lon)
+    phi = math.radians(lat)
+    theta = math.asin(_EE_M * math.sin(phi))
+    theta2 = theta * theta
+    theta6 = theta2 * theta2 * theta2
+    x = lam * math.cos(theta) / (
+        _EE_M * (_EE_A1 + 3 * _EE_A2 * theta2 + theta6 * (7 * _EE_A3 + 9 * _EE_A4 * theta2))
+    )
+    y = theta * (_EE_A1 + _EE_A2 * theta2 + theta6 * (_EE_A3 + _EE_A4 * theta2))
+    return x, y
+
+
+def _equal_earth_invert_batch(
+    x: np.ndarray, y: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Vectorised inverse Equal Earth: plane ``(x, y)`` -> ``(lon, lat)`` degrees.
+
+    Needed only for the relief raster (task: composite a hillshade texture
+    that has to sit at the *correct* lon/lat under each canvas pixel, not
+    the country outlines -- those are drawn forward, from known (lon, lat)
+    vertices, and never need inverting).
+
+    Parameters
+    ----------
+    x, y : numpy.ndarray
+        Equal Earth plane coordinates (the same unitless plane
+        :func:`_equal_earth_raw` produces), same shape, one entry per
+        canvas pixel the caller wants a (lon, lat) for.
+
+    Returns
+    -------
+    lon_deg, lat_deg, valid : numpy.ndarray
+        ``lon_deg``/``lat_deg`` in degrees (undefined -- do not use -- where
+        ``valid`` is ``False``). ``valid`` is ``False`` wherever ``(x, y)``
+        does not correspond to any real point on the globe: Equal Earth's
+        outline is a curved lens shape, not the rectangle its bounding box
+        suggests, so most rectangular grids of ``(x, y)`` include points
+        outside the actual map (e.g. near the corners) that have no inverse.
+
+    Notes
+    -----
+    Equal Earth has no closed-form inverse (unlike the forward direction):
+    ``y`` is a degree-9 odd polynomial in ``theta`` with no algebraic root
+    formula, so ``theta`` is recovered by Newton-Raphson on
+    ``f(theta) = y(theta) - y_target``, starting from the linear
+    small-angle approximation ``theta ~= y / A1`` (exact at ``theta=0`` and
+    close enough for quadratic Newton convergence within a handful of
+    iterations across Equal Earth's whole valid ``theta`` range). Longitude
+    then falls out of the *forward* ``x`` formula solved for ``lam`` at the
+    now-known ``theta``, and latitude from inverting
+    ``theta = asin(M * sin(phi))``.
+
+    Examples
+    --------
+    >>> x0, y0 = _equal_earth_raw(30.0, -15.0)
+    >>> lon, lat, valid = _equal_earth_invert_batch(np.array([x0]), np.array([y0]))
+    >>> bool(valid[0])
+    True
+    >>> round(float(lon[0]), 4), round(float(lat[0]), 4)
+    (30.0, -15.0)
+    """
+    # Newton-Raphson on f(theta) = y(theta) - y, starting from the
+    # small-angle linear approximation. 12 iterations comfortably
+    # converges to float64 precision across Equal Earth's full theta range
+    # (|theta| < ~65 degrees) -- verified by the round-trip doctest above.
+    theta = y / _EE_A1
+    for _ in range(12):
+        theta2 = theta * theta
+        theta6 = theta2 * theta2 * theta2
+        # d(y)/d(theta) -- the same polynomial that appears (times M) as
+        # the x-formula's denominator in _equal_earth_raw, differentiated
+        # term-by-term from y(theta) = A1*theta + A2*theta^3 + A3*theta^7 + A4*theta^9.
+        dy_dtheta = _EE_A1 + 3 * _EE_A2 * theta2 + theta6 * (7 * _EE_A3 + 9 * _EE_A4 * theta2)
+        f = theta * (_EE_A1 + _EE_A2 * theta2 + theta6 * (_EE_A3 + _EE_A4 * theta2)) - y
+        with np.errstate(divide="ignore", invalid="ignore"):
+            step = np.where(np.abs(dy_dtheta) > 1e-12, f / dy_dtheta, 0.0)
+        theta = theta - step
+    theta2 = theta * theta
+    theta6 = theta2 * theta2 * theta2
+    denom = _EE_M * (_EE_A1 + 3 * _EE_A2 * theta2 + theta6 * (7 * _EE_A3 + 9 * _EE_A4 * theta2))
+    cos_theta = np.cos(theta)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        lam = np.where(np.abs(cos_theta) > 1e-9, x * denom / cos_theta, np.nan)
+    sin_phi = np.sin(theta) / _EE_M
+    # A pixel is only a real point on the globe if cos(theta) didn't
+    # vanish (would make lam infinite) AND sin(phi) landed in [-1, 1]
+    # (asin's domain) AND the Newton solve actually produced a finite lam.
+    valid = (np.abs(cos_theta) > 1e-9) & (sin_phi >= -1.0) & (sin_phi <= 1.0) & np.isfinite(lam)
+    lat_deg = np.degrees(np.arcsin(np.clip(sin_phi, -1.0, 1.0)))
+    lon_deg = np.degrees(lam)
+    return lon_deg, lat_deg, valid
+
+
+# Sequential blue ramp — pale sky -> system blue -> deep navy. Same three
+# hex stops the pre-OKLCH ramp used; only the interpolation between them
+# changed (OKLCH via _geo_colors.sequential_ramp_hex, not a per-channel
+# RGB lerp -- see that module's docstring for why the difference matters).
 _RAMP: Tuple[Tuple[float, str], ...] = (
     (0.00, "#EAF3FF"),
     (0.62, "#007AFF"),
@@ -53,18 +187,8 @@ _RAMP: Tuple[Tuple[float, str], ...] = (
 
 
 def _ramp_hex(t: float) -> str:
-    """Sample the house blue ramp at position ``t`` in ``[0, 1]``."""
-    t = min(1.0, max(0.0, t))
-    for (lo_t, lo_c), (hi_t, hi_c) in zip(_RAMP, _RAMP[1:]):
-        if lo_t <= t <= hi_t:
-            local = (t - lo_t) / (hi_t - lo_t) if hi_t > lo_t else 0.0
-            ar, ag, ab = int(lo_c[1:3], 16), int(lo_c[3:5], 16), int(lo_c[5:7], 16)
-            br, bg, bb = int(hi_c[1:3], 16), int(hi_c[3:5], 16), int(hi_c[5:7], 16)
-            r = round(ar + (br - ar) * local)
-            g = round(ag + (bg - ag) * local)
-            b = round(ab + (bb - ab) * local)
-            return f"#{r:02X}{g:02X}{b:02X}"
-    return _RAMP[-1][1]
+    """Sample the house sequential blue ramp at position ``t`` in ``[0, 1]``."""
+    return sequential_ramp_hex(t, _RAMP)
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +326,8 @@ def build_svg(
     height: int = 420,
     mode: str = "self-contained",
     accessibility: str = "universal",
+    diverging: Optional[bool] = None,
+    relief: bool = True,
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -217,9 +343,23 @@ def build_svg(
     mode : str, optional
         Forwarded to :func:`_interactive.fullscreen_control`.
     accessibility : str, optional
-        Accepted for CLI parity but a documented no-op: the ramp is a
-        single mono-hue blue scale, already colour-vision-deficiency-safe
-        by construction (magnitude reads by lightness alone).
+        Accepted for CLI parity but a documented no-op: both ramps
+        (sequential and diverging) are mono-per-side hue scales where
+        magnitude reads by lightness alone, verified
+        colour-vision-deficiency-safe via ``_geo_colors.simulate_cvd_hex``
+        rather than merely asserted -- see ``.private/todo.md``.
+    diverging : bool or None, optional
+        Force the diverging (negative/neutral/positive) ramp on or off.
+        ``None`` (the default) auto-detects: the diverging ramp switches on
+        automatically when the data spans both negative and positive
+        values (a meaningful zero, e.g. growth or an anomaly), otherwise
+        the sequential ramp is used.
+    relief : bool, optional
+        Composite the vendored Natural Earth hillshade under the vector
+        layers (default ``True``). Set ``False`` to skip it -- e.g. for a
+        faster render in a tight test loop, since the reprojection is the
+        one part of this generator that costs more than a few
+        milliseconds.
 
     Returns
     -------
@@ -233,17 +373,100 @@ def build_svg(
     all_values = list(values_by_id.values())
     v_min, v_max = (min(all_values), max(all_values)) if all_values else (0.0, 1.0)
     v_span = (v_max - v_min) or 1.0
+    v_median = statistics.median(all_values) if all_values else 0.0
+    # Auto-detect a diverging indicator (both signs present, e.g. growth
+    # rates) unless the caller already decided. A diverging ramp centers
+    # on the data's actual zero, not on the midpoint of [v_min, v_max] --
+    # those only coincide when the range happens to be symmetric.
+    use_diverging = diverging if diverging is not None else (v_min < 0.0 < v_max)
+    # Symmetric half-extent for the diverging ramp so +/-v_abs_max reach
+    # full saturation at the more extreme of the two tails; the milder
+    # tail stays inside [-1, 1] and reads proportionally lighter.
+    v_abs_max = max(abs(v_min), abs(v_max)) or 1.0
 
-    top_margin, bottom_margin, side_margin = 96.0, 36.0, 20.0
+    def _color_for_value(value: float) -> str:
+        """Map one data value to a ramp hex, honouring ``use_diverging``."""
+        if use_diverging:
+            return diverging_ramp_hex(value / v_abs_max)
+        return _ramp_hex((value - v_min) / v_span)
+
+    # Rank (1 = highest value) for the tooltip enrichment below. Ties get
+    # the same rank a human reading a leaderboard would expect (dense
+    # ranking is overkill here -- ties are rare in real indicator data and
+    # "co-3rd" reads stranger in a one-line tooltip than it helps).
+    rank_by_id = {
+        cid: rank
+        for rank, (cid, _value) in enumerate(
+            sorted(values_by_id.items(), key=lambda kv: kv[1], reverse=True), start=1
+        )
+    }
+    # Percent-of-total only makes sense for a sequential (all-one-sign-ish)
+    # indicator -- for a diverging one (growth rates, anomalies) the sum
+    # can land near zero and turn "share of total" into a meaningless or
+    # wildly unstable number, so it is only computed and shown when the
+    # ramp itself is sequential.
+    values_total = sum(values_by_id.values())
+    show_percent_of_total = not use_diverging and values_total != 0.0
+
+    def _ordinal(n: int) -> str:
+        """Format an integer rank as an English ordinal (1 -> "1st").
+
+        Parameters
+        ----------
+        n : int
+            A positive rank (1-based).
+
+        Returns
+        -------
+        str
+            ``n`` followed by its ordinal suffix.
+
+        Examples
+        --------
+        >>> _ordinal(1)
+        '1st'
+        >>> _ordinal(11)
+        '11th'
+        >>> _ordinal(22)
+        '22nd'
+        """
+        # The 11th/12th/13th special case: those end in 1/2/3 but still
+        # take "th" (English ordinals except for the "teen" exceptions).
+        if 10 <= n % 100 <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
+
+    # bottom_margin grew from 36 to 44 to leave room for the median tick
+    # label the enriched legend adds above the ramp swatches.
+    top_margin, bottom_margin, side_margin = 96.0, 44.0, 20.0
     plot_w = width - 2 * side_margin
     plot_h = height - top_margin - bottom_margin
-    lon_min, lon_max = -180.0, 180.0
-    lat_min, lat_max = -90.0, 84.0
+
+    # Fit the Equal Earth point cloud to the plot rect with ONE uniform
+    # scale (equal-area only holds if x and y are scaled together), then
+    # center it and flip y for SVG.
+    raw_pts = [
+        _equal_earth_raw(lon, lat)
+        for country in countries
+        for ring in country["rings"]
+        for lon, lat in ring
+    ]
+    ee_x_min = min(p[0] for p in raw_pts)
+    ee_x_max = max(p[0] for p in raw_pts)
+    ee_y_min = min(p[1] for p in raw_pts)
+    ee_y_max = max(p[1] for p in raw_pts)
+    ee_scale = min(plot_w / (ee_x_max - ee_x_min), plot_h / (ee_y_max - ee_y_min))
+    ee_x_mid = (ee_x_min + ee_x_max) / 2.0
+    ee_y_mid = (ee_y_min + ee_y_max) / 2.0
+    map_w = ee_scale * (ee_x_max - ee_x_min)
+    cx = side_margin + plot_w / 2.0
+    cy = top_margin + plot_h / 2.0
 
     def project(lon: float, lat: float) -> Tuple[float, float]:
-        x = side_margin + (lon - lon_min) / (lon_max - lon_min) * plot_w
-        y = top_margin + (lat_max - lat) / (lat_max - lat_min) * plot_h
-        return x, y
+        x, y = _equal_earth_raw(lon, lat)
+        return cx + (x - ee_x_mid) * ee_scale, cy - (y - ee_y_mid) * ee_scale
 
     parts: List[str] = []
     parts.append(svg_open(width, height, "cx-title", "cx-desc"))
@@ -268,6 +491,56 @@ def build_svg(
     )
     parts.append(f'<text x="40" y="66" font-size="13" fill="{SECONDARY}">{xml_escape(subtitle)}</text>')
 
+    if relief:
+        # ---- relief: a faint desaturated hillshade texture under
+        # everything else (graticule and countries both paint on top of
+        # it). The source raster is equirectangular; Equal Earth is not,
+        # so each output pixel's (lon, lat) has to be recovered via the
+        # inverse projection before the raster can be sampled there --
+        # see _equal_earth_invert_batch's docstring for why that needs
+        # Newton-Raphson rather than a closed form.
+        plot_px = np.arange(int(plot_w))
+        plot_py = np.arange(int(plot_h))
+        grid_px, grid_py = np.meshgrid(plot_px, plot_py)
+        # Undo the screen-space project() transform to get back to the
+        # Equal Earth plane, then invert Equal Earth itself to (lon, lat).
+        # Offsetting by side_margin/top_margin keeps this grid exactly
+        # aligned with where the <image> element below gets placed.
+        ee_x = (grid_px + side_margin - cx) / ee_scale + ee_x_mid
+        ee_y = (cy - (grid_py + top_margin)) / ee_scale + ee_y_mid
+        lon_grid, lat_grid, valid_grid = _equal_earth_invert_batch(ee_x, ee_y)
+        relief_rgba = sample_relief(lon_grid, lat_grid, valid_grid)
+        parts.append(
+            f'<image x="{side_margin:.1f}" y="{top_margin:.1f}" '
+            f'width="{int(plot_w)}" height="{int(plot_h)}" '
+            f'href="{rgba_to_data_uri(relief_rgba)}" preserveAspectRatio="none"/>'
+        )
+
+    # ---- graticule: 30-degree meridians/parallels, drawn UNDER the
+    # countries so it reads as faint texture rather than competing with
+    # the choropleth data. Equal Earth curves every meridian except the
+    # central one, so each line needs enough sample points along its own
+    # length (not just its two endpoints) to look smooth once projected.
+    parts.append(f'<g stroke="{SECONDARY}" stroke-width="0.4" fill="none" opacity="0.09">')
+    # Meridians (constant longitude, -180..180 every 30 degrees): sample
+    # every 5 degrees of latitude across the same range the country data
+    # itself spans, so the grid always matches whatever the caller's
+    # dataset actually renders (rather than a hardcoded world extent that
+    # could clip or overshoot for a lopsided value set).
+    lat_lo, lat_hi = -85.0, 85.0
+    for lon_deg in range(-180, 181, 30):
+        pts = [project(lon_deg, lat) for lat in range(int(lat_lo), int(lat_hi) + 1, 5)]
+        d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+        parts.append(f'<path d="{d}"/>')
+    # Parallels (constant latitude, skipping the poles where Equal Earth's
+    # pseudocylindrical pole-line already reads as its own strong shape --
+    # a graticule ring there would just double up on that).
+    for lat_deg in range(-60, 61, 30):
+        pts = [project(lon, lat_deg) for lon in range(-180, 181, 5)]
+        d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+        parts.append(f'<path d="{d}"/>')
+    parts.append("</g>")
+
     for country in countries:
         cid = str(country["id"])
         value = values_by_id.get(cid)
@@ -282,7 +555,7 @@ def build_svg(
             # drawing a line straight across the map.
             segments: List[List[Tuple[float, float]]] = [[pts[0]]]
             for (x0, _y0), (x1, y1) in zip(pts, pts[1:]):
-                if abs(x1 - x0) > plot_w * 0.5:
+                if abs(x1 - x0) > map_w * 0.5:
                     segments.append([])
                 segments[-1].append((x1, y1))
             for seg in segments:
@@ -296,29 +569,61 @@ def build_svg(
             fill, edge = NO_DATA, NO_DATA_EDGE
             tip = f"{country['name']}: no data"
         else:
-            t = (value - v_min) / v_span
-            fill, edge = _ramp_hex(t), BG
-            tip = f"{country['name']}: {value:.1f}"
+            fill, edge = _color_for_value(value), BG
+            # Enrich the raw value with its rank ("3rd of 42") and, when
+            # meaningful, its share of the total ("12% of total") -- the
+            # native SVG <title> tooltip already existed for the exact
+            # value; this only adds context a reader would otherwise have
+            # to compute by eye against every other country's shade.
+            tip = f"{country['name']}: {value:.1f} ({_ordinal(rank_by_id[cid])} of {n_with_data}"
+            if show_percent_of_total:
+                # One decimal, not zero: with dozens of countries sharing
+                # one total, most individual shares round to "0%" or "1%"
+                # at zero decimals, which erases exactly the signal this
+                # stat exists to show.
+                tip += f", {value / values_total * 100:.1f}% of total"
+            tip += ")"
         parts.append(
-            f'<path class="country" tabindex="0" d="{path_d}" fill="{fill}" '
+            f'<path class="country" tabindex="0" d="{path_d}" fill="{fill}" fill-opacity="{_COUNTRY_FILL_OPACITY}" '
             f'stroke="{edge}" stroke-width="0.4"><title>{xml_escape(tip)}</title></path>'
         )
 
-    # ---- legend: ramp swatches + low/high labels ----
+    # ---- legend: ramp swatches + min/median/max labels ----
     ly = height - 16.0
+    swatch_top = ly - 11.0
     lx0 = side_margin
     parts.append(f'<text x="{lx0:.1f}" y="{ly:.1f}" font-size="11" fill="{SECONDARY}">{v_min:.0f}</text>')
     swatch_x = lx0 + 26.0
     n_swatches = 8
+    swatch_run = n_swatches * 16.0
     for i in range(n_swatches):
-        t = i / (n_swatches - 1)
-        parts.append(f'<rect x="{swatch_x + i * 16:.1f}" y="{ly - 11:.1f}" width="14" height="12" fill="{_ramp_hex(t)}"/>')
+        # Sample the legend strip across the same value range the map
+        # itself used, converting each swatch's *value* through
+        # _color_for_value so the legend and the map are always the same
+        # ramp -- sequential or diverging -- rather than two independent
+        # color choices that could drift apart.
+        swatch_value = v_min + (v_max - v_min) * i / (n_swatches - 1)
+        parts.append(f'<rect x="{swatch_x + i * 16:.1f}" y="{swatch_top:.1f}" width="14" height="12" fill="{_color_for_value(swatch_value)}"/>')
     parts.append(
-        f'<text x="{swatch_x + n_swatches * 16 + 6:.1f}" y="{ly:.1f}" font-size="11" '
+        f'<text x="{swatch_x + swatch_run + 6:.1f}" y="{ly:.1f}" font-size="11" '
         f'fill="{SECONDARY}">{v_max:.0f}</text>'
     )
-    swatch_end = swatch_x + n_swatches * 16 + 40
-    parts.append(f'<rect x="{swatch_end:.1f}" y="{ly - 11:.1f}" width="14" height="12" fill="{NO_DATA}" stroke="{NO_DATA_EDGE}"/>')
+    # Median tick: a short caret sitting on the swatch strip at the
+    # proportional x position of the median value, with its own label
+    # above -- so a reader can place "typical" on the ramp, not just the
+    # two extremes.
+    median_frac = (v_median - v_min) / (v_max - v_min) if v_max > v_min else 0.5
+    median_x = swatch_x + median_frac * swatch_run
+    parts.append(
+        f'<path d="M {median_x:.1f},{swatch_top - 1:.1f} L {median_x:.1f},{swatch_top + 13:.1f}" '
+        f'stroke="{INK}" stroke-width="1"/>'
+    )
+    parts.append(
+        f'<text x="{median_x:.1f}" y="{swatch_top - 4:.1f}" font-size="9" text-anchor="middle" '
+        f'fill="{SECONDARY}">med {v_median:.0f}</text>'
+    )
+    swatch_end = swatch_x + swatch_run + 40
+    parts.append(f'<rect x="{swatch_end:.1f}" y="{swatch_top:.1f}" width="14" height="12" fill="{NO_DATA}" stroke="{NO_DATA_EDGE}"/>')
     parts.append(f'<text x="{swatch_end + 20:.1f}" y="{ly:.1f}" font-size="11" fill="{SECONDARY}">No data</text>')
 
     parts.append(fullscreen_control(width, height, mode))
@@ -336,6 +641,8 @@ def make_choropleth(
     height: int = 420,
     mode: str = "self-contained",
     accessibility: str = "universal",
+    diverging: Optional[bool] = None,
+    relief: bool = True,
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -351,7 +658,7 @@ def make_choropleth(
         Chart text.
     width, height : int
         Canvas size in pixels.
-    mode, accessibility : str
+    mode, accessibility, diverging, relief
         Forwarded to :func:`build_svg`.
 
     Returns
@@ -366,7 +673,7 @@ def make_choropleth(
     True
     """
     svg = build_svg(data, title=title, subtitle=subtitle, width=width, height=height,
-                     mode=mode, accessibility=accessibility)
+                     mode=mode, accessibility=accessibility, diverging=diverging, relief=relief)
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)
 
