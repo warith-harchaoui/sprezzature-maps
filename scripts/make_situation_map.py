@@ -97,6 +97,13 @@ _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
 # the United States -- see _bbox_in_united_states -- so a France or Himalaya
 # situation map never pays to load it.
 _US_STATES_TOPOJSON = _ASSETS / "us-states.json"
+# Coarse pyramid tier (3% weighted Visvalingam, re-derived from the same raw
+# TIGER shapefile rather than re-simplifying the fine TopoJSON, to avoid
+# compounding two simplification passes) for whole-country-or-wider US
+# renders, where the fine tier's extra detail cannot survive the render's
+# own pixel density anyway -- same rationale, and the same bbox-span
+# threshold, as _land_topojson_for_bbox's 50m/10m country-boundary choice.
+_US_STATES_TOPOJSON_COARSE = _ASSETS / "us-states-coarse.json"
 # The vendored file's own bounds (CONUS + Alaska + Hawaii + PR/Guam/USVI/
 # N. Mariana Is., i.e. every TIGER "state" record) -- used as a cheap bbox
 # pre-filter so non-US callers skip the TopoJSON load entirely.
@@ -110,32 +117,83 @@ _US_STATES_BOUNDS = (-179.24, -14.61, 179.86, 71.44)
 # every other tier here: mapshaper, 15% weighted Visvalingam keep-shapes,
 # quantized TopoJSON.
 _FR_REGIONS_TOPOJSON = _ASSETS / "fr-regions.json"
+# Coarse pyramid tier -- same rationale as _US_STATES_TOPOJSON_COARSE.
+_FR_REGIONS_TOPOJSON_COARSE = _ASSETS / "fr-regions-coarse.json"
 # Metropolitan France plus every overseas region -- Guyane (South America)
 # pushes the west bound out to the Americas and La Reunion/Mayotte (Indian
 # Ocean) push the east bound past Africa, so this bbox is wide for the same
 # reason _US_STATES_BOUNDS is (a scattered national territory), not a bug.
 _FR_REGIONS_BOUNDS = (-61.81, -21.39, 55.84, 51.09)
 
-# Third admin-1 source (task #31): Switzerland's 26 cantons, sourced
-# directly from OpenStreetMap (c) OpenStreetMap contributors, ODbL 1.0 --
-# the first ODbL-licensed data this repo vendors, unlike TIGER (public
-# domain) and IGN/ADMIN-EXPRESS (Licence Ouverte 2.0). ODbL's share-alike
-# clause binds a *produced work* (a rendered map) only to attribution, not
-# redistribution of the underlying data under ODbL -- but the vendored
-# ch-cantons.json file below *is* a derivative database extracted from OSM,
-# so it is itself ODbL-licensed and must carry the same attribution; see
-# the provenance table in doc/CARTOGRAPHY.tex and the README credit.
-# Fetched via one Overpass API query (admin_level=4 boundary=administrative
-# relations inside CH, "out geom" so each way member carries its own
-# lon/lat geometry inline) -- no OSM PBF/osmium/GDAL needed. Assembled with
+# Third admin-1 source (task #31), and the only one that is a registry of
+# several countries rather than a single file: OpenStreetMap (c)
+# OpenStreetMap contributors, ODbL 1.0 -- the first ODbL-licensed data
+# this repo vendors, unlike TIGER (public domain) and IGN/ADMIN-EXPRESS
+# (Licence Ouverte 2.0). ODbL's share-alike clause binds a *produced
+# work* (a rendered map) only to attribution, not redistribution of the
+# underlying data under ODbL -- but each vendored file below *is* a
+# derivative database extracted from OSM, so it is itself ODbL-licensed
+# and must carry the same attribution; see the provenance table in
+# doc/CARTOGRAPHY.tex and the README credit.
+#
+# Every entry was fetched the same way: one Overpass API query
+# (boundary=administrative at the country's state-equivalent
+# admin_level, "out geom" so each way member carries its own lon/lat
+# geometry inline) -- no OSM PBF/osmium/GDAL needed. Assembled with
 # shapely.ops.polygonize (outer-role ways unioned, inner-role ways
-# subtracted as holes) since Overpass returns each multipolygon relation as
-# loose way segments, not ready-made rings; Switzerland was chosen as the
-# pilot specifically because its cantons include genuine mutual enclaves
-# (Appenzell Innerrhoden/Ausserrhoden, the Basel split) that exercise the
-# inner/outer assembly path, not just simple single-ring shapes.
-_CH_CANTONS_TOPOJSON = _ASSETS / "ch-cantons.json"
-_CH_CANTONS_BOUNDS = (5.96, 45.82, 10.49, 47.81)
+# subtracted as holes) since Overpass returns each multipolygon relation
+# as loose way segments, not ready-made rings. A registry keyed by
+# country, not one loader function per country, since three near-
+# identical (path, bounds, admin_level, feature-count) tuples is the
+# point past which copy-pasting :func:`load_us_states`-style boilerplate
+# a third time stops paying for itself; adding a fourth OSM country is a
+# vendoring pass (Overpass query + mapshaper) and one registry entry,
+# not new code.
+#
+# Switzerland (26 cantons) was the pilot specifically because several
+# cantons, Appenzell Innerrhoden/Ausserrhoden most notably, interleave
+# into mutual enclaves rather than forming simple single-ring shapes, a
+# real test of the outer/inner assembly rather than a token one. Germany
+# (16 Bundesländer) and Italy (20 regioni) followed once that path was
+# proven, both also admin_level=4 in OSM's tagging scheme like
+# Switzerland (the level is a national convention, not a global
+# constant -- worth re-verifying per country before adding a fifth).
+# Each entry: (fine-tier path, coarse-tier path, bounds, TopoJSON object
+# name). The coarse tier (3% weighted Visvalingam, re-derived from the same
+# raw Overpass extract rather than re-simplifying the fine TopoJSON) is
+# picked instead of the fine one past the same bbox-span threshold as
+# _US_STATES_TOPOJSON_COARSE -- see _admin1_tier_path.
+_OSM_ADMIN1_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, float], str]] = {
+    "CH": (_ASSETS / "ch-cantons.json", _ASSETS / "ch-cantons-coarse.json",
+           (5.96, 45.82, 10.49, 47.81), "cantons"),
+    "DE": (_ASSETS / "de-states.json", _ASSETS / "de-states-coarse.json",
+           (5.87, 47.27, 15.04, 55.10), "states"),
+    "IT": (_ASSETS / "it-regions.json", _ASSETS / "it-regions-coarse.json",
+           (6.63, 35.49, 18.52, 47.09), "regions"),
+}
+
+# Admin-2 (second sub-national tier, one level finer than admin-1) registry,
+# same shape as :data:`_OSM_ADMIN1_SOURCES` for the same reason: a registry
+# from the start rather than a bespoke loader function per source, since
+# admin-1 already proved that pattern stops paying for itself past one
+# instance. The only entry so far is France's 101 departments (96
+# metropolitan plus 5 overseas), the same IGN ADMIN-EXPRESS product
+# admin-1's `fr-regions.json` came from, via the same `france-geojson`
+# mirror -- vendored once more at the finer granularity. US counties
+# (3000+, a much heavier vendoring pass) and Swiss districts remain
+# unvendored; see the roadmap in doc/CARTOGRAPHY.tex.
+_ADMIN2_SOURCES: dict[str, tuple[Path, tuple[float, float, float, float], str]] = {
+    "FR": (_ASSETS / "fr-departments.json", (-61.81, -21.39, 55.84, 51.09), "departments"),
+}
+
+# Admin-2 lines are one level more detailed than admin-1 again, so they only
+# earn their clutter once a render is zoomed in past a single admin-1 unit,
+# not merely past the whole country the way admin-1 itself activates at 25
+# degrees. Roughly the angular span of one to a few French regions, chosen
+# empirically the same way :data:`_TEN_M_BBOX_DEGREES_THRESHOLD` was: narrow
+# enough that a whole-country plate (25deg+) never shows 101 department
+# lines at once, wide enough that a single-region zoom still gets them.
+_ADMIN2_BBOX_DEGREES_THRESHOLD = 8.0
 
 # A region bbox whose longer side is narrower than this many degrees reads as
 # "a single country or a small sub-region" rather than "a continent-scale
@@ -409,11 +467,7 @@ def _bbox_in_united_states(bbox: Optional[Iterable[float]]) -> bool:
         real geometry does not intersect the region, so a false positive
         here only costs one extra TopoJSON load, never a wrong border.
     """
-    if bbox is None:
-        return False
-    west, south, east, north = bbox
-    us_west, us_south, us_east, us_north = _US_STATES_BOUNDS
-    return west <= us_east and east >= us_west and south <= us_north and north >= us_south
+    return _bbox_overlaps(bbox, _US_STATES_BOUNDS)
 
 
 def _named_polygons_from_topojson(topo: dict[str, Any], object_name: str) -> list[tuple[str, Any]]:
@@ -502,7 +556,8 @@ def load_us_states(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, An
     """
     if not _bbox_in_united_states(bbox):
         return []
-    topo = json.loads(_US_STATES_TOPOJSON.read_text())
+    path = _admin1_tier_path(bbox, _US_STATES_TOPOJSON, _US_STATES_TOPOJSON_COARSE)
+    topo = json.loads(path.read_text())
     return _named_polygons_from_topojson(topo, "states")
 
 
@@ -512,11 +567,7 @@ def _bbox_in_france(bbox: Optional[Iterable[float]]) -> bool:
     Same bounds-overlap contract as :func:`_bbox_in_united_states`, against
     :data:`_FR_REGIONS_BOUNDS` instead.
     """
-    if bbox is None:
-        return False
-    west, south, east, north = bbox
-    fr_west, fr_south, fr_east, fr_north = _FR_REGIONS_BOUNDS
-    return west <= fr_east and east >= fr_west and south <= fr_north and north >= fr_south
+    return _bbox_overlaps(bbox, _FR_REGIONS_BOUNDS)
 
 
 def load_fr_regions(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
@@ -541,50 +592,145 @@ def load_fr_regions(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, A
     """
     if not _bbox_in_france(bbox):
         return []
-    topo = json.loads(_FR_REGIONS_TOPOJSON.read_text())
+    path = _admin1_tier_path(bbox, _FR_REGIONS_TOPOJSON, _FR_REGIONS_TOPOJSON_COARSE)
+    topo = json.loads(path.read_text())
     return _named_polygons_from_topojson(topo, "regions")
 
 
-def _bbox_in_switzerland(bbox: Optional[Iterable[float]]) -> bool:
-    """Cheaply test whether a region bbox falls inside the vendored OSM extent.
+def _bbox_overlaps(bbox: Optional[Iterable[float]],
+                   bounds: tuple[float, float, float, float]) -> bool:
+    """Cheap bounds-overlap test shared by every admin-1 source's bbox pre-filter.
 
-    Same bounds-overlap contract as :func:`_bbox_in_united_states`, against
-    :data:`_CH_CANTONS_BOUNDS` instead.
+    Parameters
+    ----------
+    bbox : iterable of float or None
+        ``(west, south, east, north)`` in degrees, or ``None`` (no region
+        context -- returns ``False``, so a missing bbox never opts in).
+    bounds : (float, float, float, float)
+        The candidate source's own ``(west, south, east, north)`` extent.
+
+    Returns
+    -------
+    bool
+        A bounds overlap, not a true point-in-polygon test: cheap, and
+        deliberately biased toward false positives over false negatives,
+        since every caller already re-checks with a real per-feature
+        intersection before drawing anything.
     """
     if bbox is None:
         return False
     west, south, east, north = bbox
-    ch_west, ch_south, ch_east, ch_north = _CH_CANTONS_BOUNDS
-    return west <= ch_east and east >= ch_west and south <= ch_north and north >= ch_south
+    b_west, b_south, b_east, b_north = bounds
+    return west <= b_east and east >= b_west and south <= b_north and north >= b_south
 
 
-def load_ch_cantons(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
-    """Return ``(name, polygon)`` for every Swiss canton that overlaps a bbox.
+def _admin1_tier_path(bbox: Optional[Iterable[float]], fine_path: Path, coarse_path: Path) -> Path:
+    """Pick the fine or coarse simplification tier for an admin-1/admin-2 source.
+
+    Same algorithmic-tier-selection pattern as :func:`_land_topojson_for_bbox`
+    (which the admin-0 country boundaries already use), reusing its exact
+    threshold rather than inventing a second magic number: an admin-1
+    boundary render only needs the coarse tier's lighter weight past the
+    same bbox span where the country-boundary tier itself already drops to
+    1:50m, since that is where the fine tier's extra vertices stop being
+    visible at the render's own pixel density.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None
+        ``(west, south, east, north)`` in degrees. ``None`` keeps the fine
+        tier, matching how a missing bbox context is treated elsewhere in
+        this module (no info to downgrade on).
+    fine_path, coarse_path : pathlib.Path
+        The two vendored tiers for one source.
+
+    Returns
+    -------
+    pathlib.Path
+        ``coarse_path`` when the bbox's longer side is at least
+        :data:`_TEN_M_BBOX_DEGREES_THRESHOLD`, otherwise ``fine_path``.
+    """
+    if bbox is None:
+        return fine_path
+    west, south, east, north = bbox
+    span = max(east - west, north - south)
+    return coarse_path if span >= _TEN_M_BBOX_DEGREES_THRESHOLD else fine_path
+
+
+def _bbox_in_osm_admin1(bbox: Optional[Iterable[float]]) -> bool:
+    """Cheaply test whether a region bbox overlaps *any* vendored OSM country.
+
+    Used by :func:`_attribution_layer` to decide whether the ODbL credit is
+    owed, without caring which of :data:`_OSM_ADMIN1_SOURCES` matched.
+    """
+    return any(_bbox_overlaps(bbox, bounds) for _, _, bounds, _ in _OSM_ADMIN1_SOURCES.values())
+
+
+def load_osm_admin1(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+    """Return ``(name, polygon)`` for every OSM admin-1 feature that overlaps a bbox.
 
     The OpenStreetMap counterpart to :func:`load_us_states` /
-    :func:`load_fr_regions` -- lets a Switzerland-region situation map draw
-    real cantonal boundaries instead of stopping at the national frontier.
-    Data (c) OpenStreetMap contributors, ODbL 1.0 -- any rendered map using
-    this layer must carry that attribution; :func:`_attribution_layer` adds
-    it automatically to any plate that actually draws from this source.
+    :func:`load_fr_regions` -- lets a situation map in any country listed in
+    :data:`_OSM_ADMIN1_SOURCES` draw real sub-national boundaries instead of
+    stopping at the national frontier. Data (c) OpenStreetMap contributors,
+    ODbL 1.0 -- any rendered map using this layer must carry that
+    attribution; :func:`_attribution_layer` adds it automatically to any
+    plate that actually draws from one of these sources.
 
     Parameters
     ----------
     bbox : iterable of float or None, optional
-        ``(west, south, east, north)`` in degrees. When the bbox does not
-        overlap the vendored extent (see :func:`_bbox_in_switzerland`), the
-        TopoJSON is not even loaded and an empty list is returned -- this is
-        what makes calling it unconditionally cheap for non-Swiss maps.
+        ``(west, south, east, north)`` in degrees. Only the registry
+        entries whose own extent overlaps this bbox are even read from
+        disk (see :func:`_bbox_overlaps`) -- this is what makes calling it
+        unconditionally cheap for a situation map outside every vendored
+        OSM country, and cheap-per-extra-country as the registry grows.
 
     Returns
     -------
     list of (str, shapely geometry)
-        Canton name paired with its (repaired) polygon, WGS84 lon/lat.
+        Feature name paired with its (repaired) polygon, WGS84 lon/lat,
+        pooled across every matching country.
     """
-    if not _bbox_in_switzerland(bbox):
-        return []
-    topo = json.loads(_CH_CANTONS_TOPOJSON.read_text())
-    return _named_polygons_from_topojson(topo, "cantons")
+    out: list[tuple[str, Any]] = []
+    for fine_path, coarse_path, bounds, object_name in _OSM_ADMIN1_SOURCES.values():
+        if not _bbox_overlaps(bbox, bounds):
+            continue
+        path = _admin1_tier_path(bbox, fine_path, coarse_path)
+        topo = json.loads(path.read_text())
+        out.extend(_named_polygons_from_topojson(topo, object_name))
+    return out
+
+
+def load_admin2(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+    """Return ``(name, polygon)`` for every admin-2 feature that overlaps a bbox.
+
+    One level finer than :func:`load_us_states`/:func:`load_fr_regions`/
+    :func:`load_osm_admin1` -- currently France's departments only (see
+    :data:`_ADMIN2_SOURCES`), drawn by :func:`_admin2_borders_layer` rather
+    than :func:`_internal_borders_layer`, since admin-2 additionally gates
+    on zoom level (:data:`_ADMIN2_BBOX_DEGREES_THRESHOLD`), not just bbox
+    overlap: a whole-country plate should not show a hundred department
+    lines even where the data is available.
+
+    Parameters
+    ----------
+    bbox : iterable of float or None, optional
+        ``(west, south, east, north)`` in degrees. Only registry entries
+        whose own extent overlaps this bbox are read from disk.
+
+    Returns
+    -------
+    list of (str, shapely geometry)
+        Feature name paired with its (repaired) polygon, WGS84 lon/lat.
+    """
+    out: list[tuple[str, Any]] = []
+    for topo_path, bounds, object_name in _ADMIN2_SOURCES.values():
+        if not _bbox_overlaps(bbox, bounds):
+            continue
+        topo = json.loads(topo_path.read_text())
+        out.extend(_named_polygons_from_topojson(topo, object_name))
+    return out
 
 
 def load_rivers() -> list[tuple[Any, str, int]]:
@@ -1089,8 +1235,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 3b. frontiers (international borders + neighbour labels) --------------- #
     layers.append(_frontiers_layer(cfg, proj, vp, region_box))
 
-    # 3c. internal-borders (US state lines, task #31's first admin-1 tier) --- #
+    # 3c. internal-borders (admin-1: US states, FR regions, OSM countries) --- #
     layers.append(_internal_borders_layer(cfg, proj, vp, region_box))
+
+    # 3d. admin2-borders (admin-2, currently FR departments, zoom-gated) ----- #
+    layers.append(_admin2_borders_layer(cfg, proj, vp, region_box))
 
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp))
@@ -1320,6 +1469,24 @@ def _frontiers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
 
 
+def _polygonal_boundary_source(poly: Any) -> Optional[Any]:
+    """Return a geometry whose ``.boundary`` is well-defined, or ``None`` if it has none.
+
+    TIGER's self-touching rings near complex coastlines (observed on Texas,
+    Oklahoma) make ``make_valid()`` return a ``GeometryCollection`` mixing
+    the repaired polygon with degenerate point/line artifacts; a
+    ``GeometryCollection`` has no well-defined ``.boundary`` (``None`` in
+    shapely, not an empty geometry), so this extracts just the polygonal
+    part first. Shared by every admin-1/admin-2 border layer rather than
+    inlined per layer, since it is a defensive fix for a real vendored-data
+    quirk, not an arbitrary style choice each layer could reasonably repeat.
+    """
+    if poly.geom_type != "GeometryCollection":
+        return poly
+    polys = [g for g in poly.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+    return unary_union(polys) if polys else None
+
+
 def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
                             region_box: Any) -> str:
     """Return sub-national admin-1 borders (US states, French regions) for covered areas.
@@ -1329,18 +1496,18 @@ def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
     borders, which read as secondary to national ones. Draws from every
     vendored admin-1 source whose bbox overlaps the region: TIGER
     (:func:`load_us_states`, US), IGN/ADMIN-EXPRESS (:func:`load_fr_regions`,
-    France), and OpenStreetMap (:func:`load_ch_cantons`, Switzerland).
-    Silently a no-op wherever none of them cover the region: each loader
-    already skips its own TopoJSON load when the bbox does not overlap its
-    extent, so a situation map of, say, the Himalaya pays nothing for this
-    layer beyond three bounds checks.
+    France), and OpenStreetMap (:func:`load_osm_admin1`, currently
+    Switzerland, Germany, Italy). Silently a no-op wherever none of them
+    cover the region: each loader already skips its own TopoJSON load when
+    the bbox does not overlap its extent, so a situation map of, say, the
+    Himalaya pays nothing for this layer beyond a handful of bounds checks.
 
-    The OSM source carries a real obligation the other two do not: ODbL
-    requires attribution on any produced work (a rendered map) that uses it.
-    :func:`_attribution_layer` adds that credit automatically whenever this
-    layer would actually draw Swiss cantons -- this function does not add it
-    itself, since it has no rendered text layer of its own to attach a
-    footer to.
+    The OSM sources carry a real obligation the other two do not: ODbL
+    requires attribution on any produced work (a rendered map) that uses
+    it. :func:`_attribution_layer` adds that credit automatically whenever
+    this layer would actually draw from one of them -- this function does
+    not add it itself, since it has no rendered text layer of its own to
+    attach a footer to.
     """
     ib = cfg.get("internal_borders", {})
     if ib.get("show", True) is False:
@@ -1355,7 +1522,7 @@ def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
     admin1 = (
         load_us_states(bbox=region_box.bounds)
         + load_fr_regions(bbox=region_box.bounds)
-        + load_ch_cantons(bbox=region_box.bounds)
+        + load_osm_admin1(bbox=region_box.bounds)
     )
     for name, poly in admin1:
         try:
@@ -1364,17 +1531,9 @@ def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
             continue
         if vis.is_empty:
             continue
-        # TIGER's self-touching rings near complex coastlines (observed on
-        # Texas, Oklahoma) make make_valid() return a GeometryCollection
-        # mixing the repaired polygon with degenerate point/line artifacts;
-        # a GeometryCollection has no well-defined .boundary (None in
-        # shapely), so extract just the polygonal part first.
-        boundary_source = poly
-        if poly.geom_type == "GeometryCollection":
-            polys = [g for g in poly.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
-            if not polys:
-                continue
-            boundary_source = unary_union(polys)
+        boundary_source = _polygonal_boundary_source(poly)
+        if boundary_source is None:
+            continue
         gp = _project_geom(boundary_source.boundary.intersection(region_box), proj)
         d = projected_geom_to_path(gp, vp, close=False)
         if d:
@@ -1389,6 +1548,56 @@ def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
             labels.append(tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf",
                                        tracking=1.6, weight="500"))
     return f'<g id="internal-borders">{"".join(lines)}{"".join(labels)}</g>'
+
+
+def _admin2_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
+                          region_box: Any) -> str:
+    """Return admin-2 borders (French departments) for a sufficiently zoomed-in region.
+
+    A second, finer tier below :func:`_internal_borders_layer`'s admin-1
+    lines, in an even lighter hairline, drawn only once the region bbox is
+    zoomed in past :data:`_ADMIN2_BBOX_DEGREES_THRESHOLD` -- unlike admin-1
+    (gated purely on which vendored source overlaps the bbox), admin-2 also
+    gates on zoom, since a whole-country plate should never show a hundred
+    department lines even where the data exists for it.
+    """
+    ib = cfg.get("admin2_borders", {})
+    if ib.get("show", True) is False:
+        return '<g id="admin2-borders"></g>'
+    west, south, east, north = region_box.bounds
+    if max(east - west, north - south) >= _ADMIN2_BBOX_DEGREES_THRESHOLD:
+        return '<g id="admin2-borders"></g>'
+    ts = vp["ts"]
+    color = ib.get("color", "#d6d9db")
+    do_label = ib.get("label_names", False)
+    min_frac = float(ib.get("label_min_area_frac", 0.02))
+    region_area = region_box.area
+    lines: list[str] = []
+    labels: list[str] = []
+    for name, poly in load_admin2(bbox=region_box.bounds):
+        try:
+            vis = poly.intersection(region_box)
+        except Exception:
+            continue
+        if vis.is_empty:
+            continue
+        boundary_source = _polygonal_boundary_source(poly)
+        if boundary_source is None:
+            continue
+        gp = _project_geom(boundary_source.boundary.intersection(region_box), proj)
+        d = projected_geom_to_path(gp, vp, close=False)
+        if d:
+            lines.append(
+                f'<path d="{d}" fill="none" stroke="{color}" '
+                f'stroke-width="{0.45 * ts:.1f}" stroke-opacity="0.7" '
+                f'stroke-dasharray="{1.4 * ts:.1f} {1.4 * ts:.1f}"/>'
+            )
+        if do_label and name and vis.area >= min_frac * region_area:
+            pt = vis.representative_point()
+            x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
+            labels.append(tracked_text(x, y, name, size=6.8 * ts, fill="#b5b9bc",
+                                       tracking=1.2, weight="500"))
+    return f'<g id="admin2-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
 def _rivers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
@@ -1606,16 +1815,16 @@ def _attribution_layer(cfg: dict[str, Any], vp: dict[str, Any],
 
     Natural Earth (public domain) and TIGER/IGN (public domain / Licence
     Ouverte) need no runtime attribution, but OpenStreetMap's ODbL requires
-    one on any produced work -- so whenever :func:`load_ch_cantons` would
+    one on any produced work -- so whenever :func:`load_osm_admin1` would
     actually draw something for this ``bbox`` (see
-    :func:`_bbox_in_switzerland`), the required "(c) OpenStreetMap
+    :func:`_bbox_in_osm_admin1`), the required "(c) OpenStreetMap
     contributors" credit is added automatically, rather than left for the
     caller to remember. ``cfg["attribution"]`` (a string or list of strings)
     appends further caller-supplied credits to the same line, for callers
     who bring their own additional licensed sources.
     """
     credits: list[str] = []
-    if _bbox_in_switzerland(bbox) and cfg.get("internal_borders", {}).get("show", True) is not False:
+    if _bbox_in_osm_admin1(bbox) and cfg.get("internal_borders", {}).get("show", True) is not False:
         credits.append("© OpenStreetMap contributors (ODbL)")
     extra = cfg.get("attribution")
     if isinstance(extra, str) and extra:

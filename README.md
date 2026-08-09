@@ -96,6 +96,23 @@ cartography plan (ETOPO-based hypsometric relief, alternate editorial
 projections like Robinson/Mollweide, a shared TopoJSON decoder) are
 tracked but not scheduled.
 
+## Data credits
+
+Code is BSD-3-Clause (see below); the vendored geodata under
+`assets/geo/` carries its own, separate licenses. Full provenance and
+license table: `doc/CARTOGRAPHY.tex` § Data provenance and licensing.
+Most of it (Natural Earth, USGS/NGA GMTED2010, U.S. Census TIGER/Line)
+is public domain and needs no credit. Two sources are not:
+
+- France region and department boundaries: © IGN, ADMIN EXPRESS, via
+  the [`gregoiredavid/france-geojson`](https://github.com/gregoiredavid/france-geojson)
+  mirror, [Licence Ouverte / Etalab 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/).
+- Switzerland, Germany, and Italy admin-1 boundaries: © [OpenStreetMap](https://www.openstreetmap.org/copyright)
+  contributors, [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+  `situation_map` renders using any of these adds the required credit
+  to the plate itself automatically (see `_attribution_layer` in
+  `scripts/make_situation_map.py`).
+
 ## License
 
 BSD-3-Clause.
