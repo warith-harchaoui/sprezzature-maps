@@ -176,14 +176,34 @@ _OSM_ADMIN1_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, floa
 # same shape as :data:`_OSM_ADMIN1_SOURCES` for the same reason: a registry
 # from the start rather than a bespoke loader function per source, since
 # admin-1 already proved that pattern stops paying for itself past one
-# instance. The only entry so far is France's 101 departments (96
-# metropolitan plus 5 overseas), the same IGN ADMIN-EXPRESS product
-# admin-1's `fr-regions.json` came from, via the same `france-geojson`
-# mirror -- vendored once more at the finer granularity. US counties
-# (3000+, a much heavier vendoring pass) and Swiss districts remain
-# unvendored; see the roadmap in doc/CARTOGRAPHY.tex.
-_ADMIN2_SOURCES: dict[str, tuple[Path, tuple[float, float, float, float], str]] = {
-    "FR": (_ASSETS / "fr-departments.json", (-61.81, -21.39, 55.84, 51.09), "departments"),
+# instance. France's 101 departments (96 metropolitan plus 5 overseas) came
+# from the same IGN ADMIN-EXPRESS product admin-1's `fr-regions.json` did,
+# via the same `france-geojson` mirror, vendored once more at the finer
+# granularity. US counties are TIGER/Line again (public domain), the same
+# recipe as `us-states.json` but a substantially heavier pull: 3,235
+# records (every county plus county-equivalent, e.g. Louisiana's parishes
+# and Alaska's boroughs/census areas), 4.6MB even after 15% weighted
+# Visvalingam simplification -- by a wide margin the largest vendored
+# vector file in this repo, flagged explicitly rather than vendored
+# silently. Swiss districts (135 records, ODbL via OpenStreetMap
+# admin_level=6) round this out: unlike admin_level=4 country boundaries,
+# district relations carry no ISO3166-2 tag, so noise-filtering used an
+# area-overlap check against Switzerland's own bbox instead of the
+# ISO-prefix trick admin-1's DE/IT sources needed (none of the 135
+# candidates this query returned needed dropping).
+# Each entry: (fine path, coarse path, bounds, TopoJSON object name) --
+# same fine/coarse pyramid shape :data:`_OSM_ADMIN1_SOURCES` has, added
+# once three admin-2 sources existed and the heaviest of them (US
+# counties, 4.6MB fine) made the weight saving worth having twice: once
+# via the show/hide gate below, and again via a lighter file for the
+# wider end of the window that gate still allows through.
+_ADMIN2_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, float], str]] = {
+    "FR": (_ASSETS / "fr-departments.json", _ASSETS / "fr-departments-coarse.json",
+           (-61.81, -21.39, 55.84, 51.09), "departments"),
+    "US": (_ASSETS / "us-counties.json", _ASSETS / "us-counties-coarse.json",
+           _US_STATES_BOUNDS, "counties"),
+    "CH": (_ASSETS / "ch-districts.json", _ASSETS / "ch-districts-coarse.json",
+           (5.96, 45.82, 10.49, 47.81), "districts"),
 }
 
 # Admin-2 lines are one level more detailed than admin-1 again, so they only
@@ -194,6 +214,16 @@ _ADMIN2_SOURCES: dict[str, tuple[Path, tuple[float, float, float, float], str]] 
 # enough that a whole-country plate (25deg+) never shows 101 department
 # lines at once, wide enough that a single-region zoom still gets them.
 _ADMIN2_BBOX_DEGREES_THRESHOLD = 8.0
+
+# A second, finer threshold inside the window the gate above already
+# allows: past this span (still under the show/hide gate), admin-2 uses
+# its own coarse tier rather than the fine one -- a single large US state
+# (California, Texas) can itself approach or exceed this span, at which
+# point the fine county file's extra detail is not worth its weight
+# either. Deliberately well under _ADMIN2_BBOX_DEGREES_THRESHOLD, not
+# equal to it, so there is a real fine-tier zone left, not just coarse
+# right up to the show/hide edge.
+_ADMIN2_FINE_BBOX_DEGREES_THRESHOLD = 3.0
 
 # A region bbox whose longer side is narrower than this many degrees reads as
 # "a single country or a small sub-region" rather than "a continent-scale
@@ -624,16 +654,20 @@ def _bbox_overlaps(bbox: Optional[Iterable[float]],
     return west <= b_east and east >= b_west and south <= b_north and north >= b_south
 
 
-def _admin1_tier_path(bbox: Optional[Iterable[float]], fine_path: Path, coarse_path: Path) -> Path:
+def _admin1_tier_path(bbox: Optional[Iterable[float]], fine_path: Path, coarse_path: Path,
+                      threshold: float = _TEN_M_BBOX_DEGREES_THRESHOLD) -> Path:
     """Pick the fine or coarse simplification tier for an admin-1/admin-2 source.
 
     Same algorithmic-tier-selection pattern as :func:`_land_topojson_for_bbox`
-    (which the admin-0 country boundaries already use), reusing its exact
-    threshold rather than inventing a second magic number: an admin-1
+    (which the admin-0 country boundaries already use). The default
+    ``threshold`` reuses that function's exact 25-degree constant rather
+    than inventing a second magic number for admin-1 sources: an admin-1
     boundary render only needs the coarse tier's lighter weight past the
     same bbox span where the country-boundary tier itself already drops to
     1:50m, since that is where the fine tier's extra vertices stop being
-    visible at the render's own pixel density.
+    visible at the render's own pixel density. Admin-2 callers pass
+    :data:`_ADMIN2_FINE_BBOX_DEGREES_THRESHOLD` instead, a tighter cutoff
+    appropriate to admin-2's own, much narrower, visible zoom window.
 
     Parameters
     ----------
@@ -643,18 +677,21 @@ def _admin1_tier_path(bbox: Optional[Iterable[float]], fine_path: Path, coarse_p
         this module (no info to downgrade on).
     fine_path, coarse_path : pathlib.Path
         The two vendored tiers for one source.
+    threshold : float, optional
+        The bbox-span cutoff, in degrees, above which the coarse tier is
+        picked. Defaults to :data:`_TEN_M_BBOX_DEGREES_THRESHOLD`.
 
     Returns
     -------
     pathlib.Path
         ``coarse_path`` when the bbox's longer side is at least
-        :data:`_TEN_M_BBOX_DEGREES_THRESHOLD`, otherwise ``fine_path``.
+        ``threshold``, otherwise ``fine_path``.
     """
     if bbox is None:
         return fine_path
     west, south, east, north = bbox
     span = max(east - west, north - south)
-    return coarse_path if span >= _TEN_M_BBOX_DEGREES_THRESHOLD else fine_path
+    return coarse_path if span >= threshold else fine_path
 
 
 def _bbox_in_osm_admin1(bbox: Optional[Iterable[float]]) -> bool:
@@ -706,12 +743,16 @@ def load_admin2(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]
     """Return ``(name, polygon)`` for every admin-2 feature that overlaps a bbox.
 
     One level finer than :func:`load_us_states`/:func:`load_fr_regions`/
-    :func:`load_osm_admin1` -- currently France's departments only (see
-    :data:`_ADMIN2_SOURCES`), drawn by :func:`_admin2_borders_layer` rather
-    than :func:`_internal_borders_layer`, since admin-2 additionally gates
-    on zoom level (:data:`_ADMIN2_BBOX_DEGREES_THRESHOLD`), not just bbox
+    :func:`load_osm_admin1` -- France's departments, US counties, and
+    Swiss districts (see :data:`_ADMIN2_SOURCES`), drawn by
+    :func:`_admin2_borders_layer` rather than
+    :func:`_internal_borders_layer`, since admin-2 additionally gates on
+    zoom level (:data:`_ADMIN2_BBOX_DEGREES_THRESHOLD`), not just bbox
     overlap: a whole-country plate should not show a hundred department
-    lines even where the data is available.
+    lines even where the data is available. Within that gate, each source
+    also picks its own fine/coarse tier via
+    :data:`_ADMIN2_FINE_BBOX_DEGREES_THRESHOLD`, the same pyramid pattern
+    :func:`load_us_states` and friends use, just at admin-2's own scale.
 
     Parameters
     ----------
@@ -725,10 +766,12 @@ def load_admin2(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]
         Feature name paired with its (repaired) polygon, WGS84 lon/lat.
     """
     out: list[tuple[str, Any]] = []
-    for topo_path, bounds, object_name in _ADMIN2_SOURCES.values():
+    for fine_path, coarse_path, bounds, object_name in _ADMIN2_SOURCES.values():
         if not _bbox_overlaps(bbox, bounds):
             continue
-        topo = json.loads(topo_path.read_text())
+        path = _admin1_tier_path(bbox, fine_path, coarse_path,
+                                 threshold=_ADMIN2_FINE_BBOX_DEGREES_THRESHOLD)
+        topo = json.loads(path.read_text())
         out.extend(_named_polygons_from_topojson(topo, object_name))
     return out
 
