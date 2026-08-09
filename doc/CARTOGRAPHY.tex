@@ -624,14 +624,24 @@ admin-2 needed the identical guard a second time.
 
 A situation map zoomed in past a single admin-1 unit, one French
 region rather than the whole country, can profit from one level more
-detail again: admin-2, the next division down, a department in France.
+detail again: admin-2, the next division down, a department in France,
+a county in the United States, a district in Switzerland.
 \texttt{load\_admin2} follows the same registry shape as the OSM
-sources above, one entry so far, France's 101 departments (96
+sources above, three entries: France's 101 departments (96
 metropolitan plus 5 overseas), from the same IGN ADMIN EXPRESS product
-admin-1's French regions came from, vendored once more at the finer
-granularity. United States counties (over 3{,}000 records, a
-substantially heavier vendoring pass) and Swiss districts remain
-unvendored, left for the roadmap in Section~\ref{sec:roadmap}.
+admin-1's French regions came from; United States counties, TIGER/Line
+again, 3{,}235 records (every county plus county-equivalent, Louisiana's
+parishes and Alaska's boroughs and census areas included) and, at
+4.6MB even after simplification, by a wide margin the largest vendored
+vector file in this repository; and Switzerland's 135 districts, via
+Overpass \texttt{admin\_level=6}. The district relations needed a
+different noise-filtering approach than admin-1's OSM sources: district
+boundaries carry no \texttt{ISO3166-2} tag (that tag only covers a
+country's first administrative level), so instead of the prefix filter
+Germany and Italy needed, each candidate's assembled geometry is
+checked for at least fifty percent area overlap with Switzerland's own
+bbox before being kept -- for this particular query all 135 candidates
+passed, no noise to drop.
 
 Admin-2 differs from admin-1 in one structural way beyond just being
 one level finer: it additionally gates on zoom, not only on which
@@ -699,6 +709,36 @@ Italy regions (OSM) & 704\,KB & 160\,KB \\
 \end{tabular}
 \caption{Fine versus coarse TopoJSON file size per admin-1 source, all feature counts unchanged between tiers.}
 \label{tab:admin1-pyramid}
+\end{table}
+
+All three admin-2 sources gained the identical pyramid once a third
+source (Switzerland's districts) existed and the heaviest of them,
+United States counties, made the saving worth having twice over:
+first through the admin-2 show/hide gate above, and again through a
+second, tighter bbox-span threshold,
+\texttt{\_ADMIN2\_FINE\_BBOX\_DEGREES\_THRESHOLD}, three degrees,
+picking between an admin-2 source's own fine and coarse tiers within
+that gate's eight-degree window. Three degrees rather than eight
+itself, so a genuine fine-tier zone survives: some individual United
+States states, California and Texas among them, themselves approach
+or exceed three degrees of angular span, at which point the fine
+county file's extra vertices are no longer worth their weight even
+though the render is still well inside the admin-2 show/hide gate.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Source & Fine tier & Coarse tier \\
+\midrule
+France departments (ADMIN EXPRESS) & 160\,KB & 52\,KB \\
+US counties (TIGER) & 4.6\,MB & 1.4\,MB \\
+Switzerland districts (OSM) & 356\,KB & 100\,KB \\
+\bottomrule
+\end{tabular}
+\caption{Fine versus coarse TopoJSON file size per admin-2 source.}
+\label{tab:admin2-pyramid}
 \end{table}
 
 \subsection{Regional relief}
@@ -968,24 +1008,26 @@ World relief raster & Natural Earth ``Gray Earth'' & Public domain & \texttt{cho
 Global elevation grid (GMTED2010, 30 arc-sec) & USGS/NGA \autocite{danielson-gmted2010} & Public domain (U.S.\ government work) & \texttt{situation\_map} \\
 Rivers and lake centerlines (1:50m) & Natural Earth & Public domain & \texttt{situation\_map} \\
 US state boundaries (TIGER/Line) & U.S.\ Census Bureau \autocite{census-tiger} & Public domain & \texttt{situation\_map} \\
+US county boundaries (TIGER/Line) & U.S.\ Census Bureau \autocite{census-tiger} & Public domain & \texttt{situation\_map} \\
 France region boundaries (ADMIN EXPRESS) & IGN, via \texttt{france-geojson} \autocite{ign-adminexpress} & Licence Ouverte / Etalab 2.0 & \texttt{situation\_map} \\
 France department boundaries (ADMIN EXPRESS) & IGN, via \texttt{france-geojson} \autocite{ign-adminexpress} & Licence Ouverte / Etalab 2.0 & \texttt{situation\_map} \\
 Switzerland, Germany, Italy admin-1 boundaries & OpenStreetMap \autocite{openstreetmap-odbl} & ODbL 1.0 (attribution required) & \texttt{situation\_map} \\
+Switzerland district boundaries (admin-2) & OpenStreetMap \autocite{openstreetmap-odbl} & ODbL 1.0 (attribution required) & \texttt{situation\_map} \\
 \bottomrule
 \end{tabular}
 \caption{Every dataset this codebase vendors, its license, and which generator uses it.}
 \end{table}
 
-The first five rows are genuinely public domain, usable with no
+The first six rows are genuinely public domain, usable with no
 attribution obligation at all, though Natural Earth's own suggested
 short citation, ``Made with Natural Earth,'' is honored here
 regardless, since it costs nothing and this document already cites
-everything else. The two IGN rows are not: Licence Ouverte / Etalab
-2.0 is an attribution license (its Article 4.1 calls for naming the
-source and the data's last update date), credited here and in
-\texttt{README.md} rather than emitted per-render, since its
+everything else. The two IGN rows after them are not: Licence Ouverte
+/ Etalab 2.0 is an attribution license (its Article 4.1 calls for
+naming the source and the data's last update date), credited here and
+in \texttt{README.md} rather than emitted per-render, since its
 obligation is lighter and its enforcement norms softer than ODbL's,
-the distinction the last row draws precisely. OpenStreetMap is the
+the distinction the last two rows draw precisely. OpenStreetMap is the
 first dataset this codebase vendors under a share-alike or
 attribution-required license in the stricter sense: its Open Database
 License requires attribution on any produced work that draws from it,
@@ -1042,37 +1084,47 @@ a contract the eyeball pass already validated.
 The admin-1 boundary tier described in
 Section~\ref{sec:admin1-tiering} closed what had been this document's
 longest-standing open item: a fourth boundary tier above Natural
-Earth's 1:10m, plus the licensing groundwork ODbL required. All three
-follow-on items that roadmap entry itself listed are now done too:
-OpenStreetMap coverage grew from one pilot country to a three-country
-registry (Switzerland, Germany, Italy), an admin-2 tier landed for
-France's departments, and every admin-1 source gained the fine/coarse
-resolution pyramid described in
-Section~\ref{sec:admin1-tiering}. What remains is the coverage this
-second pass still left out, listed here rather than left silently
-implied, on the principle that a document like this one should mark
-what is done and what is not with the same explicitness.
+Earth's 1:10m, plus the licensing groundwork ODbL required. The three
+follow-on items that roadmap entry then listed, wider OpenStreetMap
+coverage, an admin-2 tier, and a resolution pyramid, are now fully
+done, each carried through to completion rather than left as a partial
+pilot: OpenStreetMap coverage grew to a three-country registry
+(Switzerland, Germany, Italy); admin-2 now covers three countries of
+its own (France's departments, United States counties, Switzerland's
+districts), each vendored through a genuinely different path (a
+national mapping-agency product, TIGER/Line again, and a second,
+tag-poorer Overpass query respectively); and every admin-1 \emph{and}
+admin-2 source now has its own fine/coarse resolution pyramid. What
+remains is the coverage this pass still left out, listed here rather
+than left silently implied, on the principle that a document like this
+one should mark what is done and what is not with the same
+explicitness.
 
 \begin{itemize}[leftmargin=1.4em]
-\item \textbf{Coverage beyond five admin-1 countries and one admin-2
-  country}: the OpenStreetMap/Overpass path generalizes directly to
+\item \textbf{Coverage beyond five admin-1 countries and three admin-2
+  countries}: the OpenStreetMap/Overpass path generalizes directly to
   any country's state-equivalent \texttt{admin\_level} (four in every
   country vendored so far, but a national convention to re-verify, not
   a constant, per Section~\ref{sec:admin1-tiering}), so the next
-  country is a query, an \texttt{ISO3166-2}-prefix filter, and a
-  vendoring pass, not new code; the registry shape already
-  accommodates it directly.
-\item \textbf{US counties and Swiss districts} for the admin-2 tier,
-  left unvendored this pass. US counties in particular are a
-  substantially heavier pull, over three thousand records against
-  France's 101 departments, worth budgeting for as a distinct piece of
-  work rather than assumed to be the same size of task.
-\item \textbf{Admin-2's own resolution pyramid}: unlike admin-1,
-  France's departments do not yet have a coarse tier, since admin-2 is
-  already zoom-gated to a narrow bbox span
-  (Section~\ref{sec:admin1-tiering}) where a single fine tier has so
-  far been judged sufficient; worth revisiting once a second admin-2
-  country makes the comparison meaningful.
+  country is a query, a noise filter (an \texttt{ISO3166-2} prefix
+  where the tag exists, an area-overlap check where it does not, per
+  the Swiss districts case), and a vendoring pass, not new code; the
+  registry shape already accommodates it directly. Admin-2 for
+  Germany and Italy, matching the countries admin-1 already covers, is
+  the most immediately useful next slice of this.
+\item \textbf{Admin-3 and deeper}: French communes (over 34{,}000,
+  IGN's finest ADMIN EXPRESS tier) or US census tracts would be a
+  third sub-national level below admin-2, the same relationship
+  admin-2 now has to admin-1; not started, and, at that record count,
+  worth a deliberate size/simplification budget before attempting
+  rather than assumed to scale the same way admin-2 did.
+\item \textbf{A true multi-tier pyramid} rather than the current two
+  discrete steps (fine, coarse) per source, the way elevation's six
+  tiers form a continuous progression: worth revisiting only if a
+  concrete rendering case shows the two-tier pyramid's coarse end
+  still too heavy, or its fine end still too coarse, since two tiers
+  have so far covered every zoom level this codebase's situation maps
+  actually render at.
 \end{itemize}
 
 \clearpage
