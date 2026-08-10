@@ -51,7 +51,7 @@ from __future__ import annotations
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -105,22 +105,22 @@ _render_lock = threading.Lock()
 class ChoroplethRow(BaseModel):
     """One data row for ``POST /v1/choropleth``."""
 
-    id: str = Field(description="ISO-3166-1 numeric country code, e.g. \"840\" for the USA.")
+    id: str = Field(description='ISO-3166-1 numeric country code, e.g. "840" for the USA.')
     value: float = Field(description="The indicator's value for this country.")
 
 
 class ChoroplethRequest(BaseModel):
     """Body for ``POST /v1/choropleth``."""
 
-    data: Optional[list[ChoroplethRow]] = Field(
+    data: list[ChoroplethRow] | None = Field(
         default=None,
         description="Per-country rows. Omit to render the built-in demo data.",
     )
-    title: Optional[str] = Field(default=None, description="Chart title. Omit for the default.")
-    subtitle: Optional[str] = Field(default=None, description="Chart subtitle. Omit for the default.")
+    title: str | None = Field(default=None, description="Chart title. Omit for the default.")
+    subtitle: str | None = Field(default=None, description="Chart subtitle. Omit for the default.")
     width: int = Field(default=745, ge=100, le=8000, description="Canvas width in pixels.")
     height: int = Field(default=420, ge=100, le=8000, description="Canvas height in pixels.")
-    diverging: Optional[bool] = Field(
+    diverging: bool | None = Field(
         default=None,
         description="Force the diverging ramp on/off. Omit to auto-detect from the data's sign.",
     )
@@ -133,12 +133,12 @@ class ChoroplethRequest(BaseModel):
 class SituationMapRequest(BaseModel):
     """Body for ``POST /v1/situation-map``."""
 
-    config: Optional[dict[str, Any]] = Field(
+    config: dict[str, Any] | None = Field(
         default=None,
         description="Region/layer config, the same shape the --config YAML uses. "
         "Omit to render the bundled Western-Europe demo.",
     )
-    title: Optional[str] = Field(default=None, description="Overrides config['title'] if set.")
+    title: str | None = Field(default=None, description="Overrides config['title'] if set.")
     format: Literal["svg", "png", "pdf", "jpg"] = Field(
         default="svg", description="Output format; picks the response Content-Type."
     )
@@ -193,9 +193,7 @@ def docs_redirect() -> RedirectResponse:
     return RedirectResponse(url="/docs")
 
 
-def _render_to_response(
-    make_fn: Any, kwargs: dict[str, Any], fmt: str, stem: str
-) -> Response:
+def _render_to_response(make_fn: Any, kwargs: dict[str, Any], fmt: str, stem: str) -> Response:
     """Call a ``make_<kind>`` function against a temp file and wrap the bytes.
 
     Parameters

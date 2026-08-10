@@ -39,8 +39,8 @@ from __future__ import annotations
 import argparse
 import inspect
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 
 def _render_scale() -> float:
@@ -96,10 +96,7 @@ def svg_example_path(script_file: str, figure_id: str) -> Path:
     # ``.parent`` is the scripts/ dir; ``.parent.parent`` is the skill root that
     # holds assets/. Resolve first so a relative ``__file__`` still works.
     return (
-        Path(script_file).resolve().parent.parent
-        / "assets"
-        / "svg-examples"
-        / f"{figure_id}.svg"
+        Path(script_file).resolve().parent.parent / "assets" / "svg-examples" / f"{figure_id}.svg"
     )
 
 
@@ -139,8 +136,8 @@ def write_svg(out: Path, svg: str, *, embed_fonts: bool = True) -> Path:
 
     Examples
     --------
-    >>> # write_svg(Path("/tmp/venn.svg"), "<svg .../>")  # doctest: +SKIP
-    >>> # prints: wrote /tmp/venn.svg
+    >>> write_svg(Path("/tmp/venn.svg"), "<svg .../>")  # doctest: +SKIP
+    PosixPath('/tmp/venn.svg')
     """
     if embed_fonts and "@font-face" not in svg and svg.lstrip().startswith("<svg"):
         from sprezzature_figures.fonts import DEFAULT_SVG_FACES, svg_font_defs
@@ -214,7 +211,7 @@ def _write_in_format(out: Path, svg: str) -> None:
 def _svg_to_html(svg: str) -> str:
     """Wrap a standalone SVG in a minimal, responsive HTML document."""
     return (
-        "<!doctype html>\n<html lang=\"en\">\n<head>\n"
+        '<!doctype html>\n<html lang="en">\n<head>\n'
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         "<style>html,body{margin:0;height:100%}"
@@ -275,8 +272,12 @@ def render_cli(
     parser.add_argument(
         "--accessibility",
         choices=(
-            "universal", "high-contrast", "monochrome",
-            "deuteranopia", "protanopia", "tritanopia",
+            "universal",
+            "high-contrast",
+            "monochrome",
+            "deuteranopia",
+            "protanopia",
+            "tritanopia",
         ),
         default="universal",
         help="palette accessibility level (default: universal, the CVD-safe standard)",

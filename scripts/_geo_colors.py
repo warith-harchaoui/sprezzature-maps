@@ -39,12 +39,12 @@ Author
 from __future__ import annotations
 
 import math
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
 # A ramp stop is (position, hex_color), position in [0, 1] -- the same
 # (t, hex) tuple order make_choropleth.py's original ``_RAMP`` constant
 # already used, kept identical here rather than silently swapping it.
-RampStop = Tuple[float, str]
+RampStop = tuple[float, str]
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +57,7 @@ RampStop = Tuple[float, str]
 # perceptual (the classic bug: converting hex -> OKLab directly on the
 # encoded 0-1 values instead of decoding gamma first).
 # ---------------------------------------------------------------------------
+
 
 def _srgb_to_linear(channel_8bit: int) -> float:
     """Decode one 8-bit sRGB channel to linear light in ``[0.0, 1.0]``.
@@ -127,7 +128,7 @@ def _linear_to_srgb(linear_channel: float) -> int:
     return max(0, min(255, round(encoded * 255)))
 
 
-def _parse_hex(hex_color: str) -> Tuple[int, int, int]:
+def _parse_hex(hex_color: str) -> tuple[int, int, int]:
     """Parse a ``#RRGGBB`` (or ``#RGB``) string into an 8-bit ``(R, G, B)``.
 
     Parameters
@@ -163,7 +164,7 @@ def _parse_hex(hex_color: str) -> Tuple[int, int, int]:
     return int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16)
 
 
-def _hex_to_linear(hex_color: str) -> Tuple[float, float, float]:
+def _hex_to_linear(hex_color: str) -> tuple[float, float, float]:
     """Parse a hex color straight through to linear-light sRGB.
 
     Parameters
@@ -189,7 +190,7 @@ def _hex_to_linear(hex_color: str) -> Tuple[float, float, float]:
     return _srgb_to_linear(r), _srgb_to_linear(g), _srgb_to_linear(b)
 
 
-def _linear_to_hex(linear_rgb: Tuple[float, float, float]) -> str:
+def _linear_to_hex(linear_rgb: tuple[float, float, float]) -> str:
     """Format a linear-light triple back to an upper-case ``#RRGGBB`` string.
 
     Parameters
@@ -222,7 +223,8 @@ def _linear_to_hex(linear_rgb: Tuple[float, float, float]) -> str:
 # next, instead of the naive RGB lerp's uneven-looking midpoints.
 # ---------------------------------------------------------------------------
 
-def _linear_to_oklab(linear_rgb: Tuple[float, float, float]) -> Tuple[float, float, float]:
+
+def _linear_to_oklab(linear_rgb: tuple[float, float, float]) -> tuple[float, float, float]:
     """Convert linear-light sRGB to OKLab.
 
     Parameters
@@ -263,7 +265,7 @@ def _linear_to_oklab(linear_rgb: Tuple[float, float, float]) -> Tuple[float, flo
     )
 
 
-def _oklab_to_linear(oklab: Tuple[float, float, float]) -> Tuple[float, float, float]:
+def _oklab_to_linear(oklab: tuple[float, float, float]) -> tuple[float, float, float]:
     """Invert :func:`_linear_to_oklab`: OKLab back to linear-light sRGB.
 
     Parameters
@@ -293,9 +295,9 @@ def _oklab_to_linear(oklab: Tuple[float, float, float]) -> Tuple[float, float, f
     s_ = big_l - 0.0894841775 * a - 1.2914855480 * b
     # Undo the cube root from the forward direction (plain cube this time,
     # sign is preserved automatically since cubing keeps the sign).
-    l_cone = l_ ** 3
-    m_cone = m_ ** 3
-    s_cone = s_ ** 3
+    l_cone = l_**3
+    m_cone = m_**3
+    s_cone = s_**3
     # Inverse of the cone-response matrix -> back to linear sRGB.
     return (
         4.0767416621 * l_cone - 3.3077115913 * m_cone + 0.2309699292 * s_cone,
@@ -304,7 +306,7 @@ def _oklab_to_linear(oklab: Tuple[float, float, float]) -> Tuple[float, float, f
     )
 
 
-def _oklab_to_oklch(oklab: Tuple[float, float, float]) -> Tuple[float, float, float]:
+def _oklab_to_oklch(oklab: tuple[float, float, float]) -> tuple[float, float, float]:
     """Convert OKLab (Cartesian) to OKLCH (polar): ``(L, C, H)``.
 
     Parameters
@@ -337,7 +339,7 @@ def _oklab_to_oklch(oklab: Tuple[float, float, float]) -> Tuple[float, float, fl
     return big_l, chroma, hue_deg
 
 
-def _oklch_to_oklab(oklch: Tuple[float, float, float]) -> Tuple[float, float, float]:
+def _oklch_to_oklab(oklch: tuple[float, float, float]) -> tuple[float, float, float]:
     """Invert :func:`_oklab_to_oklch`: OKLCH (polar) back to OKLab (Cartesian).
 
     Parameters
@@ -503,6 +505,7 @@ def _interpolate_oklch_hex(hex_a: str, hex_b: str, t: float) -> str:
 # Public ramps
 # ---------------------------------------------------------------------------
 
+
 def sequential_ramp_hex(t: float, stops: Sequence[RampStop]) -> str:
     """Sample a multi-stop sequential ramp at ``t``, interpolated in OKLCH.
 
@@ -529,7 +532,7 @@ def sequential_ramp_hex(t: float, stops: Sequence[RampStop]) -> str:
     # Clamp once here so every caller downstream (including the two
     # helpers below) can assume t is already in range.
     t = min(1.0, max(0.0, t))
-    for (lo_t, lo_color), (hi_t, hi_color) in zip(stops, stops[1:]):
+    for (lo_t, lo_color), (hi_t, hi_color) in zip(stops, stops[1:], strict=False):
         if lo_t <= t <= hi_t:
             # Re-scale t from the stop's own [lo_t, hi_t] window to a
             # local [0, 1] before handing it to the OKLCH interpolator,
@@ -685,7 +688,7 @@ def wcag_contrast_ratio(hex_a: str, hex_b: str) -> float:
     21.0
     """
 
-    def relative_luminance(linear_rgb: Tuple[float, float, float]) -> float:
+    def relative_luminance(linear_rgb: tuple[float, float, float]) -> float:
         # WCAG's fixed luminance-weighting coefficients (Rec. 709), applied
         # to the same linear-light triple the rest of this module already
         # works with.

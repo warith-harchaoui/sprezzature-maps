@@ -46,10 +46,14 @@ def test_choropleth_csv_with_column_mapping(tmp_path: Path) -> None:
         main,
         [
             "choropleth",
-            "--data", str(csv_path),
-            "--map", "id=Code",
-            "--map", "value=Score",
-            "--out", str(out),
+            "--data",
+            str(csv_path),
+            "--map",
+            "id=Code",
+            "--map",
+            "value=Score",
+            "--out",
+            str(out),
         ],
     )
     assert result.exit_code == 0, result.output

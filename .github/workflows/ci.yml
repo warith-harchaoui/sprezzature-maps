@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # sprezzature-figures is not on PyPI yet (see README.md § Install);
+          # pull the same sibling checkout the local dev workflow uses.
+          git clone --depth 1 https://github.com/warith-harchaoui/sprezzature-figures ../sprezzature-figures
+          pip install -e ../sprezzature-figures
+          pip install -e ".[dev,cli,api,mcp]"
+
+      - name: Lint
+        run: ruff check sprezzature_maps scripts tests
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Doctests (scripts/)
+        run: |
+          for f in scripts/_geo_colors.py scripts/_relief.py scripts/_svg.py scripts/_render.py scripts/_interactive.py scripts/make_choropleth.py scripts/make_situation_map.py; do
+            python -m doctest "$f"
+          done
