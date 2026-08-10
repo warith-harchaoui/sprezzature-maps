@@ -185,12 +185,16 @@ _OSM_ADMIN1_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, floa
 # and Alaska's boroughs/census areas), 4.6MB even after 15% weighted
 # Visvalingam simplification -- by a wide margin the largest vendored
 # vector file in this repo, flagged explicitly rather than vendored
-# silently. Swiss districts (135 records, ODbL via OpenStreetMap
-# admin_level=6) round this out: unlike admin_level=4 country boundaries,
-# district relations carry no ISO3166-2 tag, so noise-filtering used an
-# area-overlap check against Switzerland's own bbox instead of the
-# ISO-prefix trick admin-1's DE/IT sources needed (none of the 135
-# candidates this query returned needed dropping).
+# silently. Switzerland (135 districts), Germany (400 Kreise), and
+# Italy (109 province) round this out, all three via OpenStreetMap
+# admin_level=6 -- unlike admin_level=4 country boundaries, this level's
+# relations carry no ISO3166-2 tag, so noise-filtering used an
+# area-overlap check (at least 50% of the assembled geometry's area
+# inside the country's own bbox) instead of the ISO-prefix trick
+# admin-1's DE/IT sources needed. That filter earned its keep twice:
+# Switzerland's 135 candidates were all clean, but Italy's query
+# returned a French department (Haute-Savoie, an Alpine neighbor) that
+# the area check correctly dropped.
 # Each entry: (fine path, coarse path, bounds, TopoJSON object name) --
 # same fine/coarse pyramid shape :data:`_OSM_ADMIN1_SOURCES` has, added
 # once three admin-2 sources existed and the heaviest of them (US
@@ -204,6 +208,10 @@ _ADMIN2_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, float], 
            _US_STATES_BOUNDS, "counties"),
     "CH": (_ASSETS / "ch-districts.json", _ASSETS / "ch-districts-coarse.json",
            (5.96, 45.82, 10.49, 47.81), "districts"),
+    "DE": (_ASSETS / "de-kreise.json", _ASSETS / "de-kreise-coarse.json",
+           (5.87, 47.27, 15.04, 55.10), "kreise"),
+    "IT": (_ASSETS / "it-province.json", _ASSETS / "it-province-coarse.json",
+           (6.63, 35.49, 18.52, 47.09), "provinces"),
 }
 
 # Admin-2 lines are one level more detailed than admin-1 again, so they only

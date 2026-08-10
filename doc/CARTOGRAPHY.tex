@@ -625,23 +625,34 @@ admin-2 needed the identical guard a second time.
 A situation map zoomed in past a single admin-1 unit, one French
 region rather than the whole country, can profit from one level more
 detail again: admin-2, the next division down, a department in France,
-a county in the United States, a district in Switzerland.
+a county in the United States, a district in Switzerland, a
+\emph{Kreis} in Germany, a \emph{provincia} in Italy.
 \texttt{load\_admin2} follows the same registry shape as the OSM
-sources above, three entries: France's 101 departments (96
-metropolitan plus 5 overseas), from the same IGN ADMIN EXPRESS product
-admin-1's French regions came from; United States counties, TIGER/Line
-again, 3{,}235 records (every county plus county-equivalent, Louisiana's
+sources above, five entries: France's 101 departments (96 metropolitan
+plus 5 overseas), from the same IGN ADMIN EXPRESS product admin-1's
+French regions came from; United States counties, TIGER/Line again,
+3{,}235 records (every county plus county-equivalent, Louisiana's
 parishes and Alaska's boroughs and census areas included) and, at
 4.6MB even after simplification, by a wide margin the largest vendored
-vector file in this repository; and Switzerland's 135 districts, via
-Overpass \texttt{admin\_level=6}. The district relations needed a
-different noise-filtering approach than admin-1's OSM sources: district
-boundaries carry no \texttt{ISO3166-2} tag (that tag only covers a
-country's first administrative level), so instead of the prefix filter
-Germany and Italy needed, each candidate's assembled geometry is
-checked for at least fifty percent area overlap with Switzerland's own
-bbox before being kept -- for this particular query all 135 candidates
-passed, no noise to drop.
+vector file in this repository; and Switzerland's 135 districts,
+Germany's 400 Kreise, and Italy's 109 province, all three via Overpass
+\texttt{admin\_level=6}, matching the countries admin-1 already covers
+at the finer level.
+
+The \texttt{admin\_level=6} relations needed a different
+noise-filtering approach than admin-1's \texttt{admin\_level=4}
+sources: this level's boundaries carry no \texttt{ISO3166-2} tag (that
+tag only covers a country's first administrative level), so instead of
+the prefix filter Germany and Italy's admin-1 query needed, each
+candidate's assembled geometry is checked for at least fifty percent
+area overlap with the target country's own bbox before being kept.
+That check earned its keep unevenly across the three: Switzerland's
+135 candidates and Germany's 400 both came back clean, no noise to
+drop, but Italy's query returned a French department (Haute-Savoie, an
+Alpine neighbor whose relation happened to satisfy the area filter)
+that the overlap check correctly caught and dropped, the same category
+of real data noise the admin-1 DE/IT sources hit, just past a
+different tag.
 
 Admin-2 differs from admin-1 in one structural way beyond just being
 one level finer: it additionally gates on zoom, not only on which
@@ -735,6 +746,8 @@ Source & Fine tier & Coarse tier \\
 France departments (ADMIN EXPRESS) & 160\,KB & 52\,KB \\
 US counties (TIGER) & 4.6\,MB & 1.4\,MB \\
 Switzerland districts (OSM) & 356\,KB & 100\,KB \\
+Germany Kreise (OSM) & 1.5\,MB & 392\,KB \\
+Italy province (OSM) & 1.0\,MB & 232\,KB \\
 \bottomrule
 \end{tabular}
 \caption{Fine versus coarse TopoJSON file size per admin-2 source.}
@@ -1012,7 +1025,7 @@ US county boundaries (TIGER/Line) & U.S.\ Census Bureau \autocite{census-tiger} 
 France region boundaries (ADMIN EXPRESS) & IGN, via \texttt{france-geojson} \autocite{ign-adminexpress} & Licence Ouverte / Etalab 2.0 & \texttt{situation\_map} \\
 France department boundaries (ADMIN EXPRESS) & IGN, via \texttt{france-geojson} \autocite{ign-adminexpress} & Licence Ouverte / Etalab 2.0 & \texttt{situation\_map} \\
 Switzerland, Germany, Italy admin-1 boundaries & OpenStreetMap \autocite{openstreetmap-odbl} & ODbL 1.0 (attribution required) & \texttt{situation\_map} \\
-Switzerland district boundaries (admin-2) & OpenStreetMap \autocite{openstreetmap-odbl} & ODbL 1.0 (attribution required) & \texttt{situation\_map} \\
+Switzerland, Germany, Italy admin-2 boundaries & OpenStreetMap \autocite{openstreetmap-odbl} & ODbL 1.0 (attribution required) & \texttt{situation\_map} \\
 \bottomrule
 \end{tabular}
 \caption{Every dataset this codebase vendors, its license, and which generator uses it.}
@@ -1089,29 +1102,28 @@ follow-on items that roadmap entry then listed, wider OpenStreetMap
 coverage, an admin-2 tier, and a resolution pyramid, are now fully
 done, each carried through to completion rather than left as a partial
 pilot: OpenStreetMap coverage grew to a three-country registry
-(Switzerland, Germany, Italy); admin-2 now covers three countries of
-its own (France's departments, United States counties, Switzerland's
-districts), each vendored through a genuinely different path (a
-national mapping-agency product, TIGER/Line again, and a second,
-tag-poorer Overpass query respectively); and every admin-1 \emph{and}
-admin-2 source now has its own fine/coarse resolution pyramid. What
-remains is the coverage this pass still left out, listed here rather
-than left silently implied, on the principle that a document like this
-one should mark what is done and what is not with the same
-explicitness.
+(Switzerland, Germany, Italy); admin-2 now matches that same coverage
+exactly, five countries (France's departments, United States counties,
+Switzerland's districts, Germany's Kreise, Italy's province), each of
+the three OpenStreetMap ones vendored through the identical
+\texttt{admin\_level=6} recipe once the pattern was proven on
+Switzerland; and every admin-1 \emph{and} admin-2 source now has its
+own fine/coarse resolution pyramid. What remains is the coverage this
+pass still left out, listed here rather than left silently implied, on
+the principle that a document like this one should mark what is done
+and what is not with the same explicitness.
 
 \begin{itemize}[leftmargin=1.4em]
-\item \textbf{Coverage beyond five admin-1 countries and three admin-2
-  countries}: the OpenStreetMap/Overpass path generalizes directly to
-  any country's state-equivalent \texttt{admin\_level} (four in every
-  country vendored so far, but a national convention to re-verify, not
-  a constant, per Section~\ref{sec:admin1-tiering}), so the next
-  country is a query, a noise filter (an \texttt{ISO3166-2} prefix
-  where the tag exists, an area-overlap check where it does not, per
-  the Swiss districts case), and a vendoring pass, not new code; the
-  registry shape already accommodates it directly. Admin-2 for
-  Germany and Italy, matching the countries admin-1 already covers, is
-  the most immediately useful next slice of this.
+\item \textbf{Coverage beyond five countries at both tiers}: the
+  OpenStreetMap/Overpass path generalizes directly to any country's
+  state-equivalent \texttt{admin\_level} (four for admin-1, six for
+  admin-2 in every country vendored so far, but a national convention
+  to re-verify, not a constant, per Section~\ref{sec:admin1-tiering}),
+  so the next country is a query, a noise filter (an
+  \texttt{ISO3166-2} prefix where the tag exists, an area-overlap
+  check where it does not, per the Swiss/German/Italian admin-2 case),
+  and a vendoring pass, not new code; the registry shape already
+  accommodates it directly.
 \item \textbf{Admin-3 and deeper}: French communes (over 34{,}000,
   IGN's finest ADMIN EXPRESS tier) or US census tracts would be a
   third sub-national level below admin-2, the same relationship
