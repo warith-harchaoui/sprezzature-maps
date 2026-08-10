@@ -92,14 +92,14 @@ def _tile_html(tile: dict[str, str]) -> str:
     # two tiles share one script instead of one per tile.
     return f"""
     <article class="tile">
-      <div class="tile-thumb" id="thumb-{tile['kind']}" data-endpoint="{tile['endpoint']}"
-           role="img" aria-label="{tile['title']} example render">
+      <div class="tile-thumb" id="thumb-{tile["kind"]}" data-endpoint="{tile["endpoint"]}"
+           role="img" aria-label="{tile["title"]} example render">
         <p class="tile-loading">Rendering demo&hellip;</p>
       </div>
       <div class="tile-body">
-        <h2 class="tile-title">{tile['title']}</h2>
-        <p class="tile-description">{tile['description']}</p>
-        <code class="tile-kind">{tile['kind']}</code>
+        <h2 class="tile-title">{tile["title"]}</h2>
+        <p class="tile-description">{tile["description"]}</p>
+        <code class="tile-kind">{tile["kind"]}</code>
       </div>
     </article>"""
 

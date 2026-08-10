@@ -50,7 +50,6 @@ import base64
 import io
 import sys
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -116,7 +115,7 @@ _SHADE_STRETCH_HIGH: float = 245.0
 # Cached decoded source raster: the PNG is read once per process, not once
 # per render call, since a caller (a batch export, or the test suite) may
 # render many maps in one run.
-_relief_array_cache: Optional[np.ndarray] = None
+_relief_array_cache: np.ndarray | None = None
 
 # Cached 256-entry duotone lookup table: (256, 3) uint8, index = the 0-255
 # shade value, columns = (R, G, B). Built once via _geo_colors'
@@ -127,7 +126,7 @@ _relief_array_cache: Optional[np.ndarray] = None
 # pass through a visibly muddy, desaturated grey-brown at the midpoint.
 # Then applied to a whole image via one numpy fancy-index (lut[shade]) --
 # no per-pixel Python loop.
-_duotone_lut_cache: Optional[np.ndarray] = None
+_duotone_lut_cache: np.ndarray | None = None
 
 
 def _duotone_lut() -> np.ndarray:
@@ -281,7 +280,8 @@ def sample_relief(
     # skipping this step made real renders look flatter, not richer.
     stretched = np.clip(
         (shade - _SHADE_STRETCH_LOW) / (_SHADE_STRETCH_HIGH - _SHADE_STRETCH_LOW) * 255.0,
-        0.0, 255.0,
+        0.0,
+        255.0,
     ).astype(np.uint8)
     alpha = np.where(valid, round(opacity * 255), 0).astype(np.uint8)
     # One fancy-index lookup retints the whole grid through the warm/cool
@@ -711,7 +711,9 @@ def _compute_terrain_shade(
     # the fine multi-scale detail that reads as "alive" -- a 0.35/0.65
     # hillshade/texture split was the blend that matched the reference
     # during manual comparison (see Notes).
-    blended = np.clip(hillshade_weight * hillshade + (1.0 - hillshade_weight) * texture_norm, 0.0, 1.0)
+    blended = np.clip(
+        hillshade_weight * hillshade + (1.0 - hillshade_weight) * texture_norm, 0.0, 1.0
+    )
     return (blended * 255).astype(np.uint8)
 
 

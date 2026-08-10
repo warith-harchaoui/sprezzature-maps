@@ -163,7 +163,9 @@ def build_cvd_figure(out_path: Path, *, bar_width: int = 2200, bar_height: int =
         canvas.paste(Image.fromarray(arr), (label_w, y))
         bbox = draw.textbbox((0, 0), label, font=font)
         text_h = bbox[3] - bbox[1]
-        draw.text((32, y + (bar_height - text_h) / 2 - bbox[1]), label, fill=_CAPTION_TEXT, font=font)
+        draw.text(
+            (32, y + (bar_height - text_h) / 2 - bbox[1]), label, fill=_CAPTION_TEXT, font=font
+        )
         y += bar_height + gap
     canvas.save(out_path, format="PNG")
 
@@ -202,14 +204,19 @@ def build_relief_duotone_figure(out_path: Path, *, panel_width: int = 1600) -> N
     crop = grid[row0:row1, col0:col1]
 
     stretched = np.clip(
-        (crop.astype(np.float32) - _SHADE_STRETCH_LOW) / (_SHADE_STRETCH_HIGH - _SHADE_STRETCH_LOW) * 255.0,
+        (crop.astype(np.float32) - _SHADE_STRETCH_LOW)
+        / (_SHADE_STRETCH_HIGH - _SHADE_STRETCH_LOW)
+        * 255.0,
         0.0,
         255.0,
     ).astype(np.uint8)
     plain_grey = np.stack([stretched, stretched, stretched], axis=-1)
     duotone = _duotone_lut()[stretched]
 
-    panels = [("Plain contrast-stretched greyscale", plain_grey), ("Imhof-style OKLCH duotone (shipped)", duotone)]
+    panels = [
+        ("Plain contrast-stretched greyscale", plain_grey),
+        ("Imhof-style OKLCH duotone (shipped)", duotone),
+    ]
     caption_h = 145
     gutter = 26
     resized = []
@@ -230,11 +237,13 @@ def build_relief_duotone_figure(out_path: Path, *, panel_width: int = 1600) -> N
     draw = ImageDraw.Draw(canvas)
     font = _caption_font(52)
     x = 0
-    for (caption, _), img in zip(panels, resized):
+    for (caption, _), img in zip(panels, resized, strict=True):
         canvas.paste(img, (x, 0))
         bbox = draw.textbbox((0, 0), caption, font=font)
         text_w = bbox[2] - bbox[0]
-        draw.text((x + (panel_width - text_w) / 2, row_h + 36), caption, fill=_CAPTION_TEXT, font=font)
+        draw.text(
+            (x + (panel_width - text_w) / 2, row_h + 36), caption, fill=_CAPTION_TEXT, font=font
+        )
         x += panel_width + gutter
     canvas.save(out_path, format="PNG")
 

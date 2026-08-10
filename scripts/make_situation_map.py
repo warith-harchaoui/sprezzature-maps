@@ -42,11 +42,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import numpy as np
-
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 
@@ -164,12 +164,24 @@ _FR_REGIONS_BOUNDS = (-61.81, -21.39, 55.84, 51.09)
 # picked instead of the fine one past the same bbox-span threshold as
 # _US_STATES_TOPOJSON_COARSE -- see _admin1_tier_path.
 _OSM_ADMIN1_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, float], str]] = {
-    "CH": (_ASSETS / "ch-cantons.json", _ASSETS / "ch-cantons-coarse.json",
-           (5.96, 45.82, 10.49, 47.81), "cantons"),
-    "DE": (_ASSETS / "de-states.json", _ASSETS / "de-states-coarse.json",
-           (5.87, 47.27, 15.04, 55.10), "states"),
-    "IT": (_ASSETS / "it-regions.json", _ASSETS / "it-regions-coarse.json",
-           (6.63, 35.49, 18.52, 47.09), "regions"),
+    "CH": (
+        _ASSETS / "ch-cantons.json",
+        _ASSETS / "ch-cantons-coarse.json",
+        (5.96, 45.82, 10.49, 47.81),
+        "cantons",
+    ),
+    "DE": (
+        _ASSETS / "de-states.json",
+        _ASSETS / "de-states-coarse.json",
+        (5.87, 47.27, 15.04, 55.10),
+        "states",
+    ),
+    "IT": (
+        _ASSETS / "it-regions.json",
+        _ASSETS / "it-regions-coarse.json",
+        (6.63, 35.49, 18.52, 47.09),
+        "regions",
+    ),
 }
 
 # Admin-2 (second sub-national tier, one level finer than admin-1) registry,
@@ -202,16 +214,36 @@ _OSM_ADMIN1_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, floa
 # via the show/hide gate below, and again via a lighter file for the
 # wider end of the window that gate still allows through.
 _ADMIN2_SOURCES: dict[str, tuple[Path, Path, tuple[float, float, float, float], str]] = {
-    "FR": (_ASSETS / "fr-departments.json", _ASSETS / "fr-departments-coarse.json",
-           (-61.81, -21.39, 55.84, 51.09), "departments"),
-    "US": (_ASSETS / "us-counties.json", _ASSETS / "us-counties-coarse.json",
-           _US_STATES_BOUNDS, "counties"),
-    "CH": (_ASSETS / "ch-districts.json", _ASSETS / "ch-districts-coarse.json",
-           (5.96, 45.82, 10.49, 47.81), "districts"),
-    "DE": (_ASSETS / "de-kreise.json", _ASSETS / "de-kreise-coarse.json",
-           (5.87, 47.27, 15.04, 55.10), "kreise"),
-    "IT": (_ASSETS / "it-province.json", _ASSETS / "it-province-coarse.json",
-           (6.63, 35.49, 18.52, 47.09), "provinces"),
+    "FR": (
+        _ASSETS / "fr-departments.json",
+        _ASSETS / "fr-departments-coarse.json",
+        (-61.81, -21.39, 55.84, 51.09),
+        "departments",
+    ),
+    "US": (
+        _ASSETS / "us-counties.json",
+        _ASSETS / "us-counties-coarse.json",
+        _US_STATES_BOUNDS,
+        "counties",
+    ),
+    "CH": (
+        _ASSETS / "ch-districts.json",
+        _ASSETS / "ch-districts-coarse.json",
+        (5.96, 45.82, 10.49, 47.81),
+        "districts",
+    ),
+    "DE": (
+        _ASSETS / "de-kreise.json",
+        _ASSETS / "de-kreise-coarse.json",
+        (5.87, 47.27, 15.04, 55.10),
+        "kreise",
+    ),
+    "IT": (
+        _ASSETS / "it-province.json",
+        _ASSETS / "it-province-coarse.json",
+        (6.63, 35.49, 18.52, 47.09),
+        "provinces",
+    ),
 }
 
 # Admin-2 lines are one level more detailed than admin-1 again, so they only
@@ -241,7 +273,7 @@ _ADMIN2_FINE_BBOX_DEGREES_THRESHOLD = 3.0
 _TEN_M_BBOX_DEGREES_THRESHOLD = 25.0
 
 
-def _land_topojson_for_bbox(bbox: Optional[Iterable[float]]) -> Path:
+def _land_topojson_for_bbox(bbox: Iterable[float] | None) -> Path:
     """Pick the 50m or 10m vendored basemap tier to match a region's bbox.
 
     Parameters
@@ -341,7 +373,7 @@ def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
     return unary_union(fixed)
 
 
-def load_land(bbox: Optional[Iterable[float]] = None) -> Any:
+def load_land(bbox: Iterable[float] | None = None) -> Any:
     """Return the dissolved world land polygon (WGS84), from the vendored basemap.
 
     Parameters
@@ -367,7 +399,7 @@ def load_land(bbox: Optional[Iterable[float]] = None) -> Any:
     return _decode_topojson_object(topo, object_name)
 
 
-def load_country(name: str, bbox: Optional[Iterable[float]] = None) -> Any:
+def load_country(name: str, bbox: Iterable[float] | None = None) -> Any:
     """Return the polygon of a single country by Natural Earth ``name`` (WGS84).
 
     Lets a caller partition a *real* national outline into thematic zones — the
@@ -431,7 +463,7 @@ def load_country(name: str, bbox: Optional[Iterable[float]] = None) -> Any:
     raise KeyError(f"country not found in basemap: {name!r}")
 
 
-def load_countries(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+def load_countries(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every country in the vendored basemap (WGS84).
 
     Lets the map draw real international frontiers and label the neighbours, so a
@@ -486,7 +518,7 @@ def load_countries(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, An
     return out
 
 
-def _bbox_in_united_states(bbox: Optional[Iterable[float]]) -> bool:
+def _bbox_in_united_states(bbox: Iterable[float] | None) -> bool:
     """Cheaply test whether a region bbox falls inside the vendored TIGER extent.
 
     Parameters
@@ -571,7 +603,7 @@ def _named_polygons_from_topojson(topo: dict[str, Any], object_name: str) -> lis
     return out
 
 
-def load_us_states(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+def load_us_states(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every US state/territory that overlaps a bbox.
 
     The admin-1 (sub-national) counterpart to :func:`load_countries`, from the
@@ -599,7 +631,7 @@ def load_us_states(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, An
     return _named_polygons_from_topojson(topo, "states")
 
 
-def _bbox_in_france(bbox: Optional[Iterable[float]]) -> bool:
+def _bbox_in_france(bbox: Iterable[float] | None) -> bool:
     """Cheaply test whether a region bbox falls inside the vendored IGN extent.
 
     Same bounds-overlap contract as :func:`_bbox_in_united_states`, against
@@ -608,7 +640,7 @@ def _bbox_in_france(bbox: Optional[Iterable[float]]) -> bool:
     return _bbox_overlaps(bbox, _FR_REGIONS_BOUNDS)
 
 
-def load_fr_regions(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+def load_fr_regions(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every French region that overlaps a bbox.
 
     The IGN/ADMIN-EXPRESS counterpart to :func:`load_us_states` -- lets a
@@ -635,8 +667,7 @@ def load_fr_regions(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, A
     return _named_polygons_from_topojson(topo, "regions")
 
 
-def _bbox_overlaps(bbox: Optional[Iterable[float]],
-                   bounds: tuple[float, float, float, float]) -> bool:
+def _bbox_overlaps(bbox: Iterable[float] | None, bounds: tuple[float, float, float, float]) -> bool:
     """Cheap bounds-overlap test shared by every admin-1 source's bbox pre-filter.
 
     Parameters
@@ -662,8 +693,12 @@ def _bbox_overlaps(bbox: Optional[Iterable[float]],
     return west <= b_east and east >= b_west and south <= b_north and north >= b_south
 
 
-def _admin1_tier_path(bbox: Optional[Iterable[float]], fine_path: Path, coarse_path: Path,
-                      threshold: float = _TEN_M_BBOX_DEGREES_THRESHOLD) -> Path:
+def _admin1_tier_path(
+    bbox: Iterable[float] | None,
+    fine_path: Path,
+    coarse_path: Path,
+    threshold: float = _TEN_M_BBOX_DEGREES_THRESHOLD,
+) -> Path:
     """Pick the fine or coarse simplification tier for an admin-1/admin-2 source.
 
     Same algorithmic-tier-selection pattern as :func:`_land_topojson_for_bbox`
@@ -702,7 +737,7 @@ def _admin1_tier_path(bbox: Optional[Iterable[float]], fine_path: Path, coarse_p
     return coarse_path if span >= threshold else fine_path
 
 
-def _bbox_in_osm_admin1(bbox: Optional[Iterable[float]]) -> bool:
+def _bbox_in_osm_admin1(bbox: Iterable[float] | None) -> bool:
     """Cheaply test whether a region bbox overlaps *any* vendored OSM country.
 
     Used by :func:`_attribution_layer` to decide whether the ODbL credit is
@@ -711,7 +746,7 @@ def _bbox_in_osm_admin1(bbox: Optional[Iterable[float]]) -> bool:
     return any(_bbox_overlaps(bbox, bounds) for _, _, bounds, _ in _OSM_ADMIN1_SOURCES.values())
 
 
-def load_osm_admin1(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+def load_osm_admin1(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every OSM admin-1 feature that overlaps a bbox.
 
     The OpenStreetMap counterpart to :func:`load_us_states` /
@@ -747,7 +782,7 @@ def load_osm_admin1(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, A
     return out
 
 
-def load_admin2(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]:
+def load_admin2(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every admin-2 feature that overlaps a bbox.
 
     One level finer than :func:`load_us_states`/:func:`load_fr_regions`/
@@ -777,8 +812,9 @@ def load_admin2(bbox: Optional[Iterable[float]] = None) -> list[tuple[str, Any]]
     for fine_path, coarse_path, bounds, object_name in _ADMIN2_SOURCES.values():
         if not _bbox_overlaps(bbox, bounds):
             continue
-        path = _admin1_tier_path(bbox, fine_path, coarse_path,
-                                 threshold=_ADMIN2_FINE_BBOX_DEGREES_THRESHOLD)
+        path = _admin1_tier_path(
+            bbox, fine_path, coarse_path, threshold=_ADMIN2_FINE_BBOX_DEGREES_THRESHOLD
+        )
         topo = json.loads(path.read_text())
         out.extend(_named_polygons_from_topojson(topo, object_name))
     return out
@@ -809,7 +845,7 @@ def load_rivers() -> list[tuple[Any, str, int]]:
 # --------------------------------------------------------------------------- #
 
 
-def build_projection(bbox: list[float], epsg: Optional[str]) -> Transformer:
+def build_projection(bbox: list[float], epsg: str | None) -> Transformer:
     """Return a lon/lat -> planar-metre transformer suited to ``bbox``.
 
     When ``epsg`` is ``None`` (or ``"auto"``) a Lambert Conformal Conic is centred
@@ -848,9 +884,7 @@ def build_projection(bbox: list[float], epsg: Optional[str]) -> Transformer:
 # --------------------------------------------------------------------------- #
 
 
-def make_viewport(
-    proj: Transformer, bbox: list[float], width: float, pad: float
-) -> dict[str, Any]:
+def make_viewport(proj: Transformer, bbox: list[float], width: float, pad: float) -> dict[str, Any]:
     """Project ``bbox`` and return a viewport mapping planar metres -> SVG units.
 
     Returns a dict-record with the canvas size, a ``to_svg(x, y)`` closure (flips y),
@@ -996,23 +1030,23 @@ def svg_defs(contested_hatch: str = "#b03a3a") -> str:
         emphasised" rather than an unrelated red.
     """
     return (
-        '<defs>'
+        "<defs>"
         '<filter id="panel-shadow" x="-10%" y="-10%" width="120%" height="120%">'
         '<feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.18"/>'
-        '</filter>'
+        "</filter>"
         '<filter id="marker-shadow" x="-50%" y="-50%" width="200%" height="200%">'
         '<feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000" flood-opacity="0.35"/>'
-        '</filter>'
+        "</filter>"
         # A soft label halo used for the front-line callout and title underline.
         '<filter id="soft-shadow" x="-50%" y="-50%" width="200%" height="200%">'
         '<feDropShadow dx="0" dy="0.6" stdDeviation="0.9" flood-color="#000" flood-opacity="0.25"/>'
-        '</filter>'
+        "</filter>"
         f'<pattern id="hatch-contested" width="6.5" height="6.5" patternTransform="rotate(45)" '
         'patternUnits="userSpaceOnUse">'
         f'<line x1="0" y1="0" x2="0" y2="6.5" stroke="{contested_hatch}" stroke-width="1.25" '
         'stroke-opacity="0.6"/>'
-        '</pattern>'
-        '</defs>'
+        "</pattern>"
+        "</defs>"
     )
 
 
@@ -1043,9 +1077,7 @@ def tracked_text(
 
 
 def _esc(s: str) -> str:
-    return (
-        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _nice_round(value: float) -> float:
@@ -1053,7 +1085,7 @@ def _nice_round(value: float) -> float:
     if value <= 0:
         return 1.0
     exp = math.floor(math.log10(value))
-    base = 10 ** exp
+    base = 10**exp
     for mult in (5, 2, 1):
         if mult * base <= value:
             return mult * base
@@ -1090,7 +1122,7 @@ def scale_bar(x: float, y: float, vp: dict[str, Any]) -> str:
 
     return (
         f'<g id="scale-bar">{bar(y, km_len, _fmt_num(km), "KM")}'
-        f'{bar(y + 20 * ts, mi_len, _fmt_num(mi), "MI")}</g>'
+        f"{bar(y + 20 * ts, mi_len, _fmt_num(mi), 'MI')}</g>"
     )
 
 
@@ -1189,9 +1221,7 @@ def _relief_layer(
     plot_h = int(height - 2 * pad)
     # Build the pixel grid once, offset by pad so it lines up exactly with
     # where the <image> element gets placed below.
-    grid_sx, grid_sy = np.meshgrid(
-        np.arange(plot_w) + pad, np.arange(plot_h) + pad
-    )
+    grid_sx, grid_sy = np.meshgrid(np.arange(plot_w) + pad, np.arange(plot_h) + pad)
     world_x, world_y = vp["to_world"](grid_sx, grid_sy)
     # pyproj's Transformer.transform accepts numpy arrays directly and
     # applies the exact inverse LCC formula element-wise -- no iterative
@@ -1304,7 +1334,8 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'<g id="coastline"><path d="{coast_d}" fill="none" stroke="{coast_color}" '
         f'stroke-width="{0.9 * vp["ts"]:.2f}" stroke-opacity="0.75" '
         f'stroke-linejoin="round" stroke-linecap="round"/></g>'
-        if coast_d else '<g id="coastline"></g>'
+        if coast_d
+        else '<g id="coastline"></g>'
     )
 
     # 5. infrastructure ----------------------------------------------------- #
@@ -1357,16 +1388,16 @@ def build_map(cfg: dict[str, Any]) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {outer_w:.1f} {outer_h:.1f}" '
         f'width="{outer_w:.1f}" height="{outer_h:.1f}">'
-        f'{svg_defs(hatch)[:-7]}{clip}</defs>'
+        f"{svg_defs(hatch)[:-7]}{clip}</defs>"
         f'<rect width="{outer_w:.1f}" height="{outer_h:.1f}" fill="{page_color}"/>'
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
         f'<rect x="0" y="0" width="{W:.1f}" height="{H:.1f}" rx="{radius}" ry="{radius}" '
         f'fill="#ffffff" filter="url(#panel-shadow)"/>'
         f'<g clip-path="url(#plate-clip)">'
         f'<rect width="{W:.1f}" height="{H:.1f}" fill="#ffffff"/>'
-        f'{"".join(layers)}'
-        f'</g></g>'
-        f'</svg>'
+        f"{''.join(layers)}"
+        f"</g></g>"
+        f"</svg>"
     )
 
 
@@ -1404,8 +1435,9 @@ def _load_features(spec: Any, base: Path) -> list[dict[str, Any]]:
     if spec is None:
         return []
     if isinstance(spec, str):
-        data = json.loads((base / spec).read_text() if not Path(spec).is_absolute()
-                          else Path(spec).read_text())
+        data = json.loads(
+            (base / spec).read_text() if not Path(spec).is_absolute() else Path(spec).read_text()
+        )
         return data.get("features", [])
     if isinstance(spec, dict) and spec.get("type") == "FeatureCollection":
         return spec.get("features", [])
@@ -1439,8 +1471,10 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
         if not d:
             continue
         # White casing drawn first (under the fill) so borders read as clean seams.
-        casings.append(f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{casing_w}" '
-                       f'stroke-linejoin="round"/>')
+        casings.append(
+            f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{casing_w}" '
+            f'stroke-linejoin="round"/>'
+        )
         color = palette.get(cat, "#dddddd")
         fills.append(
             f'<path d="{d}" fill="{color}" fill-opacity="{fill_op:.2f}" stroke="{color}" '
@@ -1460,8 +1494,10 @@ def _infrastructure_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, 
         geom = _project_geom(shape(feat["geometry"]), proj)
         d = projected_geom_to_path(geom, vp, close=False)
         if d:
-            out.append(f'<path d="{d}" fill="none" stroke="#8a8f96" stroke-width="0.7" '
-                      f'stroke-opacity="0.7"/>')
+            out.append(
+                f'<path d="{d}" fill="none" stroke="#8a8f96" stroke-width="0.7" '
+                f'stroke-opacity="0.7"/>'
+            )
     for ap in infra.get("airports", []):
         x, y = vp["to_svg"](*proj.transform(ap["lon"], ap["lat"]))
         out.append(
@@ -1472,8 +1508,9 @@ def _infrastructure_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, 
     return f'<g id="infrastructure">{"".join(out)}</g>'
 
 
-def _frontiers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
-                     region_box: Any) -> str:
+def _frontiers_layer(
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+) -> str:
     """Return real international frontiers (hairline dashes) + neighbour labels.
 
     Every country in the vendored basemap whose outline crosses the region is
@@ -1515,12 +1552,13 @@ def _frontiers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
         if do_label and name and name.lower() not in focus and vis.area >= min_frac * region_area:
             pt = vis.representative_point()
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            labels.append(tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7",
-                                       tracking=2.2, weight="600"))
+            labels.append(
+                tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
+            )
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
 
 
-def _polygonal_boundary_source(poly: Any) -> Optional[Any]:
+def _polygonal_boundary_source(poly: Any) -> Any | None:
     """Return a geometry whose ``.boundary`` is well-defined, or ``None`` if it has none.
 
     TIGER's self-touching rings near complex coastlines (observed on Texas,
@@ -1538,8 +1576,9 @@ def _polygonal_boundary_source(poly: Any) -> Optional[Any]:
     return unary_union(polys) if polys else None
 
 
-def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
-                            region_box: Any) -> str:
+def _internal_borders_layer(
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+) -> str:
     """Return sub-national admin-1 borders (US states, French regions) for covered areas.
 
     A finer, lighter dashed line than :func:`_frontiers_layer`'s international
@@ -1596,13 +1635,15 @@ def _internal_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
         if do_label and name and vis.area >= min_frac * region_area:
             pt = vis.representative_point()
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            labels.append(tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf",
-                                       tracking=1.6, weight="500"))
+            labels.append(
+                tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500")
+            )
     return f'<g id="internal-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
-def _admin2_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
-                          region_box: Any) -> str:
+def _admin2_borders_layer(
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+) -> str:
     """Return admin-2 borders (French departments) for a sufficiently zoomed-in region.
 
     A second, finer tier below :func:`_internal_borders_layer`'s admin-1
@@ -1646,13 +1687,15 @@ def _admin2_borders_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, 
         if do_label and name and vis.area >= min_frac * region_area:
             pt = vis.representative_point()
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            labels.append(tracked_text(x, y, name, size=6.8 * ts, fill="#b5b9bc",
-                                       tracking=1.2, weight="500"))
+            labels.append(
+                tracked_text(x, y, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500")
+            )
     return f'<g id="admin2-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
-def _rivers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
-                  region_box: Any) -> str:
+def _rivers_layer(
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+) -> str:
     """Return river centerlines (water blue) with italic names for the major ones.
 
     A river is drawn if it crosses the region; it is *labelled* when it is
@@ -1674,7 +1717,7 @@ def _rivers_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any],
     lines: list[str] = []
     labels: list[str] = []
     placed: list[tuple[float, float]] = []
-    labeled: set[str] = set()   # one label per named river
+    labeled: set[str] = set()  # one label per named river
     for geom, name, rank in sorted(load_rivers(), key=lambda r: -r[2]):
         try:
             clipped = geom.intersection(region_box)
@@ -1761,8 +1804,9 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
     return f'<g id="front-line">{"".join(parts)}</g>'
 
 
-def _markers_layer(items: list[dict[str, Any]], proj: Transformer,
-                   vp: dict[str, Any], layer_id: str) -> str:
+def _markers_layer(
+    items: list[dict[str, Any]], proj: Transformer, vp: dict[str, Any], layer_id: str
+) -> str:
     """Return point markers (forces or events) as drop-shadowed dots."""
     out: list[str] = []
     for it in items:
@@ -1818,8 +1862,18 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         else:  # "start" — name to the right of the marker
             lx, ly, ta = x + clear + gap, y + 0.32 * size, "start"
         weight = "700" if place.get("capital") else "600"
-        out.append(tracked_text(lx, ly, place["text"], size=size, fill="#2f363d",
-                                tracking=tracking, weight=weight, anchor=ta))
+        out.append(
+            tracked_text(
+                lx,
+                ly,
+                place["text"],
+                size=size,
+                fill="#2f363d",
+                tracking=tracking,
+                weight=weight,
+                anchor=ta,
+            )
+        )
     # Water labels: a single ``water`` (back-compat) and/or a list ``waters`` —
     # seas and gulfs, set in the letter-spaced blue-grey water convention.
     waters = list(labels.get("waters", []))
@@ -1828,9 +1882,16 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
     for w in waters:
         x, y = vp["to_svg"](*proj.transform(w["lon"], w["lat"]))
         angle = w.get("rotate", 0)
-        txt = tracked_text(x, y, w["text"], size=w.get("size", 19) * ts,
-                           fill="#5c7c90", tracking=w.get("tracking", 6),
-                           weight="400", upper=w.get("upper", True))
+        txt = tracked_text(
+            x,
+            y,
+            w["text"],
+            size=w.get("size", 19) * ts,
+            fill="#5c7c90",
+            tracking=w.get("tracking", 6),
+            weight="400",
+            upper=w.get("upper", True),
+        )
         if angle:
             out.append(f'<g transform="rotate({angle} {x:.1f} {y:.1f})">{txt}</g>')
         else:
@@ -1860,8 +1921,9 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
 
 
-def _attribution_layer(cfg: dict[str, Any], vp: dict[str, Any],
-                       bbox: Optional[Iterable[float]]) -> str:
+def _attribution_layer(
+    cfg: dict[str, Any], vp: dict[str, Any], bbox: Iterable[float] | None
+) -> str:
     """Return a small bottom-right credit line for any ODbL-licensed layer in view.
 
     Natural Earth (public domain) and TIGER/IGN (public domain / Licence
@@ -1919,14 +1981,14 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     panel_w = 262 * ts
     header_fs = 12.5 * ts
     row_fs = 12.5 * ts
-    sw = 15 * ts        # swatch side
+    sw = 15 * ts  # swatch side
     extra = (len(markers) + 1 if markers else 0) + (1 if show_front else 0)
     n_rows = len(rows) + extra
     foot_h = 30 * ts if footer else 0
     panel_h = pad * 2 + 24 * ts + row_h * n_rows + foot_h
     px = W - panel_w - 22 * ts
     py = H - panel_h - 22 * ts
-    tx = px + pad + sw + 10 * ts   # label x
+    tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
         f'rx="{9 * ts:.1f}" fill="#ffffff" fill-opacity="0.96" filter="url(#panel-shadow)"/>',
@@ -1934,7 +1996,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         f'rx="{9 * ts:.1f}" fill="none" stroke="#e4e8ec" stroke-width="1"/>',
         f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
         f'font-size="{header_fs:.1f}" font-weight="700" fill="#1b2733" letter-spacing="1.2">'
-        f'AREAS OF CONTROL</text>',
+        f"AREAS OF CONTROL</text>",
     ]
     fill_op = float(aoc.get("fill_opacity", 0.78))
     for i, (name, color) in enumerate(rows):
@@ -1984,7 +2046,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
             f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="#333">'
-            f'{_esc(mk.get("label", ""))}</text>'
+            f"{_esc(mk.get('label', ''))}</text>"
         )
     if footer:
         fy = py + panel_h - 11 * ts
@@ -2034,11 +2096,11 @@ DEMO_DATA: list[dict[str, Any]] = [
 
 
 def make_situation_map(
-    data: "Any | None" = None,
+    data: Any | None = None,
     *,
-    out: "Path | str | None" = None,
+    out: Path | str | None = None,
     title: str = "",
-    config: "dict[str, Any] | None" = None,
+    config: dict[str, Any] | None = None,
 ) -> Path:
     """Render a situation map and write it to ``out``.
 
@@ -2066,12 +2128,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Generate a layered situation map for any region.")
     p.add_argument("--config", required=True, help="YAML config describing the map.")
     p.add_argument("--out", required=True, help="Output SVG path.")
-    p.add_argument("--render", action="store_true",
-                   help="Also rasterise to PNG next to --out via render_diagram.py.")
+    p.add_argument(
+        "--render",
+        action="store_true",
+        help="Also rasterise to PNG next to --out via render_diagram.py.",
+    )
     return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point: read config, build the SVG, optionally rasterise."""
     args = build_parser().parse_args(argv)
     cfg = yaml.safe_load(Path(args.config).read_text())

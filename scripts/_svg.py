@@ -62,18 +62,52 @@ from __future__ import annotations
 
 import math
 import textwrap
-from typing import List as _List
+from collections.abc import Callable, Sequence
 
 # Function words that must never be left stranded at the end of a wrapped line
 # (house rule: no line-end orphans, EN or FR). See references/corners.md's sibling
 # typography note and the no-line-end-orphans memory.
 _ORPHAN_WORDS = frozenset(
-    "of the a an to and or for in on by with from is as than per vs "
-    "le la les des du de un une et a au aux dans sur pour par".split()
+    [
+        "of",
+        "the",
+        "a",
+        "an",
+        "to",
+        "and",
+        "or",
+        "for",
+        "in",
+        "on",
+        "by",
+        "with",
+        "from",
+        "is",
+        "as",
+        "than",
+        "per",
+        "vs",
+        "le",
+        "la",
+        "les",
+        "des",
+        "du",
+        "de",
+        "un",
+        "une",
+        "et",
+        "a",
+        "au",
+        "aux",
+        "dans",
+        "sur",
+        "pour",
+        "par",
+    ]
 )
 
 
-def wrap_no_orphan(text: str, width: int) -> _List[str]:
+def wrap_no_orphan(text: str, width: int) -> list[str]:
     """Word-wrap ``text`` to ``width`` characters per line, then push any line
     that ends on a dangling function word (or an elided ``l'``) down to the next
     line, so no wrapped line ever ends on ``of the`` / ``the`` / ``l'`` ...
@@ -93,14 +127,14 @@ def wrap_no_orphan(text: str, width: int) -> _List[str]:
                 lines[i + 1] = f"{moved} {lines[i + 1]}"
                 changed = True
     return [ln for ln in lines if ln] or [""]
-from typing import Callable, Sequence, Tuple
+
 
 try:
     from sprezzature_figures.fonts import DEFAULT_SVG_FACES, svg_font_defs
 except ImportError:  # pragma: no cover - fonts.py is stdlib-only, always importable
     DEFAULT_SVG_FACES = ()
 
-    def svg_font_defs(keys: Tuple[str, ...] = ()) -> str:  # type: ignore[misc]
+    def svg_font_defs(keys: tuple[str, ...] = ()) -> str:  # type: ignore[misc]
         return ""
 
 
@@ -136,7 +170,7 @@ def xml_escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def point_on_circle(cx: float, cy: float, r: float, theta_rad: float) -> Tuple[float, float]:
+def point_on_circle(cx: float, cy: float, r: float, theta_rad: float) -> tuple[float, float]:
     """Cartesian point at radius ``r`` and angle ``theta_rad`` about a centre.
 
     Standard math convention: ``theta_rad = 0`` points along +x (3
@@ -205,8 +239,14 @@ def fmt_compact(v: float) -> str:
 
 
 def rounded_rect_path(
-    x: float, y: float, w: float, h: float,
-    r_tl: float = 0.0, r_tr: float = 0.0, r_br: float = 0.0, r_bl: float = 0.0,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    r_tl: float = 0.0,
+    r_tr: float = 0.0,
+    r_br: float = 0.0,
+    r_bl: float = 0.0,
 ) -> str:
     """SVG path ``d`` for a rectangle with per-corner radii (SVG house config
     for the Sprezzature Corner Policy, see references/corners.md).
@@ -221,10 +261,14 @@ def rounded_rect_path(
     f = fmt_compact
     return (
         f"M{f(x + tl)},{f(y)} "
-        f"H{f(x + w - tr)} " + (f"A{f(tr)},{f(tr)} 0 0 1 {f(x + w)},{f(y + tr)} " if tr else "")
-        + f"V{f(y + h - br)} " + (f"A{f(br)},{f(br)} 0 0 1 {f(x + w - br)},{f(y + h)} " if br else "")
-        + f"H{f(x + bl)} " + (f"A{f(bl)},{f(bl)} 0 0 1 {f(x)},{f(y + h - bl)} " if bl else "")
-        + f"V{f(y + tl)} " + (f"A{f(tl)},{f(tl)} 0 0 1 {f(x + tl)},{f(y)} " if tl else "")
+        f"H{f(x + w - tr)} "
+        + (f"A{f(tr)},{f(tr)} 0 0 1 {f(x + w)},{f(y + tr)} " if tr else "")
+        + f"V{f(y + h - br)} "
+        + (f"A{f(br)},{f(br)} 0 0 1 {f(x + w - br)},{f(y + h)} " if br else "")
+        + f"H{f(x + bl)} "
+        + (f"A{f(bl)},{f(bl)} 0 0 1 {f(x)},{f(y + h - bl)} " if bl else "")
+        + f"V{f(y + tl)} "
+        + (f"A{f(tl)},{f(tl)} 0 0 1 {f(x + tl)},{f(y)} " if tl else "")
         + "Z"
     )
 
@@ -245,7 +289,7 @@ def bar_path(x: float, y: float, w: float, h: float, r: float, side: str = "top"
 
 
 def catmull_rom_beziers(
-    pts: Sequence[Tuple[float, float]],
+    pts: Sequence[tuple[float, float]],
     fmt: Callable[[float], str],
     tension: float = 6.0,
 ) -> str:
@@ -299,9 +343,7 @@ def catmull_rom_beziers(
         # the neighbour-difference scaled by 1/tension.
         c1x, c1y = p1[0] + (p2[0] - p0[0]) / tension, p1[1] + (p2[1] - p0[1]) / tension
         c2x, c2y = p2[0] - (p3[0] - p1[0]) / tension, p2[1] - (p3[1] - p1[1]) / tension
-        seg.append(
-            f" C{fmt(c1x)},{fmt(c1y)} {fmt(c2x)},{fmt(c2y)} {fmt(p2[0])},{fmt(p2[1])}"
-        )
+        seg.append(f" C{fmt(c1x)},{fmt(c1y)} {fmt(c2x)},{fmt(c2y)} {fmt(p2[0])},{fmt(p2[1])}")
     return "".join(seg)
 
 
@@ -383,7 +425,7 @@ def svg_open(
     return tag
 
 
-def hex_to_rgb(hexv: str) -> Tuple[int, int, int]:
+def hex_to_rgb(hexv: str) -> tuple[int, int, int]:
     """Convert a ``#RRGGBB`` string to an ``(r, g, b)`` integer triple.
 
     Strips an optional leading ``#`` then reads the three hex byte pairs.

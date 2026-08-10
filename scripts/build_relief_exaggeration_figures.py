@@ -195,7 +195,7 @@ def _compose_row(
     draw = ImageDraw.Draw(canvas)
     font = _caption_font(52)
     x = 0
-    for (caption, _), img in zip(panels, resized):
+    for (caption, _), img in zip(panels, resized, strict=True):
         canvas.paste(img, (x, 0))
         bbox = draw.textbbox((0, 0), caption, font=font)
         text_w = bbox[2] - bbox[0]
@@ -238,11 +238,16 @@ def main() -> None:
         return _render_panel(elevation, res_lon_deg, res_lat_deg, pn, trim, **kwargs)
 
     vertical_true = panel(vertical_exaggeration=1.0, hillshade_weight=1.0)
-    vertical_default = panel(vertical_exaggeration=DEFAULT_VERTICAL_EXAGGERATION, hillshade_weight=1.0)
+    vertical_default = panel(
+        vertical_exaggeration=DEFAULT_VERTICAL_EXAGGERATION, hillshade_weight=1.0
+    )
     _compose_row(
         [
             ("Vertical exaggeration ×1 (true to scale)", vertical_true),
-            (f"Vertical exaggeration ×{DEFAULT_VERTICAL_EXAGGERATION:g} (shipped)", vertical_default),
+            (
+                f"Vertical exaggeration ×{DEFAULT_VERTICAL_EXAGGERATION:g} (shipped)",
+                vertical_default,
+            ),
         ],
         out_dir / "relief-exaggeration-vertical.png",
     )

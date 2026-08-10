@@ -107,9 +107,7 @@ else:
             mapping[role.strip()] = column.strip()
         return mapping
 
-    def _load_choropleth_rows(
-        data_path: str, mapping: dict[str, str]
-    ) -> list[dict[str, Any]]:
+    def _load_choropleth_rows(data_path: str, mapping: dict[str, str]) -> list[dict[str, Any]]:
         """Load choropleth rows from a CSV or JSON file, applying ``--map``.
 
         Parameters
@@ -172,7 +170,9 @@ else:
                 raw_rows = loaded
             elif suffix == ".jsonl":
                 raw_rows = [
-                    json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+                    json.loads(line)
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
                 ]
             else:
                 raise click.ClickException(
@@ -225,7 +225,9 @@ else:
         help="Force the diverging ramp on/off. Default: auto-detect from the data's sign.",
     )
     @click.option(
-        "--relief/--no-relief", default=True, show_default=True,
+        "--relief/--no-relief",
+        default=True,
+        show_default=True,
         help="Composite the vendored hillshade texture.",
     )
     def choropleth_cmd(

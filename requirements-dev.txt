@@ -1,0 +1,7 @@
+# Adds test/lint tooling on top of requirements.txt. Used for local
+# development and CI; never installed into a production install.
+-r requirements.txt
+
+pytest>=8
+ruff>=0.6
+httpx>=0.27
