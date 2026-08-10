@@ -14,6 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # assets/geo/*.png, *.pdf, doc/img/*.png are Git LFS (see
+          # .gitattributes) -- actions/checkout does not fetch LFS objects
+          # by default, which leaves relief-lowres.png etc. as small pointer
+          # stubs Pillow cannot decode. First CI run caught this for real.
+          lfs: true
 
       - uses: actions/setup-python@v5
         with:
