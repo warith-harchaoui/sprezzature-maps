@@ -1,26 +1,39 @@
 """
-build_color_relief_figures — regenerate doc/CARTOGRAPHY.tex's color/relief verification figures.
+build_color_relief_figures: regenerate doc/CARTOGRAPHY.tex's colour/relief verification figures.
 
 Module summary
 --------------
-Two claims in ``doc/CARTOGRAPHY.tex`` are currently asserted in prose without a
-supporting image: that shipped color ramps are verified (not just designed
-by eye) against color-vision deficiency, and that the world-scale relief
-path's Imhof-style duotone genuinely beats the plain contrast-stretched
-greyscale it replaced. This script renders both, from the real production
-functions (`_geo_colors.py`, `_relief.py`), not a re-implementation of
-either -- no synthetic swatches, no matplotlib.
+``doc/CARTOGRAPHY.tex``, this project's methodology document, currently
+makes two claims in prose with no image to back them up: that the colour
+ramps this repo ships have actually been checked, not just designed by
+eye, against colour-vision deficiency (a limitation, most often the
+inability to tell red from green, that changes how a colour ramp looks to
+some readers); and that the world-scale relief path's warm-and-cool
+duotone (see ``_relief.py``'s own docstring for what that means) genuinely
+looks better than the plain, contrast-stretched grey image it replaced,
+not just differently. This script renders both claims as actual images,
+calling the real production functions in ``_geo_colors.py`` and
+``_relief.py`` rather than re-implementing either one separately for the
+figure. No synthetic colour swatches, no matplotlib (Python's classic
+plotting library, deliberately unused anywhere in this stack's own
+drawing code).
 
-Two composite PNGs are written to ``doc/img/`` at print resolution:
+Two composite PNG images are written to ``doc/img/``, at a resolution
+sharp enough for print:
 
-- ``cvd-simulation-diverging.png``: the shipped diverging ramp as a smooth
-  gradient bar, four rows (normal vision, then each of the three CVD types
-  :func:`_geo_colors.simulate_cvd_hex` supports), so a reader can see
-  directly that the negative/positive extremes stay visually distinct
-  under every simulated condition, not just under normal vision.
-- ``relief-duotone-comparison.png``: the same real Alps crop from the
-  vendored Natural Earth hillshade raster, contrast-stretched plain
-  greyscale next to the shipped Imhof-style OKLCH duotone.
+- ``cvd-simulation-diverging.png``: the shipped diverging colour ramp (a
+  scale with two colours pulling away from a neutral middle, used for
+  values that can be above or below some reference point) drawn as a
+  smooth gradient bar, repeated in four rows: normal vision first, then
+  each of the three colour-vision-deficiency types
+  :func:`_geo_colors.simulate_cvd_hex` can simulate. Stacking the four
+  rows lets a reader see directly, with their own eyes, that the two
+  ends of the ramp stay visually distinct under every simulated
+  condition, not only under normal vision.
+- ``relief-duotone-comparison.png``: the same real crop of the Alps, cut
+  from the bundled Natural Earth shaded-relief image, shown twice side
+  by side: once as plain, contrast-stretched grey, once with the shipped
+  warm-and-cool duotone this repo actually uses.
 
 Usage example
 -------------

@@ -1,9 +1,14 @@
-"""Admin-1/admin-2 boundary tiering: bbox pre-filters, tier selection, real renders.
+"""Tests for sub-national boundary tiering: bounding-box pre-filters, tier choice, real renders.
 
-Covers the task #31 sub-national boundary work (TIGER, IGN ADMIN EXPRESS,
-OpenStreetMap) added to ``scripts/make_situation_map.py`` -- until this file,
-that code had only ever been checked by hand (real renders eyeballed during
-development, never captured as a regression test).
+"Admin-1" and "admin-2" are a country's first and second levels of
+internal division (a US state or a French region is admin-1; a US county
+or a French department is admin-2). This file covers the sub-national
+boundary work added to ``scripts/make_situation_map.py`` under project
+task #31, which draws on three real boundary datasets: the U.S. Census
+Bureau's TIGER data, France's IGN ADMIN EXPRESS data, and OpenStreetMap.
+Before this file existed, that code had only ever been checked by hand,
+real renders looked at during development, never captured as a test that
+could catch a future regression automatically.
 """
 
 from __future__ import annotations

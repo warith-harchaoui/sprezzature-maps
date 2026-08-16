@@ -1,27 +1,41 @@
 #!/usr/bin/env python3
-"""Streamlined builder for every shipped situation-map example — one source of truth.
+"""One builder for every shipped situation-map example, so there is a single source of truth.
 
 Author: Warith Harchaoui
 
-Generates all example configs for ``make_situation_map.py`` consistently, so the
-shipped gallery is uniform and regenerable in one command:
+Generates every example configuration for ``make_situation_map.py`` the
+same consistent way, so the shipped example gallery looks uniform and can
+be regenerated in one command:
 
-- ``ukraine`` — schematic government / occupied / contested split of the real
-  outline, along an approximate contact line per open-source geopolitical
-  literature (e.g. ISW), illustrative mid-war snapshot.
-- ``syria``   — schematic four-actor split (government / opposition / SDF /
-  Turkish-backed) per open-source literature, illustrative ~2018 snapshot.
-- ``libya``   — schematic loyalist / rebel / contested split of the First Libyan
-  Civil War, per open-source literature, illustrative ~spring 2011 snapshot.
+- ``ukraine``: a schematic split of the country's real outline into
+  government-held, occupied, and contested territory, drawn along an
+  approximate front line (the boundary between opposing forces) as
+  reported in open-source geopolitical literature (for instance ISW, the
+  Institute for the Study of War, a think tank that publishes daily
+  conflict maps). An illustrative snapshot from partway through the war,
+  not a claim of exact, current accuracy.
+- ``syria``: a schematic four-way split (government, opposition, the
+  Kurdish-led SDF, Syrian Democratic Forces, and Turkish-backed forces)
+  based on open-source literature, an illustrative snapshot from around
+  2018.
+- ``libya``: a schematic split between loyalist, rebel, and contested
+  territory during the First Libyan Civil War (the 2011 uprising against
+  Muammar Gaddafi's government), based on open-source literature, an
+  illustrative snapshot from around spring 2011.
 
-Every non-neutral map is coarse by design and says so on its face. The schematic
-sprezzature lines and control polygons live here in the open — sourced in the comments
-(Wikipedia / ISW / DeepStateMap) — so an expert can read exactly how each map was
-drawn and refine it, rather than trusting an opaque asset. It emits the tracked
-``assets/situation-maps/<name>.{yaml,svg,png}`` plus the gallery raster.
+Every one of these non-neutral maps is deliberately coarse, and says so
+directly on the map itself. The schematic control lines and territory
+polygons are not hidden inside some opaque data file: they live here, in
+the open, in this script's own source, sourced in the code comments right
+next to each one (Wikipedia, ISW, DeepStateMap, a crowd-sourced tracker
+of the war in Ukraine). An expert reader can see exactly how each map was
+drawn, line by line, and correct or refine any part of it, rather than
+having to trust a black box. Running this script writes the tracked
+``assets/situation-maps/<name>.{yaml,svg,png}`` files plus the gallery's
+raster (pixel-grid) image.
 
-    python sprezzature-figures/scripts/build_situation_examples.py            # all three
-    python sprezzature-figures/scripts/build_situation_examples.py ukraine    # just one
+    python scripts/build_situation_examples.py            # all three
+    python scripts/build_situation_examples.py ukraine    # just one
 """
 
 from __future__ import annotations

@@ -1,24 +1,31 @@
 """
-sprezzature-maps — Click CLI (``sprezzature-maps`` command).
+sprezzature-maps: the Click-based command line (the ``sprezzature-maps`` command).
 
 Module summary
 --------------
-A richer twin of the always-installed argparse ``make-map`` CLI
-(:mod:`sprezzature_maps.cli`), available with the ``[cli]`` extra. Both
-CLIs call the same shared application-service functions
+Click is a Python library for building command-line tools with
+subcommands. This module uses it to provide a richer twin of the
+always-installed, argparse-based ``make-map`` command
+(:mod:`sprezzature_maps.cli`); it is available separately, through the
+``[cli]`` extra. Both commands call the exact same underlying functions
 (:func:`sprezzature_maps.make_choropleth`,
-:func:`sprezzature_maps.make_situation_map` -- CODING.md Sec 19.1), so
-this file adds a *surface*, not a second implementation of the generators.
+:func:`sprezzature_maps.make_situation_map`; see CODING.md §19.1), so this
+file only adds a new way to reach the generators, not a second
+implementation of them.
 
-What this adds over ``make-map`` specifically: CSV ingestion (``make-map``
-only reads a pre-shaped JSON file) plus ``--map role=column`` bindings for
-a CSV whose columns are not already named ``id``/``value`` -- exactly the
-gap between the two CLIs in the sister ``sprezzature-figures`` repo (its
-argparse ``make-figure`` is JSON/demo-only too; ``sprezzature-figures``'
-Click CLI is where CSV + column mapping lives). Deliberately does **not**
-duplicate ``make-map``'s JSON-file path or add a second ``situation_map``
-config-loading path -- both already work and a CSV story does not apply to
-``situation_map`` (it is YAML-config-driven, not row-data-driven).
+What this command adds over ``make-map``, specifically: it can read data
+straight from a CSV file (``make-map`` only reads a JSON file already
+shaped the way the generator expects), and it accepts ``--map
+role=column`` bindings for a CSV whose columns are not already named
+``id``/``value``. That is exactly the same gap that exists between the
+two command lines in the sister ``sprezzature-figures`` repository (its
+argparse-based command is JSON-and-demo-data only too; its Click command
+is where CSV reading and column mapping live). This file deliberately does
+not duplicate ``make-map``'s JSON-file path, and does not add a second way
+to load a ``situation_map`` configuration: both already work, and a CSV
+story simply does not apply to ``situation_map``, since it is driven by a
+YAML configuration file describing zones and markers, not by rows of
+tabular data.
 
 Install the extra to pull in Click::
 

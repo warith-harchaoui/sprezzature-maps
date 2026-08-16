@@ -1,7 +1,11 @@
-"""``make-map`` — render a choropleth or situation map from the command line.
+"""``make-map``: render a choropleth or situation map from the command line.
 
-Thin argparse dispatcher over the two generators, mirroring
-`sprezzature-figures`' ``make-figure`` CLI shape.
+A thin dispatcher, built with argparse (Python's standard library for
+parsing command-line arguments), that just hands off to the two
+generators. Its shape deliberately mirrors the sister
+`sprezzature-figures <https://github.com/warith-harchaoui/sprezzature-figures>`_
+repository's own ``make-figure`` command, so a user already familiar with
+one recognizes the other.
 
 Author
 ------

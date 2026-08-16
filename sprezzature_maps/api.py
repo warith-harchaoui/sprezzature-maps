@@ -1,29 +1,33 @@
 """
-sprezzature-maps — FastAPI HTTP surface.
+sprezzature-maps: the FastAPI HTTP surface.
 
 Module summary
 --------------
-Exposes :func:`sprezzature_maps.make_choropleth` and
-:func:`sprezzature_maps.make_situation_map` over HTTP, so either map type
-can be rendered from any language, not just Python -- the same shared
-application-service functions the ``make-map`` argparse CLI and the
-``sprezzature-maps`` Click CLI already call (CODING.md Sec 19.1: one
-capability, several thin adapters, no duplicated logic). Also serves the
-GUI gallery page (a static route, not a separate app) since it is just
-another consumer of these same two render calls.
+FastAPI is a Python web framework for building HTTP APIs. This module
+uses it to expose :func:`sprezzature_maps.make_choropleth` and
+:func:`sprezzature_maps.make_situation_map` over HTTP, so either map
+type can be rendered from any programming language that can make an HTTP
+request, not only from Python. These are the same shared functions the
+``make-map`` command line and the richer ``sprezzature-maps`` Click
+command line already call: one real implementation, several thin ways of
+reaching it, never a second copy of the rendering logic (see CODING.md
+§19.1). This module also serves the small GUI gallery page as one more
+plain HTTP route rather than as a separate application, since that page
+is really just another caller of these same two render functions.
 
 What ships here
 ----------------
-- ``GET /health`` -- liveness probe.
-- ``GET /v1/kinds`` -- the two map kinds this repo carries (``choropleth``,
-  ``situation_map``), for a caller (or the GUI) that wants to discover them
-  rather than hardcode the names.
-- ``POST /v1/choropleth`` -- render a choropleth from JSON rows (or the
-  built-in demo data if ``data`` is omitted).
-- ``POST /v1/situation-map`` -- render a situation map from a config dict
-  (the same shape the ``--config`` YAML uses), or the bundled Western-Europe
-  demo if ``config`` is omitted.
-- ``GET /`` -- the GUI gallery page (see :mod:`sprezzature_maps.gui`).
+- ``GET /health``: a liveness probe, a route whose only job is to answer
+  quickly so a monitoring system can tell the server is still running.
+- ``GET /v1/kinds``: the two map kinds this repo carries (``choropleth``,
+  ``situation_map``), for a caller, or the GUI, that wants to discover
+  them programmatically rather than hardcode the names.
+- ``POST /v1/choropleth``: render a choropleth from JSON rows (or the
+  built-in demo data, if ``data`` is left out of the request).
+- ``POST /v1/situation-map``: render a situation map from a configuration
+  object shaped the same way the ``--config`` YAML file is, or the
+  bundled Western Europe demo if ``config`` is left out.
+- ``GET /``: the GUI gallery page (see :mod:`sprezzature_maps.gui`).
 
 Install the extra to get the runtime dependencies::
 

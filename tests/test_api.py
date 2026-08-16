@@ -1,12 +1,17 @@
-"""HTTP API contract tests: the FastAPI surface renders both map kinds correctly.
+"""Tests that the HTTP API keeps its contract: the FastAPI surface renders both map kinds correctly.
 
-Covers the same scenarios verified by hand while building
-``sprezzature_maps/api.py`` (see ``.private/todo.md``): health, kind
-discovery, both render routes (demo data and caller-supplied data, in more
-than one output format), the GUI gallery route, and the 422 error path for
-a caller mistake -- one scenario-style file per CODING.md's "prefer
-functional tests over one test per function" guidance, since these routes
-are thin adapters over the already-unit-tested generators.
+These tests cover the same scenarios that were checked by hand while
+building ``sprezzature_maps/api.py`` (see ``.private/todo.md`` for that
+record): the health check, kind discovery, both render routes (using
+demo data and caller-supplied data, in more than one output format), the
+GUI gallery route, and the case where a caller sends a malformed request
+and the server should answer with HTTP status 422, "Unprocessable
+Entity" (the standard response code for "your request was well-formed
+but its content doesn't make sense"). This is one scenario-style file
+covering many small cases together, following CODING.md's "prefer
+functional tests over one test per function" guidance, since these
+routes are thin adapters over generators that already have their own
+unit tests.
 """
 
 from __future__ import annotations
