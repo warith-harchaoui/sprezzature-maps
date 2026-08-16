@@ -1,9 +1,10 @@
 # Coding standards
 
 Adapted from [sprezzature-figures](https://github.com/warith-harchaoui/sprezzature-figures)'
-own `CODING.md` (the repo `sprezzature-maps` was split out of) — kept in sync in
-spirit, not automatically, since the two repos have diverged on surfaces (no
-Studio or dataviz tier here).
+own `CODING.md` (the repo `sprezzature-maps` was split out of). The two files
+are kept in sync in spirit, by hand, not by an automated check, since the two
+repos have since diverged on which surfaces they expose (no Studio, the
+conversational chart editor, and no dataviz dependency tier here).
 
 ## Language
 
@@ -13,11 +14,16 @@ Python 3.10+. Full type annotations on all public functions and classes.
 
 - `ruff check` with zero warnings. `ruff format` applied.
 - Line length: 100 characters (`[tool.ruff]` in `pyproject.toml`).
-- Imports: stdlib → third-party → local, separated by blank lines. `scripts/`
-  is not an installed package (its generators import siblings via a
-  `sys.path.insert(0, str(Path(__file__).resolve().parent))` shim before the
-  local imports, each with `# noqa: E402`) — keep that shim, do not turn
-  `scripts/` into a package to work around it.
+- Imports: standard library, then third-party packages, then local modules,
+  each group separated by a blank line. `scripts/` is not an installed
+  Python package, so its generators cannot simply `import` their sibling
+  helper modules the normal way; each one first runs
+  `sys.path.insert(0, str(Path(__file__).resolve().parent))` (adding its own
+  folder to Python's list of places to search for a module) and only then
+  imports the sibling, marking that import `# noqa: E402` (telling `ruff`
+  this particular import is deliberately not at the top of the file). Keep
+  that pattern; do not turn `scripts/` into a proper package just to avoid
+  it.
 
 ## Docstrings
 
@@ -53,7 +59,9 @@ def make_choropleth(
 
 ## Comments
 
-25–30 % comment density. Explain *why*, never *what*. No commented-out code.
+Roughly a quarter to a third of lines should be comments. Each one should
+explain *why* the code does something non-obvious, never restate *what* the
+code already says by itself. No commented-out code left lying around.
 
 ## Script structure for make_*.py
 
@@ -100,44 +108,61 @@ if __name__ == "__main__":
     print(make_<kind>())
 ```
 
-Shared, output-identical primitives used by both generators (SVG scaffolding,
-color ramps, relief/terrain shading, TopoJSON decoding, render/write helpers)
-live in the private `_*.py` modules alongside them, never duplicated inline —
-see each module's own docstring for what it owns and why.
+Primitives shared by both generators, and rendered identically wherever
+they're reused (SVG scaffolding, colour scales, relief/terrain shading,
+TopoJSON decoding, the write-to-disk helpers), live in the private `_*.py`
+modules next to them, never copy-pasted inline into a generator. See each
+such module's own docstring for exactly what it owns and why it exists as
+its own module.
 
 ## Testing
 
-- All tests in `tests/` must pass with `pytest -q` (`pyproject.toml` excludes
-  `@pytest.mark.slow` — network/rasterization-heavy — from the default run).
+- Every test in `tests/` must pass with `pytest -q`. `pyproject.toml`
+  excludes tests marked `@pytest.mark.slow` (ones that hit the network or do
+  heavy rasterization) from that default run.
 - Every public function in `scripts/_relief.py` and `scripts/_geo_colors.py`
-  carries a doctest exercising its documented contract; run with
-  `python -m doctest scripts/_relief.py` (and the equivalent per file).
-  Package modules (`sprezzature_maps/*.py`) use relative imports, so their
-  doctests need module invocation instead of a bare file path:
+  carries a doctest: an example call and its expected output, written right
+  in the docstring, that Python can execute as a test. Run one file's
+  doctests with `python -m doctest scripts/_relief.py` (repeat per file).
+  The modules under `sprezzature_maps/` use relative imports (imports
+  written relative to the package, `from .foo import bar` rather than
+  `import foo`), which only work once the package is actually imported, so
+  their doctests need to run through an import instead of a bare file path:
   `python3 -c "import doctest, sprezzature_maps.api as m; doctest.testmod(m)"`.
-- No mocking of file I/O or rendering. Test the real dispatcher.
-- Visual/relief changes go through the Ralph Eyeball Loop (render → inspect
-  the actual raster output → critique against a concrete defect → edit the
-  *source*, never the output image → re-render) — a test passing is
-  necessary, not sufficient, for a visual change; see
-  `doc/CARTOGRAPHY.tex` § Validation methodology.
+- No mocking of file I/O or rendering. Test the real dispatcher (the
+  function that actually writes the SVG), not a stand-in for it.
+- A visual or relief change also needs a render-and-look pass: render the
+  new output, inspect the actual image (not just the code that produced
+  it), check it against a specific, named defect, fix the *source* file
+  rather than touching the output image by hand, then render again. A
+  passing test is necessary but not sufficient proof that a visual change
+  is actually correct; see `doc/CARTOGRAPHY.tex` § Validation methodology
+  for the full process.
 
 ## Dependencies
 
-Declare all dependencies in `pyproject.toml` under `[project.dependencies]` /
-`[project.optional-dependencies]`. Do not pin exact versions in
-`pyproject.toml` (use `>=` lower bounds only). `requirements.txt` /
-`requirements-dev.txt` are pip entry points that select which extras to
-install — `pyproject.toml` stays the single source of truth for version
-constraints, so there is nothing in those two files to fall out of sync when
-a bound changes.
+Declare every dependency in `pyproject.toml`, under `[project.dependencies]`
+or `[project.optional-dependencies]`. Do not pin an exact version there
+(use a `>=` lower bound only). `requirements.txt` and `requirements-dev.txt`
+exist only as `pip` entry points that pick which optional extras to
+install; `pyproject.toml` stays the one place version constraints are
+decided, so there is nothing in those two files that could drift out of
+sync when a bound changes.
 
 ## Vendored geo data
 
-New boundary/relief sources under `assets/geo/` follow the pattern
-`doc/CARTOGRAPHY.tex` documents in full (§ Sub-national admin-1 tiering
-onward): vendor once via `mapshaper` into quantized TopoJSON, gate loading
-behind a cheap bbox pre-filter, decide Git LFS by churn pattern (does this
-file get regenerated often?) not by file size — see `.gitattributes`'
-comments for the reasoning on each tracked pattern. Never fetch geo data at
-render time; all rendering is offline.
+Any new boundary or relief source added under `assets/geo/` follows the
+pattern `doc/CARTOGRAPHY.tex` documents in full (§ Sub-national admin-1
+tiering onward, "admin-1" meaning a country's first level of internal
+division: a US state, a French region, a German Land). In short: convert
+the source once with `mapshaper` (a command-line tool for simplifying and
+converting map data) into TopoJSON with reduced coordinate precision;
+gate loading behind a cheap bounding-box pre-filter (checking a shape's
+rough rectangular extent before doing the expensive work of reading its
+full outline, so a map of France does not pay the cost of loading every
+country's detailed borders); and decide whether a file goes into Git LFS
+(Git's system for storing large binary files outside the normal
+version-controlled history) by how often it changes, not by its size.
+`.gitattributes` documents the reasoning behind each tracked pattern.
+Never fetch geo data over the network at render time; every render runs
+offline, against data already vendored into the repo.
