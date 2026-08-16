@@ -1,40 +1,85 @@
 #!/usr/bin/env python3
-"""Generate a professional, layered *situation map* for any region of the world.
+"""Generate a professional, layered "situation map" for any region of the world.
 
 Author: Warith Harchaoui
 
-This reverse-engineers the plate structure that geopolitics data desks use into a
-parameterized generator. From one YAML config (a region, a projection, thematic
-*areas of control*, forces, events, infrastructure, labels) it emits a single SVG
-built as a stack of layers whose names a geopolitics analyst recognizes on sight
-(bottom -> top paint order):
+A situation map, in the sense used here, is the kind of "who controls
+what" plate that a geopolitics analyst draws over a real map: territory
+coloured by which side holds it, plus markers for forces, events, and
+infrastructure. This module reverse-engineers that plate structure (works
+out its underlying recipe by studying real examples, rather than
+following a published specification, since professional cartography
+studios do not publish one) into a single generator that takes
+parameters instead of being redrawn by hand each time. From one YAML
+configuration file (YAML is a human-readable text format for structured
+data) describing a region, a map projection, thematic "areas of control"
+zones, military or political forces, events, infrastructure, and labels,
+it produces one SVG image, built as a stack of layers. Layers are simply
+drawn one after another, each painted over the ones before it, and this
+module names its layers the way a geopolitics analyst would recognize on
+sight, from the bottom (painted first, so it ends up furthest back) to
+the top:
 
-1. ``basemap-sea``        — sea fill.
-2. ``basemap-bathymetry`` — depth-contour halo radiating from the coast.
-3. ``basemap-land``       — land fill.
-4. ``areas-of-control``   — territory zones, pastel + white casing; contested = hatch.
-5. ``infrastructure``     — roads / highways / airports as hairlines.
-6. ``forces``             — unit / actor positions (point markers).
-7. ``events``             — incidents (ceasefire points, clashes, strikes).
-8. ``annotation-labels``  — letter-spaced place + water labels.
-9. ``annotation-furniture`` — title block, north arrow, dual-unit (km + mi) scale bar.
-10. ``legend``            — floating legend panel with swatches.
-11. ``frame``             — rounded-rectangle panel mask.
+1. ``basemap-sea``: the sea's fill colour.
+2. ``basemap-bathymetry``: a band of depth-contour shading (bathymetry
+   means ocean-floor depth, the sea's equivalent of land elevation)
+   radiating out from the coastline.
+3. ``basemap-land``: the land's fill colour.
+4. ``areas-of-control``: the territory zones, in pastel colours with a
+   white outline; contested zones are drawn with a diagonal hatch
+   pattern instead of a solid fill, so "contested" is visible even
+   without reading a legend.
+5. ``infrastructure``: roads, highways, and airports, drawn as thin
+   hairlines.
+6. ``forces``: point markers for unit or actor positions.
+7. ``events``: point markers for incidents (ceasefire points, clashes,
+   strikes).
+8. ``annotation-labels``: place names and water body names, in
+   letter-spaced (extra space added between letters, a typographic
+   convention for map labels) type.
+9. ``annotation-furniture``: the title block, a north arrow, and a scale
+   bar shown in two units at once (kilometres and miles). "Furniture" is
+   the cartographic term for these framing elements that aren't the map
+   content itself.
+10. ``legend``: a floating panel with colour swatches explaining what
+    each zone colour and marker means.
+11. ``frame``: a rounded-rectangle mask that clips the whole plate to a
+    clean panel shape.
 
-The craft signatures reproduced here: an equal-angle **local projection**
-(Lambert Conformal Conic auto-centred on the region), a **classed pastel palette**,
-**white boundary casing** between adjacent zones, **bathymetry** contours in the
-sea, **drop-shadowed** panel + markers, **letter-spaced** uppercase labels, and a
-**dual-unit scale bar** — reachable for *any* part of the world, not one example.
+The specific craft details this module reproduces, each one a small
+signature of professional cartography: a local, equal-angle projection
+(the Lambert conformal conic projection, automatically centred on
+whichever region is requested; equal-angle, or "conformal," means shapes
+and angles stay correct close to the centre, which matters for a
+single-region map the way it wouldn't for a whole-world one); a "classed"
+pastel colour palette (values sorted into a handful of named categories,
+each with its own fixed colour, rather than a continuous gradient);
+white outlines, or "casing," between adjacent zones so their edges stay
+crisp even when the fill colours are close in hue; bathymetry shading in
+the sea; drop shadows under the panel and its markers; letter-spaced
+uppercase labels; and a scale bar in two units at once. All of it works
+for any part of the world the caller asks for, not just one hardcoded
+example region.
 
-Basemap geometry is the vendored, offline Natural Earth land polygon
-(``assets/geo/countries-50m.json``); the caller supplies the thematic layers.
+The land geometry underneath everything is the vendored, offline Natural
+Earth land outline data (``assets/geo/countries-50m.json``); the caller
+supplies every thematic layer drawn on top of it.
+
+Each ``areas-of-control`` zone and each ``forces``/``events`` marker
+carries a ``.hit`` element (an invisible, larger clickable/hoverable
+shape, since the visible shape is sometimes too thin or small to hover
+precisely) and a hover-info bubble (the ``.hit``/``.tip`` elements, built
+with ``_svg.tooltip_bubble`` from the sprezzature-figures repository): a
+zone's bubble shows which actor or category holds it and what share of
+the mapped area it covers; a force or event marker's bubble shows its
+legend description and coordinates.
 
 Usage
 -----
     python make_situation_map.py --config demo.yaml --out demo.svg --render
 
-Style rules: numpy docstrings, full typing, dict-as-record over ad-hoc classes.
+Style rules for this file: NumPy-style docstrings, full type annotations,
+and plain dict-shaped records in preference to purpose-built classes.
 """
 
 from __future__ import annotations
@@ -42,6 +87,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -49,6 +95,24 @@ from typing import Any
 import numpy as np
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
+
+# tooltip_bubble lives in sprezzature-figures/scripts/_svg.py -- a genuinely
+# new capability (see that module's docstring), not something this repo's
+# own scripts carry. This generator has no local ``_svg`` module of its own
+# (own escaping stays in :func:`_esc` below), so a plain sys.path insert +
+# import is safe here, unlike make_choropleth.py which has to alias around
+# its own local ``_svg.py``. Resolved the same robust, sibling-repo-fallback
+# way market_style.py (~/sprezzature/case-studies/financial-markets) does.
+_TOOLTIP_SVG_CANDIDATES = [
+    Path(__file__).resolve().parent.parent.parent / "sprezzature-figures" / "scripts",
+    Path.home() / "sprezzature-figures" / "scripts",
+]
+_TOOLTIP_SVG_DIR = next(
+    (p for p in _TOOLTIP_SVG_CANDIDATES if (p / "_svg.py").is_file()),
+    _TOOLTIP_SVG_CANDIDATES[-1],
+)
+sys.path.insert(0, str(_TOOLTIP_SVG_DIR))
+from _svg import tooltip_bubble  # noqa: E402
 
 try:
     import yaml
@@ -1349,10 +1413,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     layers.append(_front_line_layer(cfg, proj, vp))
 
     # 6. forces ------------------------------------------------------------- #
-    layers.append(_markers_layer(cfg.get("forces", []), proj, vp, "forces"))
+    marker_legend = cfg.get("marker_legend", [])
+    layers.append(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend))
 
     # 7. events ------------------------------------------------------------- #
-    layers.append(_markers_layer(cfg.get("events", []), proj, vp, "events"))
+    layers.append(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend))
 
     # 8. annotation-labels -------------------------------------------------- #
     layers.append(_labels_layer(cfg, proj, vp))
@@ -1389,6 +1454,16 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {outer_w:.1f} {outer_h:.1f}" '
         f'width="{outer_w:.1f}" height="{outer_h:.1f}">'
         f"{svg_defs(hatch)[:-7]}{clip}</defs>"
+        # Hover-info bubbles for areas-of-control zones and forces/events
+        # markers: same .hit/.tip convention as case-studies/financial-markets
+        # and make_choropleth.py.
+        "<style>"
+        ".tip{opacity:0;pointer-events:none;transition:opacity .12s ease;}"
+        ".hit:hover~.tip,.hit:focus~.tip{opacity:1;}"
+        ".hit{cursor:crosshair;}"
+        ".hit:focus-visible{outline:2px solid #1b2733;outline-offset:1px;}"
+        "@media (prefers-reduced-motion: reduce){.tip{transition:none;}}"
+        "</style>"
         f'<rect width="{outer_w:.1f}" height="{outer_h:.1f}" fill="{page_color}"/>'
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
         f'<rect x="0" y="0" width="{W:.1f}" height="{H:.1f}" rx="{radius}" ry="{radius}" '
@@ -1447,7 +1522,14 @@ def _load_features(spec: Any, base: Path) -> list[dict[str, Any]]:
 
 
 def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
-    """Return the territory zones: pastel fill under a white casing; contested = hatch."""
+    """Return the territory zones: pastel fill under a white casing; contested = hatch.
+
+    Each zone's fill carries ``class="hit"`` and a :func:`tooltip_bubble`
+    sibling (revealed via the ``.hit:hover~.tip`` pattern): the actor/
+    category name, whether the zone is marked contested, and its share of
+    the mapped region's total area -- computed from the projected geometry
+    already at hand here, not a fabricated stat.
+    """
     aoc = cfg.get("areas_of_control", {})
     base = Path(cfg.get("_config_dir", "."))
     features = _load_features(aoc.get("source"), base)
@@ -1460,9 +1542,9 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
     # Fill opacity: high enough that the pastel classes read as solid territory,
     # low enough that the paper warmth and the coastline still show through.
     fill_op = float(aoc.get("fill_opacity", 0.78))
+    W, H = vp["width"], vp["height"]
 
-    casings: list[str] = []
-    fills: list[str] = []
+    zones: list[dict[str, Any]] = []
     for feat in features:
         props = feat.get("properties", {})
         cat = props.get(field, "")
@@ -1470,18 +1552,45 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
         d = projected_geom_to_path(geom, vp)
         if not d:
             continue
+        zones.append({"cat": cat, "geom": geom, "d": d})
+    total_area = sum(z["geom"].area for z in zones) or 1.0
+
+    casings: list[str] = []
+    fills: list[str] = []
+    for z in zones:
+        cat, geom, d = z["cat"], z["geom"], z["d"]
         # White casing drawn first (under the fill) so borders read as clean seams.
         casings.append(
             f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{casing_w}" '
             f'stroke-linejoin="round"/>'
         )
         color = palette.get(cat, "#dddddd")
+        is_contested = cat in contested
         fills.append(
-            f'<path d="{d}" fill="{color}" fill-opacity="{fill_op:.2f}" stroke="{color}" '
-            f'stroke-width="0.7" stroke-opacity="0.95"/>'
+            f'<path class="hit" tabindex="0" d="{d}" fill="{color}" fill-opacity="{fill_op:.2f}" '
+            f'stroke="{color}" stroke-width="0.7" stroke-opacity="0.95"/>'
         )
-        if cat in contested:
+        if is_contested:
             fills.append(f'<path d="{d}" fill="url(#hatch-contested)"/>')
+        share_pct = geom.area / total_area * 100
+        detail = f"{share_pct:.1f}% of mapped area"
+        if is_contested:
+            detail += " · contested"
+        rp = geom.representative_point()
+        tx, ty = vp["to_svg"](rp.x, rp.y)
+        fills.append(
+            tooltip_bubble(
+                tx,
+                ty,
+                [cat or "Unclaimed", detail],
+                anchor="middle",
+                canvas_w=W,
+                canvas_h=H,
+                ink="#1b2733",
+                secondary="#5b6169",
+                border="#e4e8ec",
+            )
+        )
     return f'<g id="areas-of-control">{"".join(casings)}{"".join(fills)}</g>'
 
 
@@ -1805,17 +1914,48 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
 
 
 def _markers_layer(
-    items: list[dict[str, Any]], proj: Transformer, vp: dict[str, Any], layer_id: str
+    items: list[dict[str, Any]],
+    proj: Transformer,
+    vp: dict[str, Any],
+    layer_id: str,
+    marker_legend: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Return point markers (forces or events) as drop-shadowed dots."""
+    """Return point markers (forces or events) as drop-shadowed, hoverable dots.
+
+    Each marker carries a ``class="hit"`` and, right after it, a
+    :func:`tooltip_bubble` sibling revealed on hover/focus (the
+    ``.hit:hover~.tip`` pattern). A marker's own dict rarely names the
+    place it sits at (``lon``/``lat``/``color``/``r`` only -- see the
+    module's example configs), but its fill ``color`` already keys into
+    ``cfg["marker_legend"]`` (a color -> description mapping every config
+    already sets, e.g. "Contested flashpoint (approx.)") -- the headline
+    reuses that real, existing data plus the marker's coordinates and
+    layer (forces/events), rather than inventing a per-marker name.
+    """
+    legend_by_color = {m.get("color"): m.get("label", "") for m in (marker_legend or [])}
+    W, H = vp["width"], vp["height"]
     out: list[str] = []
     for it in items:
         x, y = vp["to_svg"](*proj.transform(it["lon"], it["lat"]))
         color = it.get("color", "#b03a3a")
         r = float(it.get("r", 5))
         out.append(
-            f'<g transform="translate({x:.1f},{y:.1f})" filter="url(#marker-shadow)">'
-            f'<circle r="{r:.1f}" fill="{color}" stroke="#fff" stroke-width="1.4"/></g>'
+            f'<circle class="hit" tabindex="0" cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" '
+            f'fill="{color}" stroke="#fff" stroke-width="1.4" filter="url(#marker-shadow)"/>'
+        )
+        headline = it.get("label") or legend_by_color.get(color) or layer_id.capitalize()
+        out.append(
+            tooltip_bubble(
+                x,
+                y - r - 6,
+                [headline, f"{it['lat']:.2f}°, {it['lon']:.2f}° · {layer_id}"],
+                anchor="middle",
+                canvas_w=W,
+                canvas_h=H,
+                ink="#1b2733",
+                secondary="#5b6169",
+                border="#e4e8ec",
+            )
         )
     return f'<g id="{layer_id}">{"".join(out)}</g>'
 

@@ -1,10 +1,11 @@
-"""Click CLI contract tests: ``sprezzature-maps`` renders both kinds and
-ingests CSV data with column mapping.
+"""Tests that the Click command line keeps its contract: ``sprezzature-maps``
+renders both map kinds and reads CSV data with column mapping correctly.
 
-One scenario-style file, mirroring what was verified by hand while
-building ``sprezzature_maps/cli_click.py`` -- CODING.md's "prefer
-functional tests over one test per function" guidance, since these
-commands are thin adapters over the already-unit-tested generators.
+One scenario-style file covering many small cases together, mirroring
+what was checked by hand while building ``sprezzature_maps/cli_click.py``,
+following CODING.md's "prefer functional tests over one test per
+function" guidance, since these commands are thin adapters over
+generators that already have their own unit tests.
 """
 
 from __future__ import annotations

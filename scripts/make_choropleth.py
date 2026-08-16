@@ -1,23 +1,48 @@
 #!/usr/bin/env python3
 """
-make_choropleth — a house-styled world choropleth map as hand-authored SVG.
+make_choropleth: a house-styled world choropleth map, drawn as hand-authored SVG.
 
-Encodes a numeric value per country as fill colour on a world map: a
-single pale-to-navy blue ramp so magnitude reads by lightness alone
-(colour-vision-deficiency- and greyscale-safe by construction), countries
-with no assigned value fall back to neutral grey rather than vanishing.
-Typical uses: any per-country indicator -- exposure or risk index,
-adoption rate, survey coverage -- where geography itself carries meaning
-the reader already has spatial intuition for.
+A choropleth map is a map where each region (here, each country) is
+filled with a colour that encodes a number: darker usually means "more."
+This module draws one number per country as fill colour on a world map,
+using a single colour ramp running from pale to navy blue, so that how
+much of something a country has is readable from lightness alone, a
+choice that is designed to stay legible both in plain greyscale and under
+simulated colour-vision deficiency (a limitation, most often the
+inability to distinguish red from green, that changes how a colour ramp
+looks to some readers). That has actually been checked with the
+simulation tool in ``_geo_colors.py``, not just assumed; see
+``build_color_relief_figures.py``, which renders the verification image,
+and ``.private/todo.md`` for the record of that check. Countries with no
+assigned value fall back to a neutral grey rather than disappearing from
+the map. Typical uses: any per-country indicator, an exposure or risk
+index, an adoption rate, survey coverage, anything where the geography
+itself already carries meaning a reader has spatial intuition for.
 
-Previously rendered via Vega-Lite's ``geoshape`` mark against a bundled
-TopoJSON country atlas and an ``equalEarth`` projection (``vl_convert``);
-this module now decodes the same offline TopoJSON atlas
-(``assets/geo/countries-50m.json``, vendored Natural Earth data, already
-used by ``make_situation_map.py``) and projects it itself with a
-hand-written closed-form Equal Earth projection -- no Vega, no matplotlib,
-no ``pyproj``. Every country carries a native ``<title>`` tooltip with its
-exact value, rank, and (for a sequential indicator) share of the total.
+This map used to be drawn through Vega-Lite (a JSON-based charting
+grammar) using its ``geoshape`` mark, a bundled TopoJSON country atlas
+(TopoJSON is a compact format for map boundaries that stores each shared
+border only once instead of once per neighbouring country), and an
+``equalEarth`` projection, all converted to an image by ``vl_convert``. It
+no longer is. This module now reads that same offline TopoJSON atlas
+itself (``assets/geo/countries-50m.json``, vendored Natural Earth data
+already used by ``make_situation_map.py``) and projects it with its own
+hand-written, closed-form Equal Earth projection (a projection is the
+mathematical recipe for flattening the round Earth onto a flat image;
+Equal Earth is the specific recipe that keeps every country's true
+relative area, so a large but often visually exaggerated landmass like
+Greenland or Russia is not overstated the way it is on a classic Mercator
+map; "closed-form" means the formula is computed directly, with no
+external library, iteration, or lookup table needed). No Vega, no
+matplotlib (Python's classic plotting library), no ``pyproj`` (a common
+third-party geographic-projection library, not needed here). Every
+country carries a native browser ``<title>`` tooltip with its exact
+value, its rank among all countries, and, for a sequential indicator, its
+share of the total, plus a richer on-canvas hover bubble (the
+``.hit``/``.tip`` elements, built with ``_svg.tooltip_bubble`` from the
+sprezzature-figures repository) repeating the same information for
+anyone using a pointer or a keyboard rather than relying on the browser's
+native tooltip.
 
 Author
 ------
@@ -26,6 +51,7 @@ Author
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import statistics
@@ -41,6 +67,30 @@ from _interactive import fullscreen_control  # noqa: E402
 from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
+
+# tooltip_bubble lives in sprezzature-figures/scripts/_svg.py, not in this
+# repo's own scripts/_svg.py (see that module's docstring, "Deliberately not
+# extracted" -- it is a genuinely new capability, not a byte-identical
+# extraction). Resolved the same robust way market_style.py
+# (~/sprezzature/case-studies/financial-markets) does, with a sibling-repo
+# fallback. Loaded via importlib under a distinct module name -- a plain
+# ``sys.path.insert`` + ``from _svg import ...`` would silently reuse this
+# file's *own*, already-imported ``_svg`` module (Python caches by module
+# name, not path) and fail to find ``tooltip_bubble`` there.
+_TOOLTIP_SVG_CANDIDATES = [
+    Path(__file__).resolve().parent.parent.parent / "sprezzature-figures" / "scripts",
+    Path.home() / "sprezzature-figures" / "scripts",
+]
+_TOOLTIP_SVG_DIR = next(
+    (p for p in _TOOLTIP_SVG_CANDIDATES if (p / "_svg.py").is_file()),
+    _TOOLTIP_SVG_CANDIDATES[-1],
+)
+_tooltip_spec = importlib.util.spec_from_file_location(
+    "_svg_figures_tooltip", _TOOLTIP_SVG_DIR / "_svg.py"
+)
+_svg_figures = importlib.util.module_from_spec(_tooltip_spec)
+_tooltip_spec.loader.exec_module(_svg_figures)
+tooltip_bubble = _svg_figures.tooltip_bubble
 
 INK = "#1D1D1F"
 SECONDARY = "#6E6E73"
@@ -606,6 +656,12 @@ def build_svg(
         ".country{transition:opacity .15s ease;}"
         ".country:hover,.country:focus{opacity:.72;outline:none;}"
         "@media (prefers-reduced-motion: reduce){.country{transition:none;}}"
+        # Richer hover-info bubble, on top of the native <title> tooltip above:
+        # same .hit/.tip convention as case-studies/financial-markets.
+        ".tip{opacity:0;pointer-events:none;transition:opacity .12s ease;}"
+        ".hit:hover~.tip,.hit:focus~.tip{opacity:1;}"
+        ".hit:focus-visible{outline:2px solid " + INK + ";outline-offset:1px;}"
+        "@media (prefers-reduced-motion: reduce){.tip{transition:none;}}"
         "</style>"
     )
     parts.append(f'<rect width="{width}" height="{height}" fill="{BG}"/>')
@@ -671,6 +727,11 @@ def build_svg(
         cid = str(country["id"])
         value = values_by_id.get(cid)
         path_d_parts: list[str] = []
+        # Anchor for the hover bubble: centroid of the largest ring/segment
+        # (the main landmass), not a naive average across every ring -- a
+        # country with far-flung islands (or an antimeridian-split ring like
+        # Russia/Fiji) would otherwise anchor somewhere over open ocean.
+        anchor_seg: list[tuple[float, float]] = []
         for ring in country["rings"]:
             if len(ring) < 3:
                 continue
@@ -688,12 +749,15 @@ def build_svg(
                 if len(seg) < 3:
                     continue
                 path_d_parts.append("M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in seg) + " Z")
+                if len(seg) > len(anchor_seg):
+                    anchor_seg = seg
         if not path_d_parts:
             continue
         path_d = " ".join(path_d_parts)
         if value is None:
             fill, edge = NO_DATA, NO_DATA_EDGE
             tip = f"{country['name']}: no data"
+            tip_lines = [country["name"], "No data"]
         else:
             fill, edge = _color_for_value(value), BG
             # Enrich the raw value with its rank ("3rd of 42") and, when
@@ -702,16 +766,34 @@ def build_svg(
             # value; this only adds context a reader would otherwise have
             # to compute by eye against every other country's shade.
             tip = f"{country['name']}: {value:.1f} ({_ordinal(rank_by_id[cid])} of {n_with_data}"
+            detail = f"Value {value:.1f} · {_ordinal(rank_by_id[cid])} of {n_with_data}"
             if show_percent_of_total:
                 # One decimal, not zero: with dozens of countries sharing
                 # one total, most individual shares round to "0%" or "1%"
                 # at zero decimals, which erases exactly the signal this
                 # stat exists to show.
                 tip += f", {value / values_total * 100:.1f}% of total"
+                detail += f" · {value / values_total * 100:.1f}% of total"
             tip += ")"
+            tip_lines = [country["name"], detail]
+        bubble = ""
+        if anchor_seg:
+            ax = sum(p[0] for p in anchor_seg) / len(anchor_seg)
+            ay = sum(p[1] for p in anchor_seg) / len(anchor_seg)
+            bubble = tooltip_bubble(
+                ax,
+                ay,
+                tip_lines,
+                canvas_w=width,
+                canvas_h=height,
+                ink=INK,
+                secondary=SECONDARY,
+                border=NO_DATA_EDGE,
+            )
         parts.append(
-            f'<path class="country" tabindex="0" d="{path_d}" fill="{fill}" fill-opacity="{_COUNTRY_FILL_OPACITY}" '
+            f'<path class="country hit" tabindex="0" d="{path_d}" fill="{fill}" fill-opacity="{_COUNTRY_FILL_OPACITY}" '
             f'stroke="{edge}" stroke-width="0.4"><title>{xml_escape(tip)}</title></path>'
+            f"{bubble}"
         )
 
     # ---- legend: ramp swatches + min/median/max labels ----

@@ -1,23 +1,28 @@
 """
-sprezzature-maps — Model Context Protocol (MCP) surface.
+sprezzature-maps: the Model Context Protocol (MCP) surface.
 
 Module summary
 --------------
-Adapter that exposes the FastAPI app defined in :mod:`sprezzature_maps.api`
-as MCP tools, so any MCP-aware host (agent runtimes, IDE integrations,
-custom shells) can call ``render_choropleth`` / ``render_situation_map`` /
-``list_kinds`` as first-class tools. Uses :mod:`fastapi_mcp`
-(https://github.com/tadata-org/fastapi_mcp) -- one line wraps the whole
-existing HTTP surface, so the route definitions are never duplicated here
-(CODING.md Sec 23.1: MCP is an agent-facing surface, not a second place to
-implement business logic).
+MCP, the Model Context Protocol, is the standard that lets an AI
+assistant call a tool directly, the way a human would click a button or
+run a command. This module adapts the FastAPI application defined in
+:mod:`sprezzature_maps.api` into MCP tools, so any MCP-aware host (an
+agent runtime, an IDE integration, a custom shell) can call
+``render_choropleth``, ``render_situation_map``, and ``list_kinds`` as
+first-class tools of its own. It does this with :mod:`fastapi_mcp`
+(https://github.com/tadata-org/fastapi_mcp): one line of code wraps the
+entire existing HTTP surface, so none of the route logic gets written a
+second time here (per CODING.md §23.1: MCP is a way of reaching existing
+functionality, not a second place to implement it).
 
-Every route on the underlying app is tagged ``"actions"`` or ``"meta"``;
-only those two tags are exposed (``include_tags`` below) rather than the
-whole app by accident -- there is nothing *to* exclude today (this app has
-no destructive or administrative routes), but the allowlist is written
-explicitly anyway so a future route defaults to hidden from MCP until
-someone deliberately tags it, not the other way around.
+Every route on the underlying application is tagged either ``"actions"``
+or ``"meta"``; only routes carrying one of those two tags are exposed
+through MCP (see ``include_tags`` below), rather than the whole
+application being exposed by accident. There is nothing that actually
+needs excluding today, since this application has no destructive or
+administrative routes, but the allowlist is written explicitly anyway so
+that any future route stays hidden from MCP by default, until someone
+deliberately tags it as safe to expose, rather than the reverse.
 
 Install the extra to pull in ``fastapi-mcp``::
 

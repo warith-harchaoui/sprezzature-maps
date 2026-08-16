@@ -1,22 +1,28 @@
 """
-build_doc_map_figures — rasterize the vendored SVG maps at print resolution for doc/CARTOGRAPHY.tex.
+build_doc_map_figures: rasterize the bundled SVG maps at print resolution, for doc/CARTOGRAPHY.tex.
 
 Module summary
 --------------
-``web/img/`` already carries the six real map renders CARTOGRAPHY's
-choropleth and situation-map figures embed (three choropleth ramps at
-1440x812, two shared but only two used; four situation maps), each kept
-alongside its own source Scalable Vector Graphics (SVG) file, a
-resolution-independent vector image format, so the web gallery's PNG
-thumbnails and this print document's own copies are both one rasterisation
-away from the same source of truth. Those web thumbnails are sized for a
-browser (900 pixels wide) and read soft once placed at full page width in
-a printed Portable Document Format (PDF) file. This script re-rasterizes
-the same SVGs at a much higher pixel width, via the same rasterizer
-(``resvg_py``, a Python binding to the Rust ``resvg`` engine already used
-by :func:`_render._svg_to_png_bytes`) the generators themselves use, and
-writes the results to ``doc/img/``, a folder dedicated to this printed
-document's own figure copies, kept separate from the web gallery's.
+Rasterizing means converting a vector image (one described as shapes and
+coordinates, like the SVGs, Scalable Vector Graphics, this repo's
+generators write) into a plain grid of coloured pixels, the format a
+printed page or a photo actually needs. ``web/img/`` already holds the
+six real map renders that CARTOGRAPHY's choropleth and situation-map
+figures embed (three choropleth colour ramps at 1440 by 812 pixels, two
+of them generated but only two ultimately used; four situation maps),
+each kept alongside the SVG file it was rasterized from. That means the
+web gallery's PNG thumbnails and this print document's own image copies
+are both just one rasterization step away from the same underlying
+source, so they can never quietly drift apart. Those web thumbnails are
+sized for a browser window (900 pixels wide) and look soft once placed
+at full page width in a printed PDF (Portable Document Format) file.
+This script re-rasterizes the same SVGs at a much higher pixel width,
+through the same rasterizer the generators themselves already use
+(``resvg_py``, a Python binding to ``resvg``, a rasterizing engine
+written in the Rust programming language, called from
+:func:`_render._svg_to_png_bytes`), and writes the sharper results to
+``doc/img/``, a folder dedicated to this printed document's own figure
+copies, kept separate from the web gallery's.
 
 Usage example
 -------------

@@ -1,34 +1,43 @@
 """
-build_relief_exaggeration_figures — regenerate doc/CARTOGRAPHY.tex's exaggeration-strategy figures.
+build_relief_exaggeration_figures: regenerate doc/CARTOGRAPHY.tex's exaggeration-strategy figures.
 
 Module summary
 --------------
-``doc/CARTOGRAPHY.tex``'s "Relief exaggeration strategies" section illustrates
-the three knobs :func:`_relief._compute_terrain_shade` exposes (vertical
-exaggeration, texture shading's fractional order, the hillshade/texture
-blend weight) with real comparison renders, not a diagram. This script
-regenerates those renders from the *actual* production shading function
-(imported from ``_relief.py``, not reimplemented here) at a small set of
-illustrative parameter values, on the same real elevation data every other
-figure in this repository uses -- no synthetic terrain, no matplotlib.
+"Vertical exaggeration" means stretching a terrain's height relative to
+its width before shading it, a common cartographic trick: real mountains
+are usually too gentle a slope to read clearly at map scale, so
+stretching height makes the relief actually visible. ``doc/CARTOGRAPHY.tex``'s
+"Relief exaggeration strategies" section illustrates the three settings
+:func:`_relief._compute_terrain_shade` exposes for this (how much to
+stretch the vertical scale, the fractional order used by a texture-based
+shading technique, and how much weight to give that texture shading
+versus plain hillshade) with real side-by-side renders rather than a
+diagram. This script regenerates those renders by calling the actual
+production shading function, imported from ``_relief.py`` rather than
+reimplemented here, at a small set of illustrative parameter values, on
+the same real elevation data every other figure in this repository uses.
+No synthetic terrain, no matplotlib (Python's classic plotting library,
+deliberately unused anywhere in this stack's own drawing code).
 
-Two composite PNGs are written to ``doc/img/`` at print resolution (each
-panel ~1600px wide -- CARTOGRAPHY's LaTeX build is a printed/PDF document,
-not a web page, so these target a sharp result at a full-page-width
-placement rather than a screen thumbnail):
+Two composite PNG images are written to ``doc/img/``, at print
+resolution (each panel about 1600 pixels wide: CARTOGRAPHY's LaTeX build
+produces a printed PDF document, not a web page, so the target is a
+sharp result at full page width, not a small screen thumbnail):
 
-- ``relief-exaggeration-vertical.png``: hillshade-only (texture weight 0),
-  at true-scale (``vertical_exaggeration=1.0``) vs. the shipped default
-  (``2.0``), two panels.
-- ``relief-exaggeration-blend.png``: hillshade-only, texture-only, and the
-  shipped 0.35/0.65 blend, three panels.
+- ``relief-exaggeration-vertical.png``: hillshade only (texture weight
+  set to 0), comparing true scale (``vertical_exaggeration=1.0``)
+  against the shipped default (``2.0``); two panels.
+- ``relief-exaggeration-blend.png``: hillshade only, texture only, and
+  the shipped 0.35/0.65 blend of the two; three panels.
 
-Panels are composited with plain Pillow drawing (paste + a captioned
-bottom bar), not matplotlib, consistent with this whole stack's
-"no matplotlib, ever" constraint. Captions use a system serif face
-(Georgia, matching this document's editorial print register) when
-available, falling back to Pillow's bitmap default otherwise, so the
-script degrades rather than fails on a machine without it.
+The panels are composited with plain Pillow (Python's standard image
+library) drawing calls, pasting images together and adding a captioned
+bottom bar, not matplotlib, consistent with this whole stack's rule of
+never using matplotlib for its own drawing code. Captions use a system
+serif typeface (Georgia, matching this document's print-editorial look)
+where available, falling back to Pillow's plain bitmap default
+otherwise, so the script degrades gracefully rather than failing outright
+on a machine that doesn't have that font installed.
 
 Usage example
 -------------

@@ -1,11 +1,14 @@
-"""sprezzature-maps — hand-authored SVG world maps: choropleth + situation maps.
+"""sprezzature-maps: hand-authored SVG world maps, a choropleth generator and a situation-map generator.
 
-A focused sibling of `sprezzature-figures <https://github.com/warith-harchaoui/sprezzature-figures>`_
-carrying just its two Geospatial "real basemap" generators (`choropleth`,
-`situation_map`) as an independent product with its own release cycle and,
-eventually, its own Studio. Depends on ``sprezzature-figures`` for shared
-rendering primitives (font embedding, self-contained-vs-linked SVG modes)
-rather than duplicating them.
+A focused sibling of `sprezzature-figures <https://github.com/warith-harchaoui/sprezzature-figures>`_,
+carrying just its two "real basemap" geospatial generators, `choropleth`
+(a map where each country is filled with a colour encoding a number) and
+`situation_map` (a layered "who controls what" plate for any region), as
+an independent product with its own release schedule and, eventually,
+its own visual editor. Depends on ``sprezzature-figures`` for the
+rendering primitives the two products share (embedding fonts inside the
+SVG file, and choosing between a self-contained SVG and one that links to
+external files) rather than keeping a second copy of that code.
 
 Author
 ------

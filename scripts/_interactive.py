@@ -1,32 +1,42 @@
 """
-_interactive — the interactivity MODE layer shared by the make_* generators.
+_interactive: the interactivity-mode layer shared by every make_*.py generator.
 
-A figure can ship in one of three interactivity *modes*, and the choice is a
-plain argument on the generator (default ``"self-contained"``):
+An SVG figure can ship in one of three interactivity modes. The choice is
+a plain argument on the generator, defaulting to ``"self-contained"``:
 
-* ``"self-contained"`` — the SVG carries its own fullscreen button and the
-  script that wires it. Opened directly, served via ``<object>`` or inlined, the
-  figure is fully usable on its own, with no page JavaScript. This is the
-  default because the SVG is the deliverable.
-* ``"external"`` — the SVG ships *without* an internal button; a page-level
-  module (``figure-fullscreen.js``) supplies the button and a rich tooltip and
-  drives fullscreen for a whole dashboard. The internal layer stands down so the
-  two never duplicate.
-* ``"static"`` — no interactivity at all, only the responsive ``viewBox`` that
-  :func:`_svg.svg_open` already gives. For print or plain ``<img>`` embedding.
+* ``"self-contained"``: the SVG carries its own fullscreen button, plus the
+  small script that makes the button work. Opened directly in a browser,
+  served through an HTML ``<object>`` tag, or pasted straight into a page,
+  the figure works entirely on its own, with no page-level JavaScript
+  needed. This is the default because the SVG file itself is the whole
+  deliverable; nothing else has to ship alongside it.
+* ``"external"``: the SVG ships without its own button. A page-level
+  script (``figure-fullscreen.js``) supplies the button and a richer
+  tooltip, and drives fullscreen for every figure on a dashboard at once.
+  The internal layer stays off in this mode precisely so the two never
+  both try to draw a button.
+* ``"static"``: no interactivity at all, just the responsive sizing
+  (``viewBox``, the SVG attribute that lets an image scale cleanly to any
+  container) that :func:`_svg.svg_open` already provides. For print, or
+  for embedding as a plain ``<img>``.
 
-This module owns the *only* piece that is identical across figures: the
-fullscreen wiring (a generic script, no visible chrome of its own). The
-figure-specific hit regions and tooltips stay in each generator.
+This module owns the one piece that is genuinely identical across every
+figure: the fullscreen wiring, a small generic script with no visible
+appearance of its own. Each generator still owns its own figure-specific
+clickable regions and tooltips.
 
-There is no on-canvas button — the whole figure is the hit target. A
-``<img>``-embedded SVG never runs the ``<script>`` at all (browsers don't
-execute scripts inside `<img>`-referenced SVGs), so nothing changes for
-thumbnails; the script only ever runs once the SVG is a live document.
+There is no visible on-canvas button; the whole figure is the clickable
+target. An SVG embedded through an ``<img>`` tag never runs the
+``<script>`` at all (browsers do not execute scripts inside SVGs
+referenced that way), so nothing changes for a thumbnail: the script only
+ever runs once the SVG is loaded as a real, live document rather than
+just displayed as a picture.
 
-The module is **stdlib-only** (no imports) so it loads wherever the generators
-do. Composes with :func:`_svg.svg_open` (the responsive, accessible root) and
-mirrors the contract in ``sprezzature-ui/assets/components/figure-fullscreen.html``.
+The module imports nothing, not even from the standard library, so it
+loads wherever a generator does. It composes with :func:`_svg.svg_open`
+(the responsive, accessible root tag every figure opens with) and mirrors
+the same contract as ``sprezzature-ui/assets/components/figure-fullscreen.html``,
+the equivalent piece on the web-UI side.
 
 Author
 ------

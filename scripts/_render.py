@@ -1,28 +1,38 @@
 """
-_render — the write-and-report tail shared by every ``make_<id>.py`` generator.
+_render: the finishing steps shared by every ``make_<id>.py`` generator.
 
-Each ``make_<id>.py`` in this folder assembles a figure as an SVG string and
-then runs the *same* three-part epilogue: resolve the canonical output path
-under ``<skill>/assets/svg-examples/<id>.svg``, create the parent directory,
-write the bytes as UTF-8, and echo ``wrote <path>`` so a human running the
-script from a terminal sees where the artifact landed. That epilogue was
-copy-pasted, verbatim, into roughly sixty generators; this module is the one
-place it now lives.
+Each ``make_<id>.py`` in this folder builds a figure as one long SVG text
+string, then runs the exact same three-step ending: work out where the
+file should go by default (under ``<skill>/assets/svg-examples/<id>.svg``,
+one path per figure kind), create that folder if it doesn't exist yet,
+write the text to disk as UTF-8, and print ``wrote <path>`` so a person
+running the script by hand from a terminal can see where the file landed.
+That ending used to be copied, word for word, into roughly sixty
+generators. This module is the one place it lives now, so a fix or a
+change to it only has to happen once.
 
-Only the pieces that were *byte-for-byte identical* across generators are
-factored here — the path expression, the ``mkdir``/``write_text``/``print``
-sequence, and (for the handful of generators that expose a ``--out`` flag) the
-tiny argparse wiring. The figure-specific ``build_svg`` bodies stay in their own
-files; this module never touches the SVG string, so adopting it leaves every
-rendered byte unchanged. Generators with a bespoke epilogue (animated variants
-that render twice, or maps that also emit a PNG companion) still call
-:func:`write_svg` and :func:`svg_example_path` for the parts they share and keep
-their extra logic inline.
+Only the parts that really were identical, byte for byte, across every
+generator are pulled out here: the path calculation, the
+create-folder/write-file/print sequence, and, for the handful of
+generators that expose a command-line ``--out`` flag, the small amount of
+argparse (Python's standard command-line-argument parser) wiring needed
+for that flag. Each generator's own ``build_svg`` function, the part that
+actually draws the figure, stays in its own file; this module never
+touches the SVG text itself, so adopting it changes nothing about what
+gets rendered. A few generators have a non-standard ending of their own
+(an animated variant that renders twice, or a map that also writes out a
+matching PNG image); those still call :func:`write_svg` and
+:func:`svg_example_path` for the parts they do share, and keep their
+extra step written out inline.
 
-The module is **stdlib-only** (``argparse`` + ``pathlib``), so it imports
-everywhere the generators already run — no dataviz tier required. The ``wrote
-<path>`` line is a deliberate, user-facing CLI confirmation (these scripts are
-run by hand), not diagnostic logging, so it stays a plain ``print``.
+This module imports only from Python's standard library (``argparse`` and
+``pathlib``, nothing that needs installing), so it works wherever a
+generator already runs, without needing the heavier data-visualization
+dependencies some other parts of the project use. The ``wrote <path>``
+line is a deliberate message meant for the person running the command
+(these scripts are meant to be run by hand from a terminal), not an
+internal diagnostic log, which is why it stays a plain ``print`` rather
+than going through a logging system.
 
 Consumers
 ---------

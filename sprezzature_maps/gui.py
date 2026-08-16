@@ -1,32 +1,40 @@
 """
-sprezzature-maps — GUI gallery page.
+sprezzature-maps: the GUI gallery page.
 
 Module summary
 --------------
-Renders the single HTML page served at the FastAPI app's root (see
-:mod:`sprezzature_maps.api`): a two-tile gallery, one per map kind, modeled
-on the sprezzature-figures gallery
-(https://harchaoui.org/warith/sprezzature/figures.html) but scaled down --
-that page groups ~95 chart kinds into thematic sections; this repo has
-exactly two kinds, so it is one section, two tiles, no navigation needed
-between them.
+Renders the single HTML page served at the FastAPI app's root address
+(see :mod:`sprezzature_maps.api`): a two-tile gallery, one tile per map
+kind, modeled on the sprezzature-figures gallery
+(https://harchaoui.org/warith/sprezzature/figures.html) but scaled down to
+match this smaller repository. That larger page groups around 95 chart
+kinds into thematic sections; this repo has exactly two kinds, so it
+needs only one section, two tiles, and no navigation between sections.
 
-Design intent (the ``sprezzature-ui`` house rules, applied by hand rather
-than through the actual Tailwind build toolchain -- introducing an npm/
-Tailwind pipeline for a two-tile static page would be disproportionate to
-what it buys): semantic HTML, light/dark via ``prefers-color-scheme``,
-the three-Roboto typography pairing (Roboto sans for UI text, Roboto Serif
-for the page title, Roboto Mono for the kind names), visible focus rings,
-and a ``prefers-reduced-motion`` guard around the one CSS transition this
-page has (the theme-appropriate tile hover).
+The design follows the ``sprezzature-ui`` house rules, applied here by
+hand rather than through an actual build toolchain: bringing in an
+npm/Tailwind build pipeline (Tailwind is a CSS framework normally
+compiled by a JavaScript build step) just for a two-tile static page
+would cost more in tooling than it would ever pay back. The rules it
+still follows: semantic HTML (markup chosen for its meaning, like
+``<nav>`` or ``<article>``, not just generic ``<div>``s); a light or dark
+appearance chosen automatically via the browser's
+``prefers-color-scheme`` setting; the project's three-typeface pairing
+(Roboto for interface text, Roboto Serif for the page title, Roboto Mono
+for the kind names); a visible outline around whichever element is
+focused, for keyboard users; and a ``prefers-reduced-motion`` guard
+(a browser setting a user turns on to ask sites to skip animations)
+around the page's one CSS transition, the tile hover effect.
 
-Each tile's map is not a static screenshot: a small vanilla-JS module
-``fetch()``-calls this same app's own ``/v1/choropleth`` and
-``/v1/situation-map`` routes (empty body -> each generator's built-in demo
-data) and injects the returned SVG text directly into the page. That is a
-deliberate choice, not a shortcut -- it keeps the GUI honestly wired to the
-same API surface a caller would use, rather than shipping a screenshot that
-could silently drift from what the generators actually produce.
+Each tile's map is not a static screenshot. A small vanilla JavaScript
+module (plain JavaScript, no framework) calls this same app's own
+``/v1/choropleth`` and ``/v1/situation-map`` routes with an empty
+request body, which makes each generator fall back to its own built-in
+demo data, and inserts the SVG text that comes back directly into the
+page. That is a deliberate choice, not a shortcut: it keeps the GUI
+honestly wired to the same API surface any other caller would use,
+rather than shipping a screenshot that could silently go stale as the
+generators change.
 
 Usage example
 -------------

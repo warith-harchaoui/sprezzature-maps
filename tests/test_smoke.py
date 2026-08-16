@@ -1,4 +1,10 @@
-"""Smoke tests: both generators render valid, non-trivial SVG from their demo data."""
+"""Smoke tests: both generators render valid, non-trivial SVG from their demo data.
+
+A smoke test is the most basic check there is: does the thing work at
+all, without checking every detail. The name comes from electronics,
+where the first test after building a circuit is powering it on and
+checking that nothing literally starts smoking.
+"""
 
 from __future__ import annotations
 

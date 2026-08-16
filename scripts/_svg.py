@@ -1,57 +1,102 @@
 """
-_svg — tiny, output-identical SVG primitives shared by the make_* generators.
+_svg: small, output-identical SVG building blocks shared by the make_*.py generators.
 
-Every ``make_<id>.py`` generator hand-writes its SVG as f-strings. A
-handful of primitives recurred verbatim across three or more of them and
-are the *only* things factored out here, because each can be made
-byte-for-byte identical to the inline code it replaces:
+Every ``make_<id>.py`` generator writes its own SVG (Scalable Vector
+Graphics, an image format made of shapes and paths described as text,
+rather than a grid of coloured dots) by hand, assembling it piece by
+piece from Python f-strings. A handful of small building blocks turned
+up, worded identically, in three or more of those generators. This
+module is where such a piece gets pulled out, and only such a piece:
+every function here can be swapped in for the inline code it replaces
+while producing the exact same bytes of output, so factoring it out
+changes nothing about what actually renders. (Some of the generators
+named below, for historical reasons explained at the end of this
+docstring, live in the sibling repository, sprezzature-figures, not in
+this one.)
 
-* :func:`xml_escape` — the three-``replace`` XML-metacharacter escape
-  (``&`` → ``&amp;``, ``<`` → ``&lt;``, ``>`` → ``&gt;``) that ~11
-  generators defined privately as ``_xml`` / ``_esc``.
-* :func:`point_on_circle` — the polar-to-Cartesian point
-  ``(cx + r*cos(theta), cy + r*sin(theta))`` (``theta`` already in
-  radians) that several circular-layout generators (chord, windrose,
-  radviz, speaking-time) spelled out inline.
-* :func:`fmt_compact` — the ``f"{v:.1f}".rstrip("0").rstrip(".")``
-  path-data float formatter that the streamgraph, difference-chart and
-  bollinger generators each carried as a private ``_fmt``.
-* :func:`catmull_rom_beziers` — the Catmull-Rom → cubic-Bézier ``C``
-  command run those same three generators carried as a private
-  ``_catmull_rom``. The caller passes its own formatter so the emitted
-  string stays byte-identical (streamgraph/difference-chart/bollinger
-  all pass :func:`fmt_compact`).
-* :func:`hex_to_rgb` — the ``#RRGGBB`` → ``(r, g, b)`` int triple that
-  the hexbin-map, binned-grid-map and circle-packing generators each
-  spelled out as a private ``_hex_to_rgb``.
-* :func:`svg_open` — the responsive, accessible ``<svg ...>`` root tag
-  (explicit width/height, a matching ``viewBox`` so the graphic scales
-  fluidly, the house font, and ``role``/``aria-labelledby`` wiring) that
-  ~46 generators opened their document with verbatim. Only the exact
-  shared template is emitted; generators whose root uses a different
-  attribute order (e.g. andrews, which leads with ``aria-label``) keep
-  their inline tag, so every adoption stays byte-identical.
+* :func:`xml_escape`: the standard three-step text escape that makes a
+  string safe to place inside XML markup (turning the literal characters
+  ``&``, ``<``, and ``>`` into ``&amp;``, ``&lt;``, and ``&gt;``, since
+  those three characters have special meaning to an XML parser and would
+  otherwise be read as markup instead of text). About eleven generators
+  had each written their own private copy of this, usually named
+  ``_xml`` or ``_esc``.
+* :func:`point_on_circle`: converts a polar coordinate (an angle and a
+  distance from a centre point) to the Cartesian, x/y coordinate an SVG
+  actually needs to draw at: ``(cx + r*cos(theta), cy + r*sin(theta))``,
+  with ``theta`` already expressed in radians. Several generators that
+  lay elements out in a circle (chord, windrose, radviz, speaking-time)
+  had this formula written out inline.
+* :func:`fmt_compact`: formats a number to one decimal place, then trims
+  any trailing zero and, if nothing is left after the decimal point, the
+  decimal point itself, for use inside SVG path data (the string of
+  coordinates that defines a curve or shape). Three generators
+  (streamgraph, difference-chart, bollinger) each carried this as a
+  private ``_fmt`` helper.
+* :func:`catmull_rom_beziers`: converts a Catmull-Rom spline (a smooth
+  curve defined by simply passing through a list of points, popular
+  because you never have to hand-place control handles) into the cubic
+  Bézier ``C`` commands SVG path data actually understands. The same
+  three generators above each carried this as a private
+  ``_catmull_rom``. The caller supplies its own number-formatting
+  function, so the text this produces stays byte-identical to before;
+  all three pass it :func:`fmt_compact`.
+* :func:`hex_to_rgb`: converts a ``#RRGGBB`` hex colour string into its
+  three separate red, green, and blue integers. The hexbin-map,
+  binned-grid-map, and circle-packing generators each had their own
+  private ``_hex_to_rgb`` doing the same thing.
+* :func:`svg_open`: the responsive, accessible opening ``<svg ...>`` tag
+  every figure starts with: an explicit pixel width and height, a
+  matching ``viewBox`` (the SVG attribute that lets the image scale
+  smoothly to fit any container instead of clipping or leaving blank
+  space), the project's house font, and the ARIA (Accessible Rich
+  Internet Applications, the standard that lets a screen reader announce
+  what an image is) ``role``/``aria-labelledby`` attributes. About 46
+  generators opened their document with this exact tag. Only the
+  precise shared template is emitted here; a generator whose root tag
+  orders its attributes differently (andrews, for instance, which leads
+  with ``aria-label`` instead) kept its own inline version, so that
+  every adoption still matches its generator's previous output byte for
+  byte.
 
-Deliberately *not* extracted: the per-element hover/tooltip wrappers
-(the ``<g tabindex=…><title>…`` blocks and their ``:hover`` CSS) and the
-pill-label backgrounds. Those differ in class names, ARIA wiring, and
-rounding across generators, so a shared helper could not be made
-output-identical without editing rendered bytes — which the DRY refactor
-must never do. Callers keep their own float formatting; these helpers
-only return the raw string / floats the inline code produced.
+Deliberately left out of this module: the per-element hover and tooltip
+wrappers (the small ``<g tabindex=...><title>...`` blocks and their
+``:hover`` CSS rules) and the pill-shaped label backgrounds. Those
+differ from generator to generator in class names, ARIA wiring, and
+corner rounding, so no single shared version could reproduce every
+generator's existing output exactly, and changing rendered bytes during
+this kind of refactor (a change to how code is organized, never to what
+it produces) is exactly what must not happen. Each caller keeps its own
+number formatting; the functions here only ever return the same raw
+string or numbers the inline code used to produce.
 
-Other tempting-but-rejected candidates (kept inline because they fail
-either the rule of three *or* the byte-identical test): the annular
-arc/sector path (rose == radial-bar only — two callers); the ``_polar``
-clock-bearing helpers (behaviour splits by signature and all already
-delegate to :func:`point_on_circle`); the Equal-Earth map projection
-(spike-map and hexbin-map differ, and windbarb is equirectangular); the
-flow-ribbon paths (three unrelated implementations); the sequential
-colour ramp (hexbin vs binned differ in stops, gamma and light anchor);
-and the ``convex_hull`` scan (only one of these generators uses it).
+A few other candidates looked tempting but were rejected, either because
+fewer than three generators actually shared the code (the usual bar for
+factoring something out) or because making a shared version would have
+changed at least one generator's output: the ring-sector arc path (only
+rose and radial-bar use it); the clock-bearing helpers (their behaviour
+splits by which arguments are passed, and all of them already call
+:func:`point_on_circle` underneath); the Equal Earth map projection
+(spike-map and hexbin-map compute it differently, and windbarb uses a
+different, equirectangular projection instead); the flow-ribbon paths
+(three generators, three unrelated implementations); the sequential
+colour ramp (hexbin and binned-grid-map differ in their colour stops,
+gamma correction, and light-end anchor); and the convex-hull scan (an
+algorithm for finding the smallest polygon that encloses a set of
+points, used by only one generator here).
 
-The module is **stdlib-only** — it imports nothing but :mod:`math` — so
-it stays importable everywhere ``_style.py`` is (no dataviz tier needed).
+This module imports nothing beyond Python's standard :mod:`math` module,
+so it can be imported anywhere ``_style.py`` can, without needing the
+heavier data-visualization dependencies some other parts of the project
+use.
+
+Historical note: the generator names above (chord, windrose, streamgraph,
+and the rest of the roughly 120-kind catalogue) belong to
+sprezzature-figures, the sibling repository this module's design
+reasoning came from when ``choropleth`` and ``situation_map`` were split
+out into their own product, this repo. This copy of the module has since
+diverged from that repository's own version; the two are similar in
+spirit, not kept byte-identical to each other.
 
 Author
 ------

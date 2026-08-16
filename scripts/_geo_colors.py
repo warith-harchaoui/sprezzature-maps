@@ -1,29 +1,45 @@
 """
-_geo_colors — perceptual (OKLCH) color ramps shared by the geo generators.
+_geo_colors: perceptually uniform colour ramps, shared by the map generators.
 
 Module summary
 --------------
-``make_choropleth.py`` used to interpolate its blue ramp with a naive
-per-channel lerp in sRGB space (``r = ar + (br - ar) * t``, same for g/b).
-That is *not* perceptually uniform: sRGB is gamma-encoded, so a straight
-line between two colors in that space does not correspond to a straight
-line in how a human eye perceives lightness. The practical symptom is a
-ramp that looks like it "sags" in the middle -- often reading darker or
-muddier around ``t=0.5`` than either endpoint would predict.
+A colour ramp is a rule for turning a number into a colour: give it 0 and
+it returns pale blue, give it 1 and it returns navy, give it 0.5 and it
+should return something visually halfway between the two. ``make_choropleth.py``
+used to compute that halfway point the naive way, blending the red, green,
+and blue channels straight through (``r = ar + (br - ar) * t``, and the same
+for g and b), in sRGB, the ordinary colour space a screen pixel is stored
+in. The problem: sRGB is gamma-encoded, meaning its numbers do not increase
+in a straight line with how bright a colour actually looks to the eye, so a
+straight blend of two sRGB colours does not look like a straight blend of
+brightness. In practice, the ramp appears to sag in the middle: the colour
+at ``t=0.5`` reads darker and muddier than either endpoint would suggest.
 
-This module ports (not imports -- ``sprezzature-colors`` is a separate,
-unpackaged Claude skill, not a runtime dependency of this repo) the small
-set of OKLab/OKLCH primitives (Bjorn Ottosson's OKLab, 2020) needed to
-interpolate in a perceptually uniform space instead: convert both ramp
-endpoints to OKLCH (Lightness, Chroma, Hue), interpolate each of the three
-channels independently (Hue takes the *shortest* path around the circle),
-then convert back to sRGB hex for the SVG ``fill`` attribute.
+This module ports (writes its own copy of, since ``sprezzature-colors`` is a
+separate, unpackaged Claude skill rather than something this repo can
+depend on at runtime) the small handful of OKLab and OKLCH primitives
+needed to blend in a space where straight-line blending really does match
+perceived brightness. OKLab is a colour space published by Björn Ottosson
+in 2020, designed specifically so that equal numeric steps look like equal
+visual steps; OKLCH is the same space described by Lightness, Chroma
+(colour intensity), and Hue (the angle on the colour wheel) instead of
+three raw coordinates, which is the easier form to interpolate in. The
+recipe: convert both ramp endpoints to OKLCH, blend each of the three
+values independently (Hue blends the short way around the wheel, the way
+you would turn a dial rather than spin it all the way past zero), then
+convert the blended result back to an sRGB hex string for the SVG's
+``fill`` attribute.
 
-It also carries the CVD (color-vision-deficiency) simulation matrices and
-WCAG contrast helpers needed to *verify* a rendered ramp -- the Ralph
-Eyeball Loop's rule is "verify, don't assert": a docstring claiming a ramp
-is "colour-vision-deficiency-safe by construction" is not evidence unless
-someone has actually run the simulation on real output.
+The module also carries the matrices used to simulate colour-vision
+deficiency, CVD (a limitation, most commonly the inability to distinguish
+red from green, that affects how a ramp actually looks to some readers),
+and the WCAG (Web Content Accessibility Guidelines) contrast helpers
+needed to check a rendered ramp rather than merely assert it is fine. The
+Ralph Eyeball Loop, this project's render-then-look review process, follows
+one rule here: verify, don't assert. A docstring that claims a ramp is
+"colour-vision-deficiency-safe by construction" is not evidence of
+anything; only actually running the simulation on the real rendered output
+is.
 
 Usage example
 -------------

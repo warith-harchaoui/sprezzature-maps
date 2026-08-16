@@ -1,33 +1,53 @@
 """
-_relief — shared raster-relief sampling for the geo generators.
+_relief: shared shaded-terrain sampling, used by the map generators.
 
 Module summary
 --------------
-Both ``make_choropleth.py`` (Equal Earth, world scale) and, eventually,
-``make_situation_map.py`` (Lambert Conformal Conic, regional scale) want the
-same thing under their vector layers: a faint, desaturated hillshade texture
-that reads as "this is a real planet with terrain" without competing with
-the actual data on top of it. The vendored source
-(``assets/geo/relief-lowres.png``, a 1440x720 greyscale PNG downsampled from
-Natural Earth's public-domain 1:50m "Gray Earth" shaded relief) is a plain
-equirectangular grid: pixel column/row map linearly to longitude/latitude.
-Neither Equal Earth nor Lambert Conformal Conic is equirectangular, so the
-raster has to be *reprojected* -- resampled at the (lon, lat) each output
-pixel's projection actually corresponds to -- rather than just stretched
-onto the canvas.
+"Relief" is elevation, in the sense of hills and valleys, and "shaded
+relief" (also called hillshade) is an image that simulates how sunlight
+falls across that terrain, giving a flat map a sense of physical depth.
+Both ``make_choropleth.py`` (which uses the Equal Earth projection, at
+world scale) and, eventually, ``make_situation_map.py`` (which uses the
+Lambert conformal conic projection, at regional scale) want the same
+thing underneath their country outlines and fills: a faint, muted
+hillshade texture that says "this is a real planet with terrain" without
+competing for attention with the actual data drawn on top of it.
 
-The projection-specific half of that (turning a canvas pixel into a
-(lon, lat) pair, which requires inverting whichever projection a generator
-uses) stays in that generator's own module. This module owns the
-projection-*agnostic* half: given arrays of (lon, lat) already computed by
-the caller, bilinearly sample the source raster and retint it through a
-warm/cool duotone (shadow -> cool blue-slate, ridge highlight -> warm
-sand-gold, interpolated in OKLCH via ``_geo_colors`` for the same
-perceptual-uniformity reason that module's ramps use it) rather than
-literal greyscale -- a classic relief-shading convention (Eduard Imhof's
-"warm highlights, cool shadows") that reads as considerably more alive
-than flat grey at the low opacity this composites at. Packed into an RGBA
-array ready to embed as a base64 PNG ``<image>`` in the SVG.
+The source image this module samples from is vendored (bundled directly
+in this repo rather than fetched at render time):
+``assets/geo/relief-lowres.png``, a 1440-by-720 greyscale picture
+downsampled from Natural Earth's public-domain "Gray Earth" shaded
+relief, at their coarser 1:50,000,000 scale. That source picture is a
+plain equirectangular grid, meaning each pixel's column and row map in a
+straight, constant ratio to a longitude and latitude, the simplest
+possible way to lay a sphere's surface flat, the same layout as a basic
+world wall map. Neither the Equal Earth projection nor the Lambert
+conformal conic projection is equirectangular, so the picture cannot
+simply be stretched onto the output canvas; it has to be reprojected,
+meaning each output pixel is filled by looking up the longitude and
+latitude that pixel's own projection puts there, then reading the source
+picture at that point.
+
+Turning a canvas pixel into a (longitude, latitude) pair needs the
+inverse of whichever projection is in use, so that half of the work is
+projection-specific and stays inside each generator's own module. This
+module owns the other, projection-agnostic half: given arrays of
+(longitude, latitude) already computed by the caller, it looks up each
+one in the source picture using bilinear sampling (blending the four
+nearest source pixels by distance, rather than snapping to the single
+nearest one, so the result is smooth instead of blocky), then recolours
+it with a warm and cool duotone (a two-hue palette: shadow areas tint
+toward a cool blue-grey, ridges and highlights tint toward a warm
+sand-gold, blended in the OKLCH colour space through the ``_geo_colors``
+module for the same reason that module's own colour ramps use OKLCH)
+rather than leaving it as literal grey. Cool shadows against warm
+highlights is a classic convention in relief shading, credited to the
+Swiss cartographer Eduard Imhof, and it reads as noticeably more alive
+than flat grey once composited at the low opacity this texture sits at.
+The result is packed into an RGBA array (a grid of red, green, blue, and
+transparency values, one set per pixel) ready to be base64-encoded (a
+way of representing binary image data as plain text) and embedded
+directly as a PNG ``<image>`` inside the SVG file.
 
 Usage example
 -------------
