@@ -61,7 +61,7 @@ def _render_scale() -> float:
     set this one environment variable just before they call the generator, and
     the single rasterisation choke point below reads it. Absent or unparseable,
     the scale is ``1.0`` (native pixel size), so the default output is unchanged.
-    A non-positive value is ignored the same way — ``resvg_py`` would reject it.
+    A non-positive value is ignored the same way: ``resvg_py`` would reject it.
     """
     raw = os.environ.get("SPREZZATURE_RENDER_SCALE")
     if not raw:
@@ -77,7 +77,7 @@ def svg_example_path(script_file: str, figure_id: str) -> Path:
     """Return the canonical ``assets/svg-examples/<figure_id>.svg`` for a generator.
 
     Every generator writes, by default, to a file named after its figure inside
-    the skill's ``assets/svg-examples`` folder — a sibling of the ``scripts``
+    the skill's ``assets/svg-examples`` folder, a sibling of the ``scripts``
     directory the generator lives in. Passing ``__file__`` lets this helper
     locate that folder relative to the *calling* script, exactly as the inline
     ``Path(__file__).resolve().parent.parent / "assets" / "svg-examples" /
@@ -130,7 +130,7 @@ def write_svg(out: Path, svg: str, *, embed_fonts: bool = True) -> Path:
     Parameters
     ----------
     out : pathlib.Path
-        Destination file path — typically the return of
+        Destination file path: typically the return of
         :func:`svg_example_path`, or a caller-supplied ``--out`` override.
     svg : str
         The complete SVG document to write.

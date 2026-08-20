@@ -219,7 +219,7 @@ def point_on_circle(cx: float, cy: float, r: float, theta_rad: float) -> tuple[f
     """Cartesian point at radius ``r`` and angle ``theta_rad`` about a centre.
 
     Standard math convention: ``theta_rad = 0`` points along +x (3
-    o'clock) and grows counter-clockwise in a conventional axis — but in
+    o'clock) and grows counter-clockwise in a conventional axis, but in
     SVG's y-down space it reads as clockwise. Callers that want "0 = up"
     pass a pre-rotated angle (e.g. ``math.radians(deg - 90.0)``); this
     helper does no rotation of its own, so it returns exactly the pair
@@ -240,7 +240,7 @@ def point_on_circle(cx: float, cy: float, r: float, theta_rad: float) -> tuple[f
     Returns
     -------
     tuple of float
-        The ``(x, y)`` point. Unformatted floats — the caller keeps its
+        The ``(x, y)`` point. Unformatted floats: the caller keeps its
         own ``:.1f`` / ``:.2f`` formatting so output stays identical.
 
     Examples
@@ -298,7 +298,7 @@ def rounded_rect_path(
 
     Each radius is clamped to half the smaller side so a corner never overshoots.
     Zero-radius corners stay square. Use this (not a plain ``<rect rx>``) whenever
-    only *some* corners round — bars, stacked segments, arc-adjacent tiles — so
+    only *some* corners round (bars, stacked segments, arc-adjacent tiles), so
     baseline and adjacent corners can stay crisp.
     """
     m = min(w, h) / 2.0
@@ -359,7 +359,7 @@ def catmull_rom_beziers(
         The sample points, in pixel coordinates. ``pts[0]`` is assumed to
         have already been emitted by the caller (as an ``M``/``L``).
     fmt : callable
-        The float-to-string formatter to apply to every coordinate — the
+        The float-to-string formatter to apply to every coordinate: the
         caller's own ``_fmt`` (typically :func:`fmt_compact`). Injecting
         it keeps the output identical to the inline code.
     tension : float, optional
@@ -372,7 +372,7 @@ def catmull_rom_beziers(
         than three points are supplied).
     """
     n = len(pts)
-    # Fewer than three points cannot form a spline — fall back to straight
+    # Fewer than three points cannot form a spline: fall back to straight
     # line-tos through the tail (the caller already emitted pts[0]).
     if n < 3:
         return "".join(f" L{fmt(x)},{fmt(y)}" for x, y in pts[1:])
@@ -406,7 +406,7 @@ def svg_open(
     Nearly every ``make_<id>.py`` generator opens its document with the *same*
     root element: an explicit ``width``/``height`` for a sensible intrinsic
     size, a ``viewBox="0 0 width height"`` so the graphic scales fluidly to any
-    container (this is what makes the SVG **responsive** — a viewer can set
+    container (this is what makes the SVG **responsive**: a viewer can set
     ``width:100%`` and the coordinates rescale), the house ``font-family``, and
     ``role="img"`` + ``aria-labelledby`` wiring the ``<title>``/``<desc>`` pair
     that follows into one accessible name for screen readers. The ``<title>``

@@ -431,7 +431,7 @@ def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
                 polys.append(Polygon(rings[0], rings[1:]))
             geoms.append(MultiPolygon(polys))
     # Natural Earth polygons can be individually invalid (self-touching rings);
-    # repair each rather than a fragile world-wide union — the caller clips to a
+    # repair each rather than a fragile world-wide union: the caller clips to a
     # bounding box, so a MultiPolygon of validated pieces is sufficient.
     fixed = [make_valid(g) for g in geoms]
     return unary_union(fixed)
@@ -466,7 +466,7 @@ def load_land(bbox: Iterable[float] | None = None) -> Any:
 def load_country(name: str, bbox: Iterable[float] | None = None) -> Any:
     """Return the polygon of a single country by Natural Earth ``name`` (WGS84).
 
-    Lets a caller partition a *real* national outline into thematic zones — the
+    Lets a caller partition a *real* national outline into thematic zones: the
     honest way to build a situation map for a named country rather than tracing
     borders by hand.
 
@@ -897,7 +897,7 @@ def load_rivers() -> list[tuple[Any, str, int]]:
     for feat in data.get("features", []):
         try:
             geom = shape(feat["geometry"])
-        except Exception:
+        except Exception:  # skip a malformed river feature rather than fail the plate
             continue
         props = feat.get("properties", {})
         out.append((geom, props.get("name", ""), int(props.get("scalerank", 10))))
@@ -914,7 +914,7 @@ def build_projection(bbox: list[float], epsg: str | None) -> Transformer:
 
     When ``epsg`` is ``None`` (or ``"auto"``) a Lambert Conformal Conic is centred
     on the region, with standard parallels at the one-sixth / five-sixth latitudes
-    (the classic two-thirds rule) — conformal, so shapes and angles stay true at
+    (the classic two-thirds rule): conformal, so shapes and angles stay true at
     the scale of a city or a province.
 
     Parameters
@@ -1127,10 +1127,10 @@ def tracked_text(
     upper: bool = True,
     font: str = _DEFAULT_FONT,
 ) -> str:
-    """Return a ``<text>`` with letter-spacing — the cartographer's tracked label."""
+    """Return a ``<text>`` with letter-spacing: the cartographer's tracked label."""
     label = text.upper() if upper else text
     # Paint-order halo: a white stroke drawn *under* the fill so the label stays
-    # legible over land, sea or any zone colour — standard cartographic practice.
+    # legible over land, sea or any zone colour, standard cartographic practice.
     return (
         f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" '
         f'font-family="{font}" font-size="{size:.1f}" font-weight="{weight}" '
@@ -1195,7 +1195,7 @@ def _fmt_num(v: float) -> str:
 
 
 def _capital_star(cx: float, cy: float, r: float) -> str:
-    """Return a five-point star inside a white ring — the national-capital glyph."""
+    """Return a five-point star inside a white ring: the national-capital glyph."""
     pts: list[str] = []
     for i in range(10):
         rad = r if i % 2 == 0 else r * 0.42
@@ -1389,7 +1389,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp))
 
-    # 4b. coastline — a crisp hairline where land meets the sea, drawn over the
+    # 4b. coastline: a crisp hairline where land meets the sea, drawn over the
     #     control fills so the shore reads sharply against the water. Placed here
     #     (not with the land) so a coastal control zone does not paint over it.
     coast = land_proj.boundary.intersection(sea_proj.buffer(vp["m_per_unit"] * 1.5))
@@ -1408,7 +1408,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 5b. rivers (over the fills so the water reads) ------------------------ #
     layers.append(_rivers_layer(cfg, proj, vp, region_box))
 
-    # 5c. sprezzature line — the emphasised contact line between the control zones,
+    # 5c. sprezzature line: the emphasised contact line between the control zones,
     #     the single most-read feature of a situation plate.
     layers.append(_front_line_layer(cfg, proj, vp))
 
@@ -1438,7 +1438,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     )
 
     # Float the plate on a light page: an outer margin, a soft-shadowed white
-    # panel, and a rounded clip — the premium "printed plate" cue of the reference.
+    # panel, and a rounded clip, the premium "printed plate" cue of the reference.
     frame = cfg.get("frame", {})
     margin = float(frame.get("margin", 22))
     page_color = frame.get("page_color", "#eef1f3")
@@ -1646,7 +1646,7 @@ def _frontiers_layer(
     for name, poly in load_countries(bbox=region_box.bounds):
         try:
             vis = poly.intersection(region_box)
-        except Exception:
+        except Exception:  # skip a malformed country geometry rather than fail the plate
             continue
         if vis.is_empty:
             continue
@@ -1726,7 +1726,7 @@ def _internal_borders_layer(
     for name, poly in admin1:
         try:
             vis = poly.intersection(region_box)
-        except Exception:
+        except Exception:  # skip a malformed admin-1 geometry rather than fail the plate
             continue
         if vis.is_empty:
             continue
@@ -1778,7 +1778,7 @@ def _admin2_borders_layer(
     for name, poly in load_admin2(bbox=region_box.bounds):
         try:
             vis = poly.intersection(region_box)
-        except Exception:
+        except Exception:  # skip a malformed admin-2 geometry rather than fail the plate
             continue
         if vis.is_empty:
             continue
@@ -1830,7 +1830,7 @@ def _rivers_layer(
     for geom, name, rank in sorted(load_rivers(), key=lambda r: -r[2]):
         try:
             clipped = geom.intersection(region_box)
-        except Exception:
+        except Exception:  # skip a malformed river geometry rather than fail the plate
             continue
         if clipped.is_empty:
             continue
@@ -1964,9 +1964,10 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
     """Return populated-place dots with offset names, plus a tracked water label.
 
     Each place is a small dot at its true location and a letter-spaced name set
-    *beside* the dot (never on top of it). ``place["anchor"]`` steers the name —
-    ``"start"`` (right, default), ``"end"`` (left), ``"above"``, ``"below"`` —
-    so labels can dodge the coast, the frame, and one another. ``dot: false``
+    *beside* the dot (never on top of it). ``place["anchor"]`` steers the name,
+    one of ``"start"`` (right, default), ``"end"`` (left), ``"above"``,
+    or ``"below"``, so labels can dodge the coast, the frame, and one another.
+    ``dot: false``
     renders a centred area label with no dot (for a region rather than a city).
     """
     out: list[str] = []
@@ -1978,7 +1979,7 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         anchor = place.get("anchor", "start")
         tracking = place.get("tracking", 1.6)
         # A dark populated-place dot, unless this point already carries another
-        # marker (e.g. a red flashpoint) — then dot:false and `clear` is set to
+        # marker (e.g. a red flashpoint): then dot:false and `clear` is set to
         # that marker's radius so the name still dodges it.
         clear = place.get("clear", 2.6) * ts
         gap = 4 * ts
@@ -1999,7 +2000,7 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
             lx, ly, ta = x, y - clear - gap, "middle"
         elif anchor == "below":
             lx, ly, ta = x, y + clear + gap + 0.72 * size, "middle"
-        else:  # "start" — name to the right of the marker
+        else:  # "start": name to the right of the marker
             lx, ly, ta = x + clear + gap, y + 0.32 * size, "start"
         weight = "700" if place.get("capital") else "600"
         out.append(
@@ -2014,7 +2015,7 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
                 anchor=ta,
             )
         )
-    # Water labels: a single ``water`` (back-compat) and/or a list ``waters`` —
+    # Water labels: a single ``water`` (back-compat) and/or a list ``waters``,
     # seas and gulfs, set in the letter-spaced blue-grey water convention.
     waters = list(labels.get("waters", []))
     if labels.get("water"):
@@ -2043,7 +2044,7 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     """Return the title block, north arrow and dual-unit scale bar."""
     W, H = vp["width"], vp["height"]
     ts = vp["ts"]
-    # North arrow top-right, clear of the title block top-left — no collision.
+    # North arrow top-right, clear of the title block top-left: no collision.
     out: list[str] = [north_arrow(W - 30 * ts, 34 * ts, ts)]
     title = cfg.get("title")
     subtitle = cfg.get("subtitle")
@@ -2213,7 +2214,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 # Natural Earth basemap, with no thematic overlay invented. Pass a real
 # ``config`` dict (or use the ``--config`` CLI) for an actual analysis map.
 _DEMO_CONFIG: dict[str, Any] = {
-    "title": "Situation map — Western Europe (demo)",
+    "title": "Situation map: Western Europe (demo)",
     "region": {"bbox": [-11.0, 35.0, 30.0, 60.0]},
     "canvas_width": 1000,
     "projection": "auto",
@@ -2221,7 +2222,7 @@ _DEMO_CONFIG: dict[str, Any] = {
 
 #: Row-record demo data, the contract's ``list[dict[str, Any]]`` shape.
 #: This generator is config-driven (a whole layered basemap, not a table
-#: of rows — see :func:`make_situation_map`), so ``data`` is accepted for
+#: of rows, see :func:`make_situation_map`), so ``data`` is accepted for
 #: dispatcher parity and unused; this constant exists to satisfy the
 #: ``DEMO_DATA`` contract and documents the demo region as a row.
 DEMO_DATA: list[dict[str, Any]] = [

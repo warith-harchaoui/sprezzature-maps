@@ -78,8 +78,8 @@ from _geo_colors import sequential_ramp_hex  # noqa: E402
 from PIL import Image
 
 #: Vendored Natural Earth "Gray Earth" shaded relief, downsampled to
-#: 1440x720 (0.25 degree/pixel) from the original 1:50m 10800x5400 source --
-#: see ``.private/todo.md`` for the exact acquisition command. Equirectangular:
+#: 1440x720 (0.25 degree/pixel) from the original 1:50m 10800x5400 source.
+#: Equirectangular:
 #: column 0..1439 spans longitude -180..180, row 0..719 spans latitude 90..-90.
 RELIEF_PNG: Path = Path(__file__).resolve().parent.parent / "assets" / "geo" / "relief-lowres.png"
 
@@ -668,9 +668,9 @@ def _compute_terrain_shade(
       ``|frequency|^alpha``, inverse FFT): scale-invariant, so it draws out
       ridgelines and drainage networks at *every* scale at once. This is
       the piece that makes the result read as "engraved"/painterly rather
-      than "a photo of a lit ball" -- verified against editorial,
+      than "a photo of a lit ball": verified against editorial,
       New-York-Times-style relief cartography during development, not
-      chosen on theory alone; see ``.private/todo.md`` for the comparison.
+      chosen on theory alone.
       Its exaggeration knob is ``texture_alpha``: a *frequency-domain*
       exaggeration rather than a spatial one, since it boosts every scale
       of ridge/valley structure by the same power law instead of
