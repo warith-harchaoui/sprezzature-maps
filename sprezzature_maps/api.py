@@ -167,8 +167,8 @@ def kinds() -> list[str]:
     Returns
     -------
     list of str
-        Always ``["choropleth", "situation_map"]`` today -- this repo's
-        whole scope, per ``.private/t.md``, is exactly those two kinds.
+        Always ``["choropleth", "situation_map"]`` today: this repo's
+        whole scope is exactly those two map kinds.
     """
     return ["choropleth", "situation_map"]
 

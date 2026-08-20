@@ -1,5 +1,7 @@
 # sprezzature-maps
 
+[🇫🇷 LISEZMOI.md](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/LISEZMOI.md) · 🇬🇧 README.md
+
 This library draws maps as SVG (Scalable Vector Graphics, an image format
 built from lines and shapes described in text rather than a grid of
 pixels, so it stays sharp at any zoom and its labels stay selectable
@@ -83,11 +85,13 @@ command line only, with no editor UI.
 
 ## Status
 
-Early. Freshly extracted from `sprezzature-figures` and smoke-tested:
-`pytest` passes, both kinds render from their bundled demo data, and the
-command line renders both kinds to real SVG files. There is no continuous
-integration yet, no PyPI release yet, and no FIGURES.md-style catalogue
-page yet (with only two kinds so far, this README is the catalogue).
+Early. Freshly extracted from `sprezzature-figures`, with a green CI
+workflow (lint, tests, and doctests on every push and pull request to
+`main`; see `.github/workflows/ci.yml`): `pytest` passes, both kinds
+render from their bundled demo data, and the command line renders both
+kinds to real SVG files. There is no PyPI release yet, and no
+FIGURES.md-style catalogue page yet (with only two kinds so far, this
+README is the catalogue).
 
 `choropleth` draws with: an Equal Earth projection (a projection that
 keeps every country's true relative area, so a huge but visually
@@ -114,28 +118,31 @@ showing how quickly the sea floor drops off; and, new, an automatic
 choice between the coarser and finer Natural Earth detail level
 depending on how zoomed-in the requested region is.
 
-The library is reachable four ways: as a Python import, as an argparse
+The library is reachable five ways: as a Python import; as an argparse
 (Python's standard command-line-parsing library) command line, `make-map`,
-installed by default; as an HTTP API (`sprezzature-maps[api]`) that
-publishes an OpenAPI schema (a machine-readable description of every
-endpoint, letting other tools generate documentation or client code
-automatically) and a small gallery page at its root; and, coming next, a
-Click-based command line and an MCP surface (Model Context Protocol, the
+installed by default; as a richer Click-based command line,
+`sprezzature-maps` (`sprezzature-maps[cli]`), which adds CSV ingestion and
+column mapping on top of what `make-map` reads; as an HTTP API
+(`sprezzature-maps[api]`) that publishes an OpenAPI schema (a
+machine-readable description of every endpoint, letting other tools
+generate documentation or client code automatically) and a small gallery
+page at its root; and as an MCP surface (Model Context Protocol, the
 standard that lets an AI assistant call a tool directly) under
-`sprezzature-maps[cli]` / `[mcp]`.
+`sprezzature-maps[api,mcp]`.
 
 ## Roadmap
 
-Add shaded relief to `situation_map`'s Lambert conformal conic projection
-too: the same technique `choropleth` already has, reworked for a
-different projection's inverse (the maths that goes from a flat map
-position back to a real latitude and longitude). A few lower-priority
-items from the full cartography plan are tracked but not scheduled yet:
-relief built from the ETOPO global elevation dataset, alternate
-projections better suited to editorial maps (Robinson, Mollweide), and a
-single shared reader for the TopoJSON format (a compact way of storing
-map boundaries that records each shared border only once, instead of
-once per neighbouring country).
+`situation_map` already shades real elevation onto its Lambert conformal
+conic projection, on by default (`scripts/make_situation_map.py`'s
+`_relief_layer`), the same terrain-shading technique `choropleth` uses
+for the whole-world Equal Earth view, reworked for the region-scale
+projection's own analytic inverse. A few lower-priority items from the
+full cartography plan are tracked but not scheduled yet: relief built
+from the ETOPO global elevation dataset, alternate projections better
+suited to editorial maps (Robinson, Mollweide), and a single shared
+reader for the TopoJSON format (a compact way of storing map boundaries
+that records each shared border only once, instead of once per
+neighbouring country).
 
 ## Data credits
 

@@ -48,7 +48,7 @@ from __future__ import annotations
 #: The three supported interactivity modes (see the module docstring).
 MODES = ("self-contained", "external", "static")
 
-#: Generic fullscreen script, identical for every figure. No on-canvas icon —
+#: Generic fullscreen script, identical for every figure. No on-canvas icon:
 #: the whole figure is the hit target, so it stays clean at thumbnail size.
 #: Stands down inside a page-module-managed card (``[data-fs-target]``) and
 #: never runs at all inside an ``<img>``-embedded SVG (browsers don't execute
@@ -58,14 +58,14 @@ MODES = ("self-contained", "external", "static")
 #:
 #: * **Gallery card** (embedded as a live ``<object>``, ``window.parent`` is
 #:   the host page, not the lightbox's own object): a click anywhere on the
-#:   figure can never bubble to the host page — ``<object>`` is a real,
+#:   figure can never bubble to the host page: ``<object>`` is a real,
 #:   isolated document. So a click posts a message instead; ``lightbox.js`` in
 #:   the web repo opens the modal on receipt. This keeps the card's own
 #:   ``pointer-events:auto`` (native hover/``<title>`` tooltips stay live).
 #: * **Lightbox's own enlarged object** (``data-lb-obj``): the figure is
 #:   already shown at modal size, so a click on it does nothing extra.
 #: * **Standalone** (opened as its own file/tab, or inlined outside the
-#:   gallery — no ``frameElement`` at all): there is no host page to hand off
+#:   gallery, no ``frameElement`` at all): there is no host page to hand off
 #:   to, so a click (or Enter/Space once focused) toggles the browser's own
 #:   Fullscreen API directly on the SVG.
 _FS_SCRIPT = (
@@ -105,7 +105,7 @@ def fullscreen_control(
 
     Append the result just before the closing ``</svg>`` of a generator's
     document. In ``"self-contained"`` mode it is the generic wiring script
-    (see :data:`_FS_SCRIPT`) — no on-canvas button, the whole figure is the
+    (see :data:`_FS_SCRIPT`): no on-canvas button, the whole figure is the
     hit target. In ``"external"`` and ``"static"`` modes it is the empty
     string, so nothing ships.
 
@@ -161,7 +161,7 @@ def hover_isolate_css(class_name: str, count: int, *, dim: float = 0.35) -> str:
 
     Expects each mark to carry both a shared class (``class_name``) and an
     index-suffixed class (``f"{class_name}-{i}"`` for ``i`` in
-    ``range(count)``) — e.g. ``class="band band-2"`` for the third band. The
+    ``range(count)``), e.g. ``class="band band-2"`` for the third band. The
     figure-specific parts (the marks themselves, tooltips, colors) stay in
     the generator; only this interaction pattern is shared.
 

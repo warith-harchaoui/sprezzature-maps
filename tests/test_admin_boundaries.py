@@ -17,10 +17,10 @@ from sprezzature_maps import _load_script
 
 m = _load_script("make_situation_map")
 
-# Real bboxes already verified by hand during development (see
-# .private/keep-track.md) -- reused here rather than invented fresh, so a
-# failure here means an actual behavior regression, not a newly-guessed
-# coordinate that never worked in the first place.
+# Real bboxes already verified by hand during development, reused here
+# rather than invented fresh, so a failure here means an actual behavior
+# regression, not a newly-guessed coordinate that never worked in the
+# first place.
 _COLORADO_BBOX = (-109.1, 36.9, -102.0, 41.1)  # single US state, ~7deg span
 _BRETAGNE_BBOX = (-5.3, 47.1, -0.9, 49.0)  # single FR region, ~4.4deg span
 _SWITZERLAND_BBOX = (5.9, 45.75, 10.55, 47.9)  # whole CH, ~4.6deg span

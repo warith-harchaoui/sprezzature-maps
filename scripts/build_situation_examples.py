@@ -108,11 +108,11 @@ def _contested_band(line_pts: list, country: Any, km: float) -> Any:
 
 
 # --------------------------------------------------------------------------- #
-# Sardinia — neutral synthetic                                                 #
+# Sardinia: neutral synthetic                                                 #
 # --------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------- #
-# Ukraine — schematic, per open-source literature                              #
+# Ukraine: schematic, per open-source literature                              #
 # --------------------------------------------------------------------------- #
 
 # Approximate 2024 contact line north->south, hugging the reported flashpoints
@@ -164,7 +164,7 @@ def build_ukraine() -> dict[str, Any]:
     b = ukr.bounds
     bbox = [b[0] - 0.6, b[1] - 1.2, b[2] + 0.6, b[3] + 0.6]
     return {
-        "title": "Ukraine — Areas of Control",
+        "title": "Ukraine: Areas of Control",
         "subtitle": (
             "Schematic, approximate open-source positions circa 2024 · "
             "roughly 18% of the country occupied · illustrative, not operational intelligence"
@@ -241,7 +241,7 @@ def build_ukraine() -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Syria — schematic four-actor, per open-source literature (~2018)             #
+# Syria: schematic four-actor, per open-source literature (~2018)             #
 # --------------------------------------------------------------------------- #
 
 
@@ -281,7 +281,7 @@ def build_syria() -> dict[str, Any]:
     b = syr.bounds
     bbox = [b[0] - 0.6, b[1] - 0.6, b[2] + 0.6, b[3] + 0.6]
     return {
-        "title": "Syria — Areas of Control",
+        "title": "Syria: Areas of Control",
         "subtitle": (
             "Schematic / approximate, per open-source geopolitical literature · "
             "illustrative ~2018 snapshot, not an operational assessment"
@@ -362,7 +362,7 @@ def build_syria() -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Libya — schematic First Libyan Civil War, ~spring 2011                        #
+# Libya: schematic First Libyan Civil War, ~spring 2011                        #
 # --------------------------------------------------------------------------- #
 
 # Oil-crescent sprezzature, Ajdabiya -> Brega -> Ras Lanuf -> Bin Jawad -> toward Sirte.
@@ -395,7 +395,7 @@ def build_libya() -> dict[str, Any]:
     b = lby.bounds
     bbox = [b[0] - 0.6, b[1] - 0.6, b[2] + 0.6, b[3] + 1.0]
     return {
-        "title": "Libya — Areas of Control",
+        "title": "Libya: Areas of Control",
         "subtitle": (
             "Schematic · approximate, First Libyan Civil War ~spring 2011 "
             "(after UNSCR 1973) · open-source reporting, not operational intelligence"
@@ -534,7 +534,7 @@ def _export_layers(name: str, svg_text: str) -> None:
     """Emit a-posteriori per-layer SVG+PNG views by hiding the other layers.
 
     The generator writes each semantic layer as ``<g id="...">``; a view keeps a
-    chosen subset visible and sets ``display:none`` on the rest — a decomposition
+    chosen subset visible and sets ``display:none`` on the rest: a decomposition
     of the finished plate into the strata an analyst toggles between.
     """
     out_dir = SHIP / "layers"
@@ -569,7 +569,7 @@ def main(argv: list[str]) -> None:
         _render_png(svg_path, SHIP / f"{name}.png")
         _render_png(svg_path, GALLERY / f"situation-{name}.png")
         print(f"wrote {name}.yaml / .svg / .png  ({yaml_path.stat().st_size // 1024} KB config)")
-        # A-posteriori layer decomposition — the final stage, once the plate is set.
+        # A-posteriori layer decomposition: the final stage, once the plate is set.
         _export_layers(name, svg_path.read_text())
 
 

@@ -1,8 +1,8 @@
 """Tests that the HTTP API keeps its contract: the FastAPI surface renders both map kinds correctly.
 
 These tests cover the same scenarios that were checked by hand while
-building ``sprezzature_maps/api.py`` (see ``.private/todo.md`` for that
-record): the health check, kind discovery, both render routes (using
+building ``sprezzature_maps/api.py``: the health check, kind discovery,
+both render routes (using
 demo data and caller-supplied data, in more than one output format), the
 GUI gallery route, and the case where a caller sends a malformed request
 and the server should answer with HTTP status 422, "Unprocessable

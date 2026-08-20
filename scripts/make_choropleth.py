@@ -12,8 +12,8 @@ simulated colour-vision deficiency (a limitation, most often the
 inability to distinguish red from green, that changes how a colour ramp
 looks to some readers). That has actually been checked with the
 simulation tool in ``_geo_colors.py``, not just assumed; see
-``build_color_relief_figures.py``, which renders the verification image,
-and ``.private/todo.md`` for the record of that check. Countries with no
+``build_color_relief_figures.py``, which renders the verification
+image. Countries with no
 assigned value fall back to a neutral grey rather than disappearing from
 the map. Typical uses: any per-country indicator, an exposure or risk
 index, an adoption rate, survey coverage, anything where the geography
@@ -227,7 +227,7 @@ def _equal_earth_invert_batch(
     return lon_deg, lat_deg, valid
 
 
-# Sequential blue ramp — pale sky -> system blue -> deep navy. Same three
+# Sequential blue ramp: pale sky -> system blue -> deep navy. Same three
 # hex stops the pre-OKLCH ramp used; only the interpolation between them
 # changed (OKLCH via _geo_colors.sequential_ramp_hex, not a per-channel
 # RGB lerp -- see that module's docstring for why the difference matters).
@@ -521,7 +521,7 @@ def build_svg(
         (sequential and diverging) are mono-per-side hue scales where
         magnitude reads by lightness alone, verified
         colour-vision-deficiency-safe via ``_geo_colors.simulate_cvd_hex``
-        rather than merely asserted -- see ``.private/todo.md``.
+        rather than merely asserted.
     diverging : bool or None, optional
         Force the diverging (negative/neutral/positive) ramp on or off.
         ``None`` (the default) auto-detects: the diverging ramp switches on
