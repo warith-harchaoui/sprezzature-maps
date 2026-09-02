@@ -24,7 +24,19 @@ from typing import Any
 
 __version__ = "0.1.0"
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+# In the source tree the generators live in scripts/; once installed they
+# ship (collision-free) as the sibling package sprezzature_maps_scripts/,
+# same pattern as sprezzature-figures. Check the dedicated installed name
+# FIRST: a bare scripts/ at the root of site-packages is a generic name an
+# unrelated package can also claim.
+_SCRIPTS_DIR = next(
+    (
+        Path(__file__).resolve().parent.parent / name
+        for name in ("sprezzature_maps_scripts", "scripts")
+        if (Path(__file__).resolve().parent.parent / name).is_dir()
+    ),
+    Path(__file__).resolve().parent.parent / "scripts",
+)
 
 
 def _load_script(name: str) -> Any:
