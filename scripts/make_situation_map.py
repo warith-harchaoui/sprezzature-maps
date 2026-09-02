@@ -85,6 +85,7 @@ and plain dict-shaped records in preference to purpose-built classes.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 import sys
@@ -99,10 +100,20 @@ from _render import svg_example_path, write_svg
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py -- a genuinely
 # new capability (see that module's docstring), not something this repo's
 # own scripts carry. This generator has no local ``_svg`` module of its own
-# (own escaping stays in :func:`_esc` below), so a plain sys.path insert +
-# import is safe here, unlike make_choropleth.py which has to alias around
-# its own local ``_svg.py``. Resolved the same robust, sibling-repo-fallback
-# way market_style.py (~/sprezzature/case-studies/financial-markets) does.
+# (own escaping stays in :func:`_esc` below), but a plain sys.path insert +
+# ``from _svg import ...`` is *not* safe here, even so: Python caches
+# imports by bare module name, not by path, and ``sprezzature_maps/__init__.py``
+# keeps every generator it has ever loaded alive in ``sys.modules`` for the
+# life of the process (its own docstring explains why: a FastAPI worker
+# handling both routes must not re-``exec`` a generator on every call). If
+# ``make_choropleth`` (which owns its *own* local ``scripts/_svg.py``,
+# lacking ``tooltip_bubble``) has already run once in this process, the bare
+# name ``_svg`` is already claimed in ``sys.modules`` and this import would
+# silently reuse that wrong module instead of loading this one -- exactly
+# the hazard make_choropleth.py's own neighbouring comment describes,
+# just from the other generator's side. Loaded via importlib under the same
+# distinct module name make_choropleth.py uses, so whichever generator runs
+# first in a process loads the file once and the other one just reuses it.
 _TOOLTIP_SVG_CANDIDATES = [
     Path(__file__).resolve().parent.parent.parent / "sprezzature-figures" / "scripts",
     Path.home() / "sprezzature-figures" / "scripts",
@@ -111,8 +122,16 @@ _TOOLTIP_SVG_DIR = next(
     (p for p in _TOOLTIP_SVG_CANDIDATES if (p / "_svg.py").is_file()),
     _TOOLTIP_SVG_CANDIDATES[-1],
 )
-sys.path.insert(0, str(_TOOLTIP_SVG_DIR))
-from _svg import tooltip_bubble  # noqa: E402
+if "_svg_figures_tooltip" in sys.modules:
+    tooltip_bubble = sys.modules["_svg_figures_tooltip"].tooltip_bubble
+else:
+    _tooltip_spec = importlib.util.spec_from_file_location(
+        "_svg_figures_tooltip", _TOOLTIP_SVG_DIR / "_svg.py"
+    )
+    _svg_figures = importlib.util.module_from_spec(_tooltip_spec)
+    sys.modules["_svg_figures_tooltip"] = _svg_figures
+    _tooltip_spec.loader.exec_module(_svg_figures)
+    tooltip_bubble = _svg_figures.tooltip_bubble
 
 try:
     import yaml
@@ -2104,6 +2123,17 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     contested class also carries the diagonal hatch so the legend mirrors the map
     exactly, and an optional ``sprezzature.label`` swatch shows the contact-line style.
     A footer sets the as-of / provenance line so the plate is self-describing.
+
+    ``cfg["legend_position"]`` (``"bottom-right"`` by default, matching every
+    plate built before this option existed) picks which corner the card
+    floats in -- ``"bottom-left"``, ``"top-left"`` and ``"top-right"`` are
+    also accepted. The default corner is not always the right one: on a
+    real analysis map a labelled city or a stretch of occupied territory
+    can sit exactly where a fixed bottom-right card would land (found by
+    rendering the bundled Ukraine example: Mariupol, a real city this
+    product exists to let an analyst locate, was fully hidden behind the
+    legend), so the caller who spots that collision needs a way out that
+    does not require moving the underlying map data.
     """
     aoc = cfg.get("areas_of_control", {})
     palette = aoc.get("palette", {})
@@ -2127,8 +2157,10 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     n_rows = len(rows) + extra
     foot_h = 30 * ts if footer else 0
     panel_h = pad * 2 + 24 * ts + row_h * n_rows + foot_h
-    px = W - panel_w - 22 * ts
-    py = H - panel_h - 22 * ts
+    corner_margin = 22 * ts
+    position = str(cfg.get("legend_position", "bottom-right"))
+    px = corner_margin if position in ("bottom-left", "top-left") else W - panel_w - corner_margin
+    py = corner_margin if position in ("top-left", "top-right") else H - panel_h - corner_margin
     tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
