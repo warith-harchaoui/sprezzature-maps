@@ -94,6 +94,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from _assets import geo_dir
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 
@@ -163,7 +164,7 @@ except ImportError as exc:  # pragma: no cover - dependency guard
 # Vendored basemap (Natural Earth, offline)                                    #
 # --------------------------------------------------------------------------- #
 
-_ASSETS = Path(__file__).resolve().parent.parent / "assets" / "geo"
+_ASSETS = geo_dir()
 _LAND_TOPOJSON = _ASSETS / "countries-50m.json"
 # 1:10m Natural Earth admin-0 countries, vendored the same way the 50m/110m
 # atlases were: downloaded once, simplified (mapshaper, weighted Visvalingam,
@@ -1365,6 +1366,14 @@ def build_map(cfg: dict[str, Any]) -> str:
             _relief_layer(vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox)
         )
 
+    # Every geographic layer below is clipped to the projected region bbox
+    # (the same trapezoid the relief already clips to): LCC's meridians fan
+    # out from the cone apex, so neighbour geometry drawn for context
+    # otherwise pokes out past the region's bottom edge into the plate
+    # margin (caught via the Ralph Eyeball Loop: the Western-Europe demo
+    # rendered a loose strip of the North-African coast under the frame).
+    geo_start = len(layers)
+
     # 1. basemap-sea -------------------------------------------------------- #
     layers.append(
         f'<g id="basemap-sea">'
@@ -1427,9 +1436,18 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 5b. rivers (over the fills so the water reads) ------------------------ #
     layers.append(_rivers_layer(cfg, proj, vp, region_box))
 
-    # 5c. sprezzature line: the emphasised contact line between the control zones,
+    # 5c. front line: the emphasised contact line between the control zones,
     #     the single most-read feature of a situation plate.
     layers.append(_front_line_layer(cfg, proj, vp))
+
+    # Close the geographic stack: wrap layers 1..5c in the region clip.
+    # Markers, labels, furniture, legend and frame stay unclipped -- they
+    # are annotations allowed to sit in the plate margin.
+    region_clip_d = projected_geom_to_path(region_proj, vp)
+    layers[geo_start:] = [
+        f'<defs><clipPath id="region-clip"><path d="{region_clip_d}"/></clipPath></defs>'
+        f'<g id="geo" clip-path="url(#region-clip)">' + "".join(layers[geo_start:]) + "</g>"
+    ]
 
     # 6. forces ------------------------------------------------------------- #
     marker_legend = cfg.get("marker_legend", [])
@@ -1888,13 +1906,13 @@ def _rivers_layer(
 def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
     """Return the emphasised contact line between the belligerents.
 
-    The line is given by ``sprezzature.line`` (a list of ``[lon, lat]`` vertices, north
+    The line is given by ``front.line`` (a list of ``[lon, lat]`` vertices, north
     to south). It is drawn as a two-part stroke: a soft white casing under a bold
-    coloured line, the standard way a data desk makes the sprezzature read above the
+    coloured line, the standard way a data desk makes the front read above the
     pastel control fills without adding a hard black rule. A small callout label
-    (``sprezzature.label``) is set beside a chosen vertex when given.
+    (``front.label``) is set beside a chosen vertex when given.
     """
-    fr = cfg.get("sprezzature", {})
+    fr = cfg.get("front", {})
     line = fr.get("line")
     if not line:
         return '<g id="front-line"></g>'
@@ -1907,10 +1925,10 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
     if not d:
         return '<g id="front-line"></g>'
     parts = [
-        # White casing so the sprezzature lifts off the pastel zones.
+        # White casing so the front lifts off the pastel zones.
         f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{5.4 * ts:.1f}" '
         f'stroke-opacity="0.85" stroke-linejoin="round" stroke-linecap="round"/>',
-        # The contact line itself: bold, slightly dashed so it reads as a *sprezzature*,
+        # The contact line itself: bold, slightly dashed so it reads as a *front*,
         # not a fixed administrative boundary.
         f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{2.4 * ts:.1f}" '
         f'stroke-linejoin="round" stroke-linecap="round" '
@@ -2121,7 +2139,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 
     Swatches are rounded squares (a filled-territory cue, unlike a point dot), a
     contested class also carries the diagonal hatch so the legend mirrors the map
-    exactly, and an optional ``sprezzature.label`` swatch shows the contact-line style.
+    exactly, and an optional ``front.label`` swatch shows the contact-line style.
     A footer sets the as-of / provenance line so the plate is self-describing.
 
     ``cfg["legend_position"]`` (``"bottom-right"`` by default, matching every
@@ -2144,8 +2162,8 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     contested = set(aoc.get("contested", []))
     rows = list(palette.items())
     markers = cfg.get("marker_legend", [])
-    sprezzature = cfg.get("sprezzature", {})
-    show_front = bool(sprezzature.get("line") and sprezzature.get("legend", True))
+    front = cfg.get("front", {})
+    show_front = bool(front.get("line") and front.get("legend", True))
     footer = cfg.get("legend_footer")
     pad = 15 * ts
     row_h = 25 * ts
@@ -2195,12 +2213,12 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         ry = py + pad + 26 * ts + idx * row_h
         parts.append(
             f'<line x1="{px + pad:.1f}" y1="{ry:.1f}" x2="{px + pad + sw:.1f}" y2="{ry:.1f}" '
-            f'stroke="{sprezzature.get("color", "#3a4149")}" stroke-width="{2.4 * ts:.1f}" '
+            f'stroke="{front.get("color", "#3a4149")}" stroke-width="{2.4 * ts:.1f}" '
             f'stroke-dasharray="{7 * ts:.1f} {3.5 * ts:.1f}" stroke-linecap="round"/>'
         )
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{row_fs:.1f}" fill="#333">{_esc(sprezzature.get("legend_label", "Approx. sprezzature line"))}</text>'
+            f'font-size="{row_fs:.1f}" fill="#333">{_esc(front.get("legend_label", "Approx. front line"))}</text>'
         )
         idx += 1
     # Marker key, separated by a hairline divider.

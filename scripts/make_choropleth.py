@@ -62,6 +62,7 @@ from typing import Any
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _assets import geo_dir  # noqa: E402
 from _geo_colors import diverging_ramp_hex, sequential_ramp_hex  # noqa: E402
 from _interactive import fullscreen_control  # noqa: E402
 from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
@@ -112,7 +113,7 @@ _COUNTRY_FILL_OPACITY = 0.7
 
 # 50m: same vendored Natural Earth atlas make_situation_map.py already uses,
 # just switched on for the world view too (110m was a first-pass choice).
-_GEO = Path(__file__).resolve().parent.parent / "assets" / "geo" / "countries-50m.json"
+_GEO = geo_dir() / "countries-50m.json"
 
 # Equal Earth (Savric, Patterson & Jenny, 2018) -- closed-form, published
 # constants, no iteration. Restores the equal-area property the old

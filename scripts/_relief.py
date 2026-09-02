@@ -74,6 +74,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _assets import geo_dir  # noqa: E402
 from _geo_colors import sequential_ramp_hex  # noqa: E402
 from PIL import Image
 
@@ -81,7 +82,7 @@ from PIL import Image
 #: 1440x720 (0.25 degree/pixel) from the original 1:50m 10800x5400 source.
 #: Equirectangular:
 #: column 0..1439 spans longitude -180..180, row 0..719 spans latitude 90..-90.
-RELIEF_PNG: Path = Path(__file__).resolve().parent.parent / "assets" / "geo" / "relief-lowres.png"
+RELIEF_PNG: Path = geo_dir() / "relief-lowres.png"
 
 #: Default opacity for the composited relief layer, as rendered directly
 #: over the background (i.e. in ocean / no-data areas with no country fill
@@ -376,7 +377,7 @@ def rgba_to_data_uri(rgba: np.ndarray) -> str:
 #: not a claim about the underlying terrain's true accuracy (GMTED2010's
 #: "mean" statistic already smooths within each 30 arc-second cell).
 _ELEVATION_TIERS: tuple[tuple[float, Path], ...] = tuple(
-    (arcsec, Path(__file__).resolve().parent.parent / "assets" / "geo" / f"elevation-{name}.png")
+    (arcsec, geo_dir() / f"elevation-{name}.png")
     for arcsec, name in (
         (30.0, "30arcsec"),
         (60.0, "1arcmin"),
@@ -471,12 +472,18 @@ def select_elevation_tier(
     output_deg_per_px = min(lon_deg_per_px, lat_deg_per_px)
     budget_deg_per_px = output_deg_per_px / oversample
 
+    # Only consider tiers actually on disk: the installed wheel bundles the
+    # coarse levels but not the fine ones (226MB at 30 arc-seconds), which
+    # stay source-tree only. An empty filter result keeps the full list so
+    # the eventual load error names the expected path.
+    tiers = [t for t in _ELEVATION_TIERS if t[1].is_file()] or list(_ELEVATION_TIERS)
+
     # Tiers are ordered finest-first; walk coarsening and keep the last one
     # that still fits the budget. Falls back to the finest tier (index 0)
     # when even that isn't fine enough for tiny regions -- the correct
     # behaviour is "give me the best available", not "give up".
-    chosen = _ELEVATION_TIERS[0][1]
-    for tier_arcsec, tier_path in _ELEVATION_TIERS:
+    chosen = tiers[0][1]
+    for tier_arcsec, tier_path in tiers:
         tier_deg_per_px = tier_arcsec / 3600.0
         if tier_deg_per_px <= budget_deg_per_px:
             chosen = tier_path

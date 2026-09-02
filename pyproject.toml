@@ -83,10 +83,25 @@ Repository = "https://github.com/warith-harchaoui/sprezzature-maps"
 packages = [
     "sprezzature_maps",
     "sprezzature_maps_scripts",
+    "sprezzature_maps_geo",
 ]
 
 [tool.setuptools.package-dir]
 "sprezzature_maps_scripts" = "scripts"
+"sprezzature_maps_geo" = "assets/geo"
+
+# Vector data, the low-res relief, and the coarse elevation tiers only.
+# The fine tiers (elevation-30arcsec/1arcmin/2arcmin, 226MB + 64MB + 18MB)
+# stay source-tree only; _relief.py degrades to the finest tier present.
+[tool.setuptools.package-data]
+"sprezzature_maps_geo" = [
+    "*.json",
+    "*.geojson",
+    "relief-lowres.png",
+    "elevation-16arcmin.png",
+    "elevation-8arcmin.png",
+    "elevation-4arcmin.png",
+]
 
 [tool.pytest.ini_options]
 addopts = "-m 'not slow'"
