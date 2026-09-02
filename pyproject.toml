@@ -28,7 +28,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: GIS",
 ]
 dependencies = [
-    "sprezzature-figures>=1.1.0",
+    # Not on PyPI: a bare "sprezzature-figures>=1.1.0" makes every
+    # standalone `pip install git+.../sprezzature-maps` fail with "No
+    # matching distribution found". The PEP 508 direct reference lets pip
+    # fetch it from GitHub itself (and is skipped when a compatible
+    # version is already installed).
+    "sprezzature-figures @ git+https://github.com/warith-harchaoui/sprezzature-figures",
     "resvg-py>=0.3",
     "pillow>=10.0",
     "pyproj>=3.6",
