@@ -2081,8 +2081,18 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     """Return the title block, north arrow and dual-unit scale bar."""
     W, H = vp["width"], vp["height"]
     ts = vp["ts"]
-    # North arrow top-right, clear of the title block top-left: no collision.
-    out: list[str] = [north_arrow(W - 30 * ts, 34 * ts, ts)]
+    # North arrow top-right, clear of the title block top-left. When the
+    # legend card floats top-right too (``legend_position``), step left of
+    # its fixed footprint (262 panel + 22 margin, in ts units) so the
+    # arrow never sits on the card.
+    arrow_x = W - 30 * ts
+    legend_shares_corner = (
+        str(cfg.get("legend_position", "bottom-right")) == "top-right"
+        and bool(cfg.get("areas_of_control", {}).get("palette"))
+    )
+    if legend_shares_corner:
+        arrow_x = W - (262 + 22 + 30) * ts
+    out: list[str] = [north_arrow(arrow_x, 34 * ts, ts)]
     title = cfg.get("title")
     subtitle = cfg.get("subtitle")
     if title:
@@ -2171,7 +2181,10 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     header_fs = 12.5 * ts
     row_fs = 12.5 * ts
     sw = 15 * ts  # swatch side
-    extra = (len(markers) + 1 if markers else 0) + (1 if show_front else 0)
+    # Count only rows actually drawn below: the marker section's hairline
+    # divider tucks between rows and needs no row of its own (a former +1
+    # here left a blank row's worth of dead space above the footer).
+    extra = len(markers) + (1 if show_front else 0)
     n_rows = len(rows) + extra
     foot_h = 30 * ts if footer else 0
     panel_h = pad * 2 + 24 * ts + row_h * n_rows + foot_h
