@@ -495,7 +495,7 @@ def _load_countries() -> list[dict[str, Any]]:
 def build_svg(
     data: list[dict[str, Any]] | None = None,
     title: str = "Global Exposure Index, by Country",
-    subtitle: str = "Higher = greater exposure · synthetic demo data · no data in grey",
+    subtitle: str | None = None,
     width: int = 745,
     height: int = 420,
     mode: str = "self-contained",
@@ -510,8 +510,16 @@ def build_svg(
     data : list of dict or None
         Rows with keys ``id`` (str, ISO-3166-1 numeric country code) and
         ``value`` (numeric). Defaults to :data:`DEMO_DATA`.
-    title, subtitle : str
-        Chart text.
+    title : str
+        Chart title.
+    subtitle : str or None, optional
+        Chart subtitle. ``None`` (the default) picks wording that matches
+        whether *data* was actually supplied: the demo caption ("...
+        synthetic demo data...") only when *data* is falsy and
+        :data:`DEMO_DATA` is what actually got rendered, or a neutral
+        caption ("No data in grey") for caller-supplied data -- so a real
+        dataset never carries a false "synthetic demo data" claim just
+        because the caller didn't think to override the subtitle too.
     width, height : int
         Canvas size in pixels.
     mode : str, optional
@@ -542,6 +550,16 @@ def build_svg(
     """
     _ = accessibility
     rows = data if data else DEMO_DATA
+    if subtitle is None:
+        # "Higher = greater exposure" and "synthetic demo data" are both true
+        # only of DEMO_DATA's own "Global Exposure Index" -- stating either
+        # one about caller-supplied data would be a false caption baked
+        # right onto the rendered map, not just a cosmetic default.
+        subtitle = (
+            "Higher = greater exposure · synthetic demo data · no data in grey"
+            if not data
+            else "No data in grey"
+        )
     values_by_id = {str(r["id"]): float(r["value"]) for r in rows}
     countries = _load_countries()
     all_values = list(values_by_id.values())
@@ -852,7 +870,7 @@ def make_choropleth(
     *,
     out: Path | str | None = None,
     title: str = "Global Exposure Index, by Country",
-    subtitle: str = "Higher = greater exposure · synthetic demo data · no data in grey",
+    subtitle: str | None = None,
     width: int = 745,
     height: int = 420,
     mode: str = "self-contained",
@@ -870,8 +888,11 @@ def make_choropleth(
         exposure index).
     out : Path, str, or None
         Output path (.svg). Defaults to ``assets/svg-examples/choropleth.svg``.
-    title, subtitle : str
-        Chart text.
+    title : str
+        Chart title.
+    subtitle : str or None, optional
+        Chart subtitle. See :func:`build_svg` for how the ``None`` default
+        picks demo-appropriate vs. neutral wording depending on *data*.
     width, height : int
         Canvas size in pixels.
     mode, accessibility, diverging, relief
