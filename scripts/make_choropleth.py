@@ -62,7 +62,7 @@ from typing import Any
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _assets import geo_dir  # noqa: E402
+from _assets import figures_scripts_dir, geo_dir  # noqa: E402
 from _geo_colors import diverging_ramp_hex, sequential_ramp_hex  # noqa: E402
 from _interactive import fullscreen_control  # noqa: E402
 from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
@@ -72,22 +72,15 @@ from _svg import svg_open, xml_escape  # noqa: E402
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py, not in this
 # repo's own scripts/_svg.py (see that module's docstring, "Deliberately not
 # extracted" -- it is a genuinely new capability, not a byte-identical
-# extraction). Resolved the same robust way market_style.py
-# (~/sprezzature/case-studies/financial-markets) does, with a sibling-repo
-# fallback. Loaded via importlib under a distinct module name -- a plain
-# ``sys.path.insert`` + ``from _svg import ...`` would silently reuse this
-# file's *own*, already-imported ``_svg`` module (Python caches by module
-# name, not path) and fail to find ``tooltip_bubble`` there.
-_TOOLTIP_SVG_CANDIDATES = [
-    Path(__file__).resolve().parent.parent.parent / "sprezzature-figures" / "scripts",
-    Path.home() / "sprezzature-figures" / "scripts",
-]
-_TOOLTIP_SVG_DIR = next(
-    (p for p in _TOOLTIP_SVG_CANDIDATES if (p / "_svg.py").is_file()),
-    _TOOLTIP_SVG_CANDIDATES[-1],
-)
+# extraction). _assets.figures_scripts_dir() resolves the installed
+# sprezzature_figures_scripts package first (the normal case: pyproject.toml
+# declares sprezzature-figures as a real dependency), with a sibling-checkout
+# fallback for a from-source dev setup. Loaded via importlib under a distinct
+# module name -- a plain ``sys.path.insert`` + ``from _svg import ...`` would
+# silently reuse this file's *own*, already-imported ``_svg`` module (Python
+# caches by module name, not path) and fail to find ``tooltip_bubble`` there.
 _tooltip_spec = importlib.util.spec_from_file_location(
-    "_svg_figures_tooltip", _TOOLTIP_SVG_DIR / "_svg.py"
+    "_svg_figures_tooltip", figures_scripts_dir() / "_svg.py"
 )
 _svg_figures = importlib.util.module_from_spec(_tooltip_spec)
 _tooltip_spec.loader.exec_module(_svg_figures)

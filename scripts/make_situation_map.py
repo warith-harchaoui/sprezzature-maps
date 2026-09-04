@@ -94,7 +94,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from _assets import geo_dir
+from _assets import figures_scripts_dir, geo_dir
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 
@@ -115,19 +115,15 @@ from _render import svg_example_path, write_svg
 # just from the other generator's side. Loaded via importlib under the same
 # distinct module name make_choropleth.py uses, so whichever generator runs
 # first in a process loads the file once and the other one just reuses it.
-_TOOLTIP_SVG_CANDIDATES = [
-    Path(__file__).resolve().parent.parent.parent / "sprezzature-figures" / "scripts",
-    Path.home() / "sprezzature-figures" / "scripts",
-]
-_TOOLTIP_SVG_DIR = next(
-    (p for p in _TOOLTIP_SVG_CANDIDATES if (p / "_svg.py").is_file()),
-    _TOOLTIP_SVG_CANDIDATES[-1],
-)
+# _assets.figures_scripts_dir() resolves the installed
+# sprezzature_figures_scripts package first (the normal case: pyproject.toml
+# declares sprezzature-figures as a real dependency), with a sibling-checkout
+# fallback for a from-source dev setup.
 if "_svg_figures_tooltip" in sys.modules:
     tooltip_bubble = sys.modules["_svg_figures_tooltip"].tooltip_bubble
 else:
     _tooltip_spec = importlib.util.spec_from_file_location(
-        "_svg_figures_tooltip", _TOOLTIP_SVG_DIR / "_svg.py"
+        "_svg_figures_tooltip", figures_scripts_dir() / "_svg.py"
     )
     _svg_figures = importlib.util.module_from_spec(_tooltip_spec)
     sys.modules["_svg_figures_tooltip"] = _svg_figures
@@ -2317,9 +2313,17 @@ def make_situation_map(
     config-driven, not row-driven).
     """
     cfg = dict(config) if config else dict(_DEMO_CONFIG)
-    # `build_map` resolves any relative feature files against this; the demo has
-    # none, but the key must exist.
-    cfg.setdefault("_config_dir", str(Path(__file__).resolve().parent.parent / "assets"))
+    # `build_map` resolves any relative feature files against this (see
+    # `_areas_of_control_layer`/`_infrastructure_layer`'s own
+    # `cfg.get("_config_dir", ".")`). A `config` dict passed straight to this
+    # Python entry point has no source file to anchor to, so "." (the
+    # process's current working directory) is the only sensible default --
+    # this used to hardcode `Path(__file__).parent.parent / "assets"`, the
+    # source tree's `assets/` directory, which does not exist at all under an
+    # installed wheel (that data ships as the sibling package
+    # `sprezzature_maps_geo/`) and was never the right anchor for a
+    # caller-supplied dict regardless.
+    cfg.setdefault("_config_dir", ".")
     if title:
         cfg["title"] = title
     svg = build_map(cfg)
