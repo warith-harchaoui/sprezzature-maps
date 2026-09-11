@@ -5,9 +5,8 @@
 This library draws maps as SVG (Scalable Vector Graphics, an image format
 built from lines and shapes described in text rather than a grid of
 pixels, so it stays sharp at any zoom and its labels stay selectable
-text). Every line is written by hand, by our own drawing code: nothing
-here goes through Vega (a JSON-based charting engine) or matplotlib
-(Python's classic plotting library). `sprezzature-maps` used to be part
+text). Every line is written by hand, by our own drawing code: no
+charting library sits underneath it. `sprezzature-maps` used to be part
 of [sprezzature-figures](https://github.com/warith-harchaoui/sprezzature-figures);
 it was split out as its own product, with its own release schedule and,
 eventually, its own visual editor.

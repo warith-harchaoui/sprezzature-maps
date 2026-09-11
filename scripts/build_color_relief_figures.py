@@ -14,9 +14,8 @@ looks better than the plain, contrast-stretched grey image it replaced,
 not just differently. This script renders both claims as actual images,
 calling the real production functions in ``_geo_colors.py`` and
 ``_relief.py`` rather than re-implementing either one separately for the
-figure. No synthetic colour swatches, no matplotlib (Python's classic
-plotting library, deliberately unused anywhere in this stack's own
-drawing code).
+figure. No synthetic colour swatches, and no plotting library: this
+stack draws its own pixels everywhere.
 
 Two composite PNG images are written to ``doc/img/``, at a resolution
 sharp enough for print:

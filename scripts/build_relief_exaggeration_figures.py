@@ -16,8 +16,8 @@ diagram. This script regenerates those renders by calling the actual
 production shading function, imported from ``_relief.py`` rather than
 reimplemented here, at a small set of illustrative parameter values, on
 the same real elevation data every other figure in this repository uses.
-No synthetic terrain, no matplotlib (Python's classic plotting library,
-deliberately unused anywhere in this stack's own drawing code).
+No synthetic terrain, and no plotting library: this stack draws its own
+pixels everywhere.
 
 Two composite PNG images are written to ``doc/img/``, at print
 resolution (each panel about 1600 pixels wide: CARTOGRAPHY's LaTeX build
@@ -32,8 +32,8 @@ sharp result at full page width, not a small screen thumbnail):
 
 The panels are composited with plain Pillow (Python's standard image
 library) drawing calls, pasting images together and adding a captioned
-bottom bar, not matplotlib, consistent with this whole stack's rule of
-never using matplotlib for its own drawing code. Captions use a system
+bottom bar, consistent with this whole stack's rule of doing its own
+drawing. Captions use a system
 serif typeface (Georgia, matching this document's print-editorial look)
 where available, falling back to Pillow's plain bitmap default
 otherwise, so the script degrades gracefully rather than failing outright
