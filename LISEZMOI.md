@@ -7,8 +7,7 @@ un format d'image construit à partir de lignes et de formes décrites en
 texte plutôt qu'une grille de pixels, ce qui lui permet de rester nette
 à n'importe quel niveau de zoom et de garder son texte sélectionnable).
 Chaque trait est écrit à la main, par notre propre code de dessin :
-rien ici ne passe par Vega (un moteur de graphiques piloté par JSON) ni
-par matplotlib (la bibliothèque de tracé classique de Python).
+aucune bibliothèque de graphiques ne se cache dessous.
 `sprezzature-maps` faisait autrefois partie de
 [sprezzature-figures](https://github.com/warith-harchaoui/sprezzature-figures) ;
 il en a été extrait pour devenir un produit à part entière, avec son

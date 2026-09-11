@@ -19,23 +19,20 @@ the map. Typical uses: any per-country indicator, an exposure or risk
 index, an adoption rate, survey coverage, anything where the geography
 itself already carries meaning a reader has spatial intuition for.
 
-This map used to be drawn through Vega-Lite (a JSON-based charting
-grammar) using its ``geoshape`` mark, a bundled TopoJSON country atlas
-(TopoJSON is a compact format for map boundaries that stores each shared
-border only once instead of once per neighbouring country), and an
-``equalEarth`` projection, all converted to an image by ``vl_convert``. It
-no longer is. This module now reads that same offline TopoJSON atlas
-itself (``assets/geo/countries-50m.json``, vendored Natural Earth data
-already used by ``make_situation_map.py``) and projects it with its own
+This module reads an offline TopoJSON country atlas
+(``assets/geo/countries-50m.json``, vendored Natural Earth data already
+used by ``make_situation_map.py``; TopoJSON is a compact format for map
+boundaries that stores each shared border only once instead of once per
+neighbouring country) and projects it with its own
 hand-written, closed-form Equal Earth projection (a projection is the
 mathematical recipe for flattening the round Earth onto a flat image;
 Equal Earth is the specific recipe that keeps every country's true
 relative area, so a large but often visually exaggerated landmass like
 Greenland or Russia is not overstated the way it is on a classic Mercator
 map; "closed-form" means the formula is computed directly, with no
-external library, iteration, or lookup table needed). No Vega, no
-matplotlib (Python's classic plotting library), no ``pyproj`` (a common
-third-party geographic-projection library, not needed here). Every
+external library, iteration, or lookup table needed). No charting
+library, and no ``pyproj`` (a common third-party geographic-projection
+library, not needed here). Every
 country carries a native browser ``<title>`` tooltip with its exact
 value, its rank among all countries, and, for a sequential indicator, its
 share of the total, plus a richer on-canvas hover bubble (the
@@ -109,11 +106,10 @@ _COUNTRY_FILL_OPACITY = 0.7
 _GEO = geo_dir() / "countries-50m.json"
 
 # Equal Earth (Savric, Patterson & Jenny, 2018) -- closed-form, published
-# constants, no iteration. Restores the equal-area property the old
-# Vega-Lite ``equalEarth`` mark had before this generator was rewritten as
-# hand-authored SVG with a plain equirectangular projection, which inflates
-# high-latitude countries (Greenland reads ~14x its true relative size) --
-# a real bias for a choropleth, where colored area carries meaning.
+# constants, no iteration. Equal-area matters here: a plain
+# equirectangular projection inflates high-latitude countries (Greenland
+# reads ~14x its true relative size), a real bias for a choropleth, where
+# coloured area carries meaning.
 _EE_A1, _EE_A2, _EE_A3, _EE_A4 = 1.340264, -0.081106, 0.000893, 0.003796
 _EE_M = math.sqrt(3) / 2.0
 

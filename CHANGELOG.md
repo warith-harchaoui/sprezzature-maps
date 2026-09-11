@@ -2,6 +2,19 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [Unreleased] - 2026-09-11
+
+### Changed
+
+- No charting library is named anywhere in this repository any more. The
+  package description, both READMEs, `_render.py`, `make_choropleth.py`
+  and the two relief-figure scripts described what this code *does not*
+  use — a migration note that outlived the migration. Each now states
+  the positive fact: every line is authored as SVG directly, and the
+  relief panels are composited with Pillow. The competitive-landscape
+  documents (`LANDSCAPE.md` / `PAYSAGE.md`) keep their names: comparing
+  against the alternatives is what they are for.
+
 ## [Unreleased] - 2026-08-20
 
 Maintenance pass: no behavior change to the two generators or any of
