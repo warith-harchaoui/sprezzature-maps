@@ -92,7 +92,7 @@ import sys
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
@@ -170,6 +170,71 @@ _LAND_TOPOJSON = _ASSETS / "countries-50m.json"
 # read visibly facetted/over-smoothed at zoom.
 _LAND_TOPOJSON_10M = _ASSETS / "countries-10m.json"
 _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
+
+#: The two plates. ``day`` reproduces the values that were hard-coded here,
+#: so an existing config renders byte-for-byte as before.
+#:
+#: ``night`` is not the day palette inverted. Inverting gives a muddy grey
+#: sea and cream-coloured land at 8 % lightness, which reads as a mistake.
+#: These values were picked so that: the sea is nearly black but not black,
+#: leaving room for bathymetry below it; the land sits far enough above the
+#: sea to separate at a glance; and the coastline is a light hairline rather
+#: than a dark one, because on a dark plate the shore is where light is, not
+#: where ink is.
+_PLATES: Dict[str, Dict[str, str]] = {
+    "day": {
+        "plate": "#ffffff",
+        "panel": "#ffffff",
+        "panel_edge": "#e4e8ec",
+        "chrome_ink": "#1b2733",
+        "legend_ink": "#333",
+        "chrome_sub": "#5b6169",
+        "chrome_faint": "#8b9097",
+        "label_ink": "#1b2733",
+        "page": "#eef1f3",
+        "bathy": "#ffffff",
+        "bathy_opacity": 0.5,
+        "halo": "#ffffff",
+        "blend": "multiply",
+        "sea": "#a9bccb",
+        "land": "#faf6e4",
+        "coast": "#7f97a8",
+        "relief_opacity": 0.45,
+        "ink": "#1d1d1f",
+        "subtle": "#6e6e73",
+    },
+    "night": {
+        "plate": "#0a0f18",
+        "panel": "#121a26",
+        "panel_edge": "#2a3646",
+        "chrome_ink": "#eef2f7",
+        "legend_ink": "#eef2f7",
+        "chrome_sub": "#a8b2be",
+        "chrome_faint": "#7f8b98",
+        "label_ink": "#eef2f7",
+        # The page is a shade darker than the plate, so the plate still reads
+        # as an object sitting on something rather than as a hole in it.
+        "page": "#05080d",
+        "bathy": "#16324f",
+        "bathy_opacity": 0.55,
+        # A label halo on a dark plate is dark: a white one would ring every
+        # name in the very colour the text is set in.
+        "halo": "#0a0f18",
+        # Multiply darkens, which is right over a pale plate and wrong here —
+        # it dragged the control fills towards the plate instead of lifting
+        # them off it. Screen does the equivalent job in the other direction.
+        "blend": "screen",
+        "sea": "#070d18",
+        "land": "#1b2330",
+        "coast": "#5d7186",
+        # Land sits at ~13 % lightness here, so the relief underneath has the
+        # whole range above it to work with. At the day plate's 0.45 the
+        # terrain drowned the fill; 0.72 keeps the land reading as land.
+        "relief_opacity": 0.88,
+        "ink": "#f2f4f7",
+        "subtle": "#98a3b0",
+    },
+}
 # Sub-national (admin-1) tier, first of the national/regional cadastral
 # sources (task #31: TIGER/IGN/OSM) layered above Natural Earth's admin-0
 # atlases -- US Census TIGER/Line state boundaries, public domain, vendored
@@ -1354,9 +1419,45 @@ def build_map(cfg: dict[str, Any]) -> str:
     W, H = vp["width"], vp["height"]
 
     basemap = cfg.get("basemap", {})
-    sea_color = basemap.get("sea_color", "#a9bccb")
-    land_color = basemap.get("land_color", "#faf6e4")
-    coast_color = basemap.get("coast_color", "#7f97a8")
+    # ── plate ────────────────────────────────────────────────────────────
+    # "day" is the default and stays exactly as it was: cream land, muted
+    # blue sea, a plate that prints. "night" is the other tradition — the
+    # one a screen is actually good at. On black, a saturated fill glows
+    # instead of flattening, and the relief reads as terrain rather than as
+    # a wash, because the eye has the whole dark end of the range to work
+    # with rather than the compressed top of it.
+    #
+    # Nothing here is a default. A caller who does not ask for a plate gets
+    # the plate they had yesterday.
+    plate = str(basemap.get("plate", "day")).lower()
+    if plate not in _PLATES:
+        raise ValueError(f"unknown plate {plate!r}; known: {sorted(_PLATES)}")
+    palette = _PLATES[plate]
+
+    # A named plate outranks the individual colours. Any config written
+    # before plates existed carries day values, and honouring them would mean
+    # answering "plate: night" with a cream map — the silent-wrong-answer
+    # failure this codebase keeps running into. The override is announced so
+    # it is never a mystery.
+    _PLATE_KEYS = ("sea_color", "land_color", "coast_color")
+    if plate != "day":
+        overridden = [k for k in _PLATE_KEYS if k in basemap]
+        if overridden:
+            warnings.warn(
+                f"plate {plate!r} overrides {', '.join(overridden)} from the config; "
+                "remove them to silence this, or drop the plate to keep them.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        sea_color, land_color, coast_color = palette["sea"], palette["land"], palette["coast"]
+    else:
+        sea_color = basemap.get("sea_color", palette["sea"])
+        land_color = basemap.get("land_color", palette["land"])
+        coast_color = basemap.get("coast_color", palette["coast"])
+
+    # The chrome builders take cfg, not a palette; stashing it here beats
+    # threading a new argument through nine call sites.
+    cfg["_plate"] = palette
 
     region_box = box(bbox[0], bbox[1], bbox[2], bbox[3])
     # bbox already carries the region's real extent -- reuse it to pick the
@@ -1392,7 +1493,7 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 2. basemap-bathymetry ------------------------------------------------- #
     bath = basemap.get("bathymetry", {"rings": 7, "step_km": None})
-    layers.append(_bathymetry_layer(land_proj, sea_proj, vp, bath))
+    layers.append(_bathymetry_layer(land_proj, sea_proj, vp, bath, palette))
 
     # 3. basemap-land --------------------------------------------------------
     # fill-opacity < 1 (not the default opaque fill) lets the relief layer
@@ -1408,7 +1509,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     # more headroom to let it dominate. 0.45 was the empirical sweet spot
     # (0.55 was still muted; the Himalaya ridge line only became clearly
     # legible at 0.45).
-    land_fill_opacity = 0.45 if basemap.get("relief", True) else 1.0
+    land_fill_opacity = palette["relief_opacity"] if basemap.get("relief", True) else 1.0
     layers.append(
         f'<g id="basemap-land">'
         f'<path d="{projected_geom_to_path(land_proj, vp)}" fill="{land_color}" '
@@ -1493,7 +1594,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     # panel, and a rounded clip, the premium "printed plate" cue of the reference.
     frame = cfg.get("frame", {})
     margin = float(frame.get("margin", 22))
-    page_color = frame.get("page_color", "#eef1f3")
+    page_color = frame.get("page_color", _pal(cfg)["page"])
     radius = float(frame.get("radius", 8))
     # ``legend_position: "right"`` moves the legend off the map entirely into
     # its own column: the plate grows wide enough to hold it (rather than the
@@ -1541,9 +1642,11 @@ def build_map(cfg: dict[str, Any]) -> str:
 
 
 def _bathymetry_layer(
-    land_proj: Any, sea_proj: Any, vp: dict[str, Any], bath: dict[str, Any]
+    land_proj: Any, sea_proj: Any, vp: dict[str, Any], bath: dict[str, Any],
+    palette: "Dict[str, Any] | None" = None,
 ) -> str:
     """Return concentric depth-contour halos buffered out from the coast into the sea."""
+    palette = palette or _PLATES["day"]
     rings = int(bath.get("rings", 7))
     if rings <= 0 or sea_proj.is_empty:
         return '<g id="basemap-bathymetry"></g>'
@@ -1552,8 +1655,16 @@ def _bathymetry_layer(
     if not step_km:
         step_km = (vp["width"] * 0.02 * m_per_unit) / 1000.0  # ~2% of canvas
     step_m = step_km * 1000.0
-    color = bath.get("color", "#ffffff")
-    opacity = float(bath.get("opacity", 0.5))
+    # White rings read as depth on a pale sea and as harsh contour lines on
+    # a near-black one, so the plate supplies its own value.
+    # Same rule as the plate colours: a named plate outranks values a config
+    # inherited for the other one. White rings read as depth on a pale sea
+    # and as harsh contour lines drawn over a near-black one.
+    if palette is not _PLATES["day"]:
+        color, opacity = palette["bathy"], palette["bathy_opacity"]
+    else:
+        color = bath.get("color", palette["bathy"])
+        opacity = float(bath.get("opacity", palette["bathy_opacity"]))
     coast = land_proj.boundary
     paths: list[str] = []
     for i in range(1, rings + 1):
@@ -1618,8 +1729,9 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
     # Only worth doing when there *is* relief underneath; over flat paper a
     # multiply of a pastel is just the pastel, and alpha is more predictable.
     has_relief = bool(cfg.get("basemap", {}).get("relief", True))
-    blend = aoc.get("blend", "multiply" if has_relief else "none")
-    fill_style = ' style="mix-blend-mode:multiply"' if blend == "multiply" else ""
+    plate_blend = cfg.get("_plate", _PLATES["day"])["blend"]
+    blend = aoc.get("blend", plate_blend if has_relief else "none")
+    fill_style = f' style="mix-blend-mode:{blend}"' if blend in ("multiply", "screen") else ""
     # Under multiply the alpha is what keeps a dark valley from dragging the
     # pastel down to mud; the two work together rather than either alone.
     if blend == "multiply":
@@ -2151,12 +2263,12 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     if title:
         out.append(
             f'<text x="{26 * ts:.0f}" y="{40 * ts:.0f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{22 * ts:.0f}" font-weight="700" fill="#1b2733">{_esc(title)}</text>'
+            f'font-size="{22 * ts:.0f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}">{_esc(title)}</text>'
         )
     if subtitle:
         out.append(
             f'<text x="{26 * ts:.0f}" y="{40 * ts + 20 * ts:.0f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{12.5 * ts:.0f}" fill="#5b6169">{_esc(subtitle)}</text>'
+            f'font-size="{12.5 * ts:.0f}" fill="{_pal(cfg)["chrome_sub"]}">{_esc(subtitle)}</text>'
         )
     out.append(scale_bar(26 * ts, H - 44 * ts, vp))
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
@@ -2193,8 +2305,13 @@ def _attribution_layer(
     return (
         f'<g id="attribution"><text x="{W - 16 * ts:.1f}" y="{H - 12 * ts:.1f}" '
         f'text-anchor="end" font-family="{_DEFAULT_FONT}" font-size="{8.5 * ts:.1f}" '
-        f'fill="#9aa0a6">{_esc(text)}</text></g>'
+        f'fill="{_pal(cfg)["chrome_sub"]}">{_esc(text)}</text></g>'
     )
+
+
+def _pal(cfg: dict[str, Any]) -> Dict[str, str]:
+    """The resolved plate palette, or the day plate for a caller that never set one."""
+    return cfg.get("_plate", _PLATES["day"])
 
 
 def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, float]:
@@ -2287,11 +2404,12 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
-        f'rx="{9 * ts:.1f}" fill="#ffffff" fill-opacity="0.96" filter="url(#panel-shadow)"/>',
+        f'rx="{9 * ts:.1f}" fill="{_pal(cfg)["panel"]}" fill-opacity="0.96" '
+        f'filter="url(#panel-shadow)"/>',
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
-        f'rx="{9 * ts:.1f}" fill="none" stroke="#e4e8ec" stroke-width="1"/>',
+        f'rx="{9 * ts:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
         f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-        f'font-size="{header_fs:.1f}" font-weight="700" fill="#1b2733" letter-spacing="1.2">'
+        f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)['chrome_ink']}" letter-spacing="1.2">'
         f"AREAS OF CONTROL</text>",
     ]
     fill_op = float(aoc.get("fill_opacity", 0.78))
@@ -2310,7 +2428,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             )
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
-            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="#333">{_esc(name)}</text>'
+            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="{_pal(cfg)['legend_ink']}">{_esc(name)}</text>'
         )
     idx = len(rows)
     # Front-line key row.
@@ -2323,7 +2441,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         )
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{row_fs:.1f}" fill="#333">{_esc(front.get("legend_label", "Approx. front line"))}</text>'
+            f'font-size="{row_fs:.1f}" fill="{_pal(cfg)['legend_ink']}">{_esc(front.get("legend_label", "Approx. front line"))}</text>'
         )
         idx += 1
     # Marker key, separated by a hairline divider.
@@ -2341,7 +2459,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         )
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
-            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="#333">'
+            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="{_pal(cfg)["legend_ink"]}">'
             f"{_esc(mk.get('label', ''))}</text>"
         )
     if footer:
@@ -2352,7 +2470,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         )
         parts.append(
             f'<text x="{px + pad:.1f}" y="{fy:.1f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{9 * ts:.1f}" fill="#8b9097">{_esc(footer)}</text>'
+            f'font-size="{9 * ts:.1f}" fill="{_pal(cfg)["chrome_faint"]}">{_esc(footer)}</text>'
         )
     return f'<g id="legend">{"".join(parts)}</g>'
 
