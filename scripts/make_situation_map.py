@@ -1176,6 +1176,10 @@ def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) ->
 # Cartographic sans; falls back gracefully. Honors the three-Roboto rule of the
 # stack when no font is pinned in the config.
 _DEFAULT_FONT = "Roboto, 'Helvetica Neue', Arial, sans-serif"
+#: Monospace for the provenance footer: a method note is metadata, and
+#: setting it in the same face as the title invites it to be read as
+#: part of the argument rather than as its receipt.
+_MONO_FONT = "'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
 
 
 def svg_defs(contested_hatch: str = "#b03a3a") -> str:
@@ -1251,7 +1255,7 @@ def _nice_round(value: float) -> float:
     return base
 
 
-def scale_bar(x: float, y: float, vp: dict[str, Any]) -> str:
+def scale_bar(x: float, y: float, vp: dict[str, Any], ink: str = "#1b2733") -> str:
     """Return a dual-unit (km + mi) scale bar sized to a round distance on the map."""
     m_per_unit = vp["m_per_unit"]
     target_units = min(vp["width"] * 0.22, 180)  # aim ~1/5 canvas, capped
@@ -1259,7 +1263,7 @@ def scale_bar(x: float, y: float, vp: dict[str, Any]) -> str:
     mi = _nice_round(target_units * m_per_unit / 1609.34)
     km_len = km * 1000.0 / m_per_unit
     mi_len = mi * 1609.34 / m_per_unit
-    ink = "#1b2733"
+
     ts = vp["ts"]
     fs = 10 * ts
     hw = 2.8 * ts  # bar half-height
@@ -1556,6 +1560,8 @@ def build_map(cfg: dict[str, Any]) -> str:
     #     the single most-read feature of a situation plate.
     layers.append(_front_line_layer(cfg, proj, vp))
 
+
+
     # Close the geographic stack: wrap layers 1..5c in the region clip.
     # Markers, labels, furniture, legend and frame stay unclipped -- they
     # are annotations allowed to sit in the plate margin.
@@ -1577,6 +1583,11 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 9. annotation-furniture ---------------------------------------------- #
     layers.append(_furniture_layer(cfg, vp))
+
+    # The caption sits with the furniture, not with the geography: the geo
+    # layers are clipped to the region polygon, and a footer under the map
+    # falls outside it — drawn there it was silently cut away.
+    layers.append(_caption_block(cfg, vp))
 
     # 10. legend ------------------------------------------------------------ #
     layers.append(_legend_layer(cfg, vp))
@@ -1632,9 +1643,9 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'<rect width="{outer_w:.1f}" height="{outer_h:.1f}" fill="{page_color}"/>'
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
         f'<rect x="0" y="0" width="{plate_w:.1f}" height="{plate_h:.1f}" rx="{radius}" ry="{radius}" '
-        f'fill="#ffffff" filter="url(#panel-shadow)"/>'
+        f'fill="{_pal(cfg)["plate"]}" filter="url(#panel-shadow)"/>'
         f'<g clip-path="url(#plate-clip)">'
-        f'<rect width="{plate_w:.1f}" height="{plate_h:.1f}" fill="#ffffff"/>'
+        f'<rect width="{plate_w:.1f}" height="{plate_h:.1f}" fill="{_pal(cfg)["plate"]}"/>'
         f"{''.join(layers)}"
         f"</g></g>"
         f"</svg>"
@@ -2084,7 +2095,8 @@ def _rivers_layer(
             continue
         lines.append(
             f'<path d="{d}" fill="none" stroke="{line_color}" '
-            f'stroke-width="{_river_width(rank, width_mode, ts):.2f}" stroke-opacity="0.85" '
+            f'stroke-width="{_river_width(rank, width_mode, ts):{".2f" if width_mode == "ranked" else ".1f"}}" '
+            f'stroke-opacity="0.85" '
             f'stroke-linejoin="round" stroke-linecap="round"/>'
         )
         if not name or name.lower() in skip or name.lower() in labeled:
@@ -2284,6 +2296,83 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
     return f'<g id="annotation-labels">{"".join(out)}</g>'
 
 
+def _caption_height(cfg: dict[str, Any], ts: float) -> float:
+    """
+    Vertical space the caption occupies, or 0 when it is off.
+
+    The furniture needs this before drawing: the scale bar sits at the same
+    bottom-left corner, and the two landed on top of each other the first
+    time — legible text over a legible bar, both unreadable.
+    """
+    if str(cfg.get("caption", "none")).lower() != "full":
+        return 0.0
+    lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
+    return len(lines) * 11.5 * ts + 17 * ts
+
+
+def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
+    """
+    A provenance footer inside the plate, for a figure that travels alone.
+
+    A map gets screenshotted, pasted into a deck, forwarded. By the time
+    somebody asks "what is this, and when is it from", the page that carried
+    the method note is gone. mapped.earth answers that by putting the method
+    on the plate itself, in small monospace under the map, and the result
+    stays honest wherever it ends up.
+
+    Off by default: an existing plate that suddenly grew a footer would have
+    its layout changed under it. ``caption: full`` opts in.
+
+    Parameters
+    ----------
+    cfg : dict
+        The map config. Reads ``caption`` (``"none"`` or ``"full"``),
+        ``source``, ``method``, ``as_of``.
+    vp : dict
+        Viewport, for width and type scale.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when the caption is off.
+    """
+    mode = str(cfg.get("caption", "none")).lower()
+    if mode == "none":
+        # Nothing at all, not an empty group: a plate that never asked for
+        # a caption has to come out of this byte-for-byte as it did before,
+        # and twenty bytes of empty <g> is still a difference.
+        return ""
+    if mode != "full":
+        raise ValueError(f"unknown caption {mode!r}; known: none, full")
+
+    palette = _pal(cfg)
+    ts, W, H = vp["ts"], vp["width"], vp["height"]
+    lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
+    if not lines:
+        # Refusing beats printing an empty rule: a caption that says nothing
+        # is worse than no caption, because it looks like provenance.
+        raise ValueError(
+            'caption: full needs at least one of "method", "source" or "as_of"'
+        )
+
+    size = 8.2 * ts
+    leading = 11.5 * ts
+    top = H - (len(lines) * leading) - 10 * ts
+    out = [
+        f'<g id="caption">',
+        f'<line x1="{26 * ts:.1f}" y1="{top - 7 * ts:.1f}" x2="{W - 26 * ts:.1f}" '
+        f'y2="{top - 7 * ts:.1f}" stroke="{palette["panel_edge"]}" stroke-width="1"/>',
+    ]
+    for i, line in enumerate(lines):
+        out.append(
+            f'<text x="{26 * ts:.1f}" y="{top + i * leading:.1f}" '
+            f'font-family="{_MONO_FONT}" font-size="{size:.1f}" '
+            f'fill="{palette["chrome_faint"]}" letter-spacing="0.4">{_esc(line)}</text>'
+        )
+    out.append("</g>")
+    return "".join(out)
+
+
 def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     """Return the title block, north arrow and dual-unit scale bar."""
     W, H = vp["width"], vp["height"]
@@ -2312,7 +2401,7 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             f'<text x="{26 * ts:.0f}" y="{40 * ts + 20 * ts:.0f}" font-family="{_DEFAULT_FONT}" '
             f'font-size="{12.5 * ts:.0f}" fill="{_pal(cfg)["chrome_sub"]}">{_esc(subtitle)}</text>'
         )
-    out.append(scale_bar(26 * ts, H - 44 * ts, vp))
+    out.append(scale_bar(26 * ts, H - 44 * ts - _caption_height(cfg, ts), vp, _pal(cfg)["chrome_ink"]))
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
 
 
