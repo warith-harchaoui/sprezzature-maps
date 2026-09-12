@@ -165,3 +165,56 @@ def test_a_named_plate_overrides_config_colours_audibly() -> None:
         except Exception:
             pass  # the render may need assets; the warning fires before that
     assert any("overrides" in str(w.message) for w in caught), [str(w.message) for w in caught]
+
+
+def test_river_width_is_even_unless_asked() -> None:
+    """Every river at one weight, which is what this always did."""
+    module = _msm()
+    assert module._river_width(1, "even", 1.0) == module._river_width(6, "even", 1.0)
+
+
+def test_ranked_width_tapers_from_trunk_to_tributary() -> None:
+    """
+    A rank-1 trunk is drawn thicker than a rank-6 tributary, monotonically.
+
+    A taper that is not monotonic would put a headwater above a trunk
+    somewhere in the middle, which reads as noise rather than as hierarchy.
+    """
+    module = _msm()
+    widths = [module._river_width(r, "ranked", 1.0) for r in range(1, 7)]
+    assert widths == sorted(widths, reverse=True), widths
+    assert widths[0] > widths[-1] * 3, "the taper is too shallow to read"
+
+
+def test_unknown_river_width_is_refused() -> None:
+    """A typo must not silently fall back to the default."""
+    import pytest
+
+    module = _msm()
+    with pytest.raises(ValueError, match="unknown rivers.width"):
+        module.build_map({
+            "region": {"bbox": [30, 44, 40, 52]},
+            "rivers": {"width": "hydraulic"},
+        })
+
+
+def test_the_name_does_not_overclaim() -> None:
+    """
+    The mode is 'ranked', not 'hydraulic'.
+
+    Hydraulic width means discharge. The vendored river file carries only
+    name and scalerank — a cartographic prominence rank, not a measurement
+    of water — so calling it hydraulic would be a claim a reader could not
+    check and we could not support.
+    """
+    module = _msm()
+    rivers = module.load_rivers()
+    _, _, rank = rivers[0]
+    assert isinstance(rank, int)
+    # if a discharge attribute ever arrives, this test should be revisited
+    import json
+    from pathlib import Path
+
+    data = json.loads(Path(module._RIVERS_GEOJSON).read_text(encoding="utf-8"))
+    props = set(data["features"][0]["properties"])
+    assert props == {"name", "scalerank"}, f"river attributes changed: {sorted(props)}"

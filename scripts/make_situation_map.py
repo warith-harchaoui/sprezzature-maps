@@ -2004,6 +2004,41 @@ def _admin2_borders_layer(
     return f'<g id="admin2-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
+#: Stroke weight per Natural Earth scalerank, in ``ts`` units. Rank 1 is a
+#: continental trunk, rank 6 a minor tributary.
+#:
+#: Deliberately *not* called hydraulic width. Hydraulic width means
+#: discharge, and the vendored file carries no discharge — only ``name`` and
+#: ``scalerank``, which is a cartographic prominence rank. Sizing by it
+#: gives the same read at a glance, and claiming it measured water would be
+#: a lie a reader could not check.
+_RIVER_WIDTHS: Dict[int, float] = {1: 3.0, 2: 2.3, 3: 1.8, 4: 1.4, 5: 1.1, 6: 0.85}
+
+
+def _river_width(rank: int, mode: str, ts: float) -> float:
+    """
+    Stroke weight for one river reach.
+
+    Parameters
+    ----------
+    rank : int
+        Natural Earth ``scalerank``; 1 is most prominent.
+    mode : str
+        ``"even"`` for the single weight this always used, ``"ranked"`` to
+        taper by prominence.
+    ts : float
+        The plate's type scale.
+
+    Returns
+    -------
+    float
+        Stroke width in user units.
+    """
+    if mode != "ranked":
+        return 1.3 * ts
+    return _RIVER_WIDTHS.get(max(1, min(6, int(rank))), 1.0) * ts
+
+
 def _rivers_layer(
     cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
 ) -> str:
@@ -2019,6 +2054,13 @@ def _rivers_layer(
         return '<g id="rivers"></g>'
     ts = vp["ts"]
     line_color = rv.get("color", "#6f93b0")
+    # "even" is the default and draws every river at one weight, which is
+    # what this has always done. "ranked" tapers them, so a trunk reads
+    # thick and a tributary thin — the single change that turns a tangle of
+    # blue lines into a drainage network you can read at a glance.
+    width_mode = str(rv.get("width", "even")).lower()
+    if width_mode not in ("even", "ranked"):
+        raise ValueError(f"unknown rivers.width {width_mode!r}; known: even, ranked")
     label_color = rv.get("label_color", "#4f7290")
     max_rank = int(rv.get("label_max_scalerank", 6))
     min_px = float(rv.get("label_min_length_frac", 0.14)) * vp["width"]
@@ -2042,7 +2084,7 @@ def _rivers_layer(
             continue
         lines.append(
             f'<path d="{d}" fill="none" stroke="{line_color}" '
-            f'stroke-width="{1.3 * ts:.1f}" stroke-opacity="0.85" '
+            f'stroke-width="{_river_width(rank, width_mode, ts):.2f}" stroke-opacity="0.85" '
             f'stroke-linejoin="round" stroke-linecap="round"/>'
         )
         if not name or name.lower() in skip or name.lower() in labeled:
