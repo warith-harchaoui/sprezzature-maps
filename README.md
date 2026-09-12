@@ -166,6 +166,31 @@ needs no credit. Two sources do:
   the required credit line to the map itself automatically; see
   `_attribution_layer` in `scripts/make_situation_map.py`.
 
+### Credited as a courtesy, not as an obligation
+
+Nothing below is bundled here and none of it requires a credit. It is named
+because the work borrowed from it, and saying so costs nothing.
+
+The night plate, the tapered rivers, the accumulation field and the
+scrolling story are all forms taken from [mapped.earth](https://mapped.earth)
+(Aaron J. BECKER), which does them better than this does. The datasets those
+maps are built on, in case you want the real thing rather than our synthetic
+demonstrations:
+
+- **Lightning**: NOAA's GOES Geostationary Lightning Mapper over the
+  Americas, EUMETSAT's Meteosat Lightning Imager over Europe and Africa,
+  and national ground networks. `make_density.py` ships synthetic points and
+  says so on the plate; it has never seen a real flash.
+- **River discharge**: [GloFAS v4](https://global-flood.emergency.copernicus.eu/)
+  (Copernicus Emergency Management Service) on the
+  [HydroRIVERS](https://www.hydrosheds.org/products/hydrorivers) network.
+  Our `rivers.width: ranked` sizes by Natural Earth's `scalerank`, a
+  cartographic prominence rank, **not** by discharge — which is why it is
+  not called hydraulic width.
+- **River basins**: [HydroSHEDS / BasinATLAS](https://www.hydrosheds.org/hydroatlas),
+  CC-BY 4.0.
+- **Water temperature**: DynQual 1980–2019 climatology.
+
 ## License
 
 BSD-3-Clause.
