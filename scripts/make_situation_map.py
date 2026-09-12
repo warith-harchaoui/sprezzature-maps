@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate a professional, layered "situation map" for any region of the world.
 
-Author: Warith Harchaoui
+Author: Warith HARCHAOUI
 
 A situation map, in the sense used here, is the kind of "who controls
 what" plate that a geopolitics analyst draws over a real map: territory

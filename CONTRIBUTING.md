@@ -93,7 +93,7 @@ as GitHub releases.
 
 ## Authorship
 
-Sole author: [Warith Harchaoui](https://www.linkedin.com/in/warith-harchaoui/).
+Sole author: [Warith HARCHAOUI](https://www.linkedin.com/in/warith-harchaoui/).
 External contributions are welcome. Open an issue or pull request on GitHub.
 
 ## License

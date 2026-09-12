@@ -172,4 +172,4 @@ BSD-3-Clause.
 
 ## Author
 
-[Warith Harchaoui, Ph.D.](https://www.linkedin.com/in/warith-harchaoui/)
+[Warith HARCHAOUI, Ph.D.](https://www.linkedin.com/in/warith-harchaoui/)
