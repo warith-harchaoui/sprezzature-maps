@@ -180,6 +180,7 @@ def build_ukraine() -> dict[str, Any]:
             "bathymetry": {"rings": 7, "color": "#ffffff", "opacity": 0.4},
         },
         "frontiers": {"focus": "Ukraine"},
+        "legend_position": "right",
         "rivers": {"always_label": ["Dnieper"], "color": "#5d86a6", "label_color": "#3f6a8c"},
         # The approximate contact line, drawn as an emphasised sprezzature (north->south).
         "sprezzature": {

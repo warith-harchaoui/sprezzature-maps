@@ -89,6 +89,7 @@ import importlib.util
 import json
 import math
 import sys
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -907,6 +908,19 @@ def load_rivers() -> list[tuple[Any, str, int]]:
     ``scalerank`` means a more prominent river (used to decide what gets labelled).
     """
     if not _RIVERS_GEOJSON.is_file():
+        # Returning [] here is what let a map ship with no rivers at all and
+        # no complaint: the plate rendered, the exit code was 0, and the
+        # Dnieper was simply absent from a map of Ukraine. A missing vendored
+        # asset is a packaging bug, not a legitimate "this region has no
+        # rivers", so it is now audible. Still not fatal — a caller who never
+        # asked for rivers should not be stopped by them.
+        warnings.warn(
+            f"river centerlines missing at {_RIVERS_GEOJSON}: the map will be "
+            "drawn without rivers. This is a packaging fault, not a property "
+            "of the region.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return []
     data = json.loads(_RIVERS_GEOJSON.read_text())
     out: list[tuple[Any, str, int]] = []
@@ -1401,9 +1415,6 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'fill-opacity="{land_fill_opacity}"/></g>'
     )
 
-    # 3b. frontiers (international borders + neighbour labels) --------------- #
-    layers.append(_frontiers_layer(cfg, proj, vp, region_box))
-
     # 3c. internal-borders (admin-1: US states, FR regions, OSM countries) --- #
     layers.append(_internal_borders_layer(cfg, proj, vp, region_box))
 
@@ -1412,6 +1423,14 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp))
+
+    # 4a. frontiers (international borders + neighbour labels), drawn over the
+    #     control fills for the same reason the coastline below is: a national
+    #     border is base geography, and on a map *about* who holds what, which
+    #     side of a frontier a zone sits on is the question being asked. Drawn
+    #     under the fills it disappeared wherever a zone touched it — and where
+    #     the same class held both sides, it vanished entirely.
+    layers.append(_frontiers_layer(cfg, proj, vp, region_box))
 
     # 4b. coastline: a crisp hairline where land meets the sea, drawn over the
     #     control fills so the shore reads sharply against the water. Placed here
@@ -1476,10 +1495,22 @@ def build_map(cfg: dict[str, Any]) -> str:
     margin = float(frame.get("margin", 22))
     page_color = frame.get("page_color", "#eef1f3")
     radius = float(frame.get("radius", 8))
-    outer_w = W + 2 * margin
-    outer_h = H + 2 * margin
+    # ``legend_position: "right"`` moves the legend off the map entirely into
+    # its own column: the plate grows wide enough to hold it (rather than the
+    # legend floating over map content), so the map's own W/H stay untouched
+    # for every layer already drawn above -- only the outer plate/canvas size
+    # changes here.
+    legend_pos = str(cfg.get("legend_position", "bottom-right"))
+    if legend_pos == "right":
+        panel_w, panel_h, corner_margin = _legend_panel_dims(cfg, vp["ts"])
+        plate_w = W + corner_margin + panel_w + corner_margin
+        plate_h = max(H, panel_h + 2 * corner_margin)
+    else:
+        plate_w, plate_h = W, H
+    outer_w = plate_w + 2 * margin
+    outer_h = plate_h + 2 * margin
     clip = (
-        f'<clipPath id="plate-clip"><rect x="0" y="0" width="{W:.1f}" height="{H:.1f}" '
+        f'<clipPath id="plate-clip"><rect x="0" y="0" width="{plate_w:.1f}" height="{plate_h:.1f}" '
         f'rx="{radius}" ry="{radius}"/></clipPath>'
     )
     hatch = cfg.get("areas_of_control", {}).get("hatch_color", "#b03a3a")
@@ -1499,10 +1530,10 @@ def build_map(cfg: dict[str, Any]) -> str:
         "</style>"
         f'<rect width="{outer_w:.1f}" height="{outer_h:.1f}" fill="{page_color}"/>'
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
-        f'<rect x="0" y="0" width="{W:.1f}" height="{H:.1f}" rx="{radius}" ry="{radius}" '
+        f'<rect x="0" y="0" width="{plate_w:.1f}" height="{plate_h:.1f}" rx="{radius}" ry="{radius}" '
         f'fill="#ffffff" filter="url(#panel-shadow)"/>'
         f'<g clip-path="url(#plate-clip)">'
-        f'<rect width="{W:.1f}" height="{H:.1f}" fill="#ffffff"/>'
+        f'<rect width="{plate_w:.1f}" height="{plate_h:.1f}" fill="#ffffff"/>'
         f"{''.join(layers)}"
         f"</g></g>"
         f"</svg>"
@@ -1575,6 +1606,24 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
     # Fill opacity: high enough that the pastel classes read as solid territory,
     # low enough that the paper warmth and the coastline still show through.
     fill_op = float(aoc.get("fill_opacity", 0.78))
+    # How the control colour meets the terrain underneath it. A flat alpha
+    # fill averages the hillshade towards a single tone: measured on the
+    # 0.78 default, a full black-to-white relief ramp survives as 14 levels
+    # of variation, against 53 under a multiply blend — the mountains inside
+    # a controlled area effectively flatten out while the same mountains
+    # just across the border stay visible. Multiply keeps the class hue and
+    # takes its luminance from the terrain, which is the standard treatment
+    # for an areas-of-control plate and the reason relief is drawn at all.
+    #
+    # Only worth doing when there *is* relief underneath; over flat paper a
+    # multiply of a pastel is just the pastel, and alpha is more predictable.
+    has_relief = bool(cfg.get("basemap", {}).get("relief", True))
+    blend = aoc.get("blend", "multiply" if has_relief else "none")
+    fill_style = ' style="mix-blend-mode:multiply"' if blend == "multiply" else ""
+    # Under multiply the alpha is what keeps a dark valley from dragging the
+    # pastel down to mud; the two work together rather than either alone.
+    if blend == "multiply":
+        fill_op = float(aoc.get("fill_opacity", 0.88))
     W, H = vp["width"], vp["height"]
 
     zones: list[dict[str, Any]] = []
@@ -1601,7 +1650,7 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
         is_contested = cat in contested
         fills.append(
             f'<path class="hit" tabindex="0" d="{d}" fill="{color}" fill-opacity="{fill_op:.2f}" '
-            f'stroke="{color}" stroke-width="0.7" stroke-opacity="0.95"/>'
+            f'stroke="{color}" stroke-width="0.7" stroke-opacity="0.95"{fill_style}/>'
         )
         if is_contested:
             fills.append(f'<path d="{d}" fill="url(#hatch-contested)"/>')
@@ -1665,7 +1714,15 @@ def _frontiers_layer(
     if fr.get("show", True) is False:
         return '<g id="frontiers"></g>'
     ts = vp["ts"]
-    color = fr.get("color", "#b7bbc0")
+    # A frontier now rides *over* the control fills (see layer 4a), so it has
+    # to hold its own against a saturated pastel rather than a beige paper.
+    # Measured with sprezzature-colors against the three surfaces this line
+    # crosses on a typical plate, the old #b7bbc0 scored 1.51 on paper, 1.33
+    # on the government blue and **1.05** on the occupied pink — which is to
+    # say it stopped existing exactly where the map is most read. #5c636b is
+    # the lightest value clearing 3:1 on all three (WCAG 1.4.11, non-text
+    # contrast) while staying plainly subordinate to the near-black front line.
+    color = fr.get("color", "#5c636b")
     do_label = fr.get("label_neighbours", True)
     focus_raw = fr.get("focus", [])
     focus = {focus_raw.lower()} if isinstance(focus_raw, str) else {n.lower() for n in focus_raw}
@@ -2140,8 +2197,38 @@ def _attribution_layer(
     )
 
 
+def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, float]:
+    """Return ``(panel_w, panel_h, corner_margin)`` for the legend card.
+
+    Factored out of :func:`_legend_layer` so :func:`build_map` can also size
+    the extra canvas column an ``"outside"`` legend needs, without
+    duplicating the row-counting logic (and risking the two drifting apart).
+    """
+    aoc = cfg.get("areas_of_control", {})
+    palette = aoc.get("palette", {})
+    if not palette:
+        return 0.0, 0.0, 22 * ts
+    rows = palette.items()
+    markers = cfg.get("marker_legend", [])
+    front = cfg.get("front", {})
+    show_front = bool(front.get("line") and front.get("legend", True))
+    footer = cfg.get("legend_footer")
+    pad = 15 * ts
+    row_h = 25 * ts
+    panel_w = 262 * ts
+    # Count only rows actually drawn below: the marker section's hairline
+    # divider tucks between rows and needs no row of its own (a former +1
+    # here left a blank row's worth of dead space above the footer).
+    extra = len(markers) + (1 if show_front else 0)
+    n_rows = len(list(rows)) + extra
+    foot_h = 30 * ts if footer else 0
+    panel_h = pad * 2 + 24 * ts + row_h * n_rows + foot_h
+    corner_margin = 22 * ts
+    return panel_w, panel_h, corner_margin
+
+
 def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
-    """Return a floating legend card: a swatch per class, marker key, source line.
+    """Return the legend card: a swatch per class, marker key, source line.
 
     Swatches are rounded squares (a filled-territory cue, unlike a point dot), a
     contested class also carries the diagonal hatch so the legend mirrors the map
@@ -2149,15 +2236,20 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     A footer sets the as-of / provenance line so the plate is self-describing.
 
     ``cfg["legend_position"]`` (``"bottom-right"`` by default, matching every
-    plate built before this option existed) picks which corner the card
-    floats in -- ``"bottom-left"``, ``"top-left"`` and ``"top-right"`` are
-    also accepted. The default corner is not always the right one: on a
-    real analysis map a labelled city or a stretch of occupied territory
-    can sit exactly where a fixed bottom-right card would land (found by
-    rendering the bundled Ukraine example: Mariupol, a real city this
-    product exists to let an analyst locate, was fully hidden behind the
-    legend), so the caller who spots that collision needs a way out that
-    does not require moving the underlying map data.
+    plate built before this option existed) picks where the card goes --
+    ``"bottom-left"``, ``"top-left"`` and ``"top-right"`` float it over a
+    corner of the map itself, same as before. The default corner is not
+    always the right one: on a real analysis map a labelled city or a
+    stretch of occupied territory can sit exactly where a fixed
+    bottom-right card would land (found by rendering the bundled Ukraine
+    example: Mariupol, a real city this product exists to let an analyst
+    locate, was fully hidden behind the legend).
+
+    ``"right"`` avoids that class of collision entirely: it moves the card
+    off the map altogether, into a dedicated column :func:`build_map` adds
+    to the right of the plate (see its ``legend_col_w`` handling), so the
+    legend can never cover map content no matter what the underlying data
+    looks like.
     """
     aoc = cfg.get("areas_of_control", {})
     palette = aoc.get("palette", {})
@@ -2173,21 +2265,25 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     footer = cfg.get("legend_footer")
     pad = 15 * ts
     row_h = 25 * ts
-    panel_w = 262 * ts
     header_fs = 12.5 * ts
     row_fs = 12.5 * ts
     sw = 15 * ts  # swatch side
-    # Count only rows actually drawn below: the marker section's hairline
-    # divider tucks between rows and needs no row of its own (a former +1
-    # here left a blank row's worth of dead space above the footer).
-    extra = len(markers) + (1 if show_front else 0)
-    n_rows = len(rows) + extra
-    foot_h = 30 * ts if footer else 0
-    panel_h = pad * 2 + 24 * ts + row_h * n_rows + foot_h
-    corner_margin = 22 * ts
+    panel_w, panel_h, corner_margin = _legend_panel_dims(cfg, ts)
     position = str(cfg.get("legend_position", "bottom-right"))
-    px = corner_margin if position in ("bottom-left", "top-left") else W - panel_w - corner_margin
-    py = corner_margin if position in ("top-left", "top-right") else H - panel_h - corner_margin
+    if position == "right":
+        px = W + corner_margin
+        py = corner_margin
+    else:
+        px = (
+            corner_margin
+            if position in ("bottom-left", "top-left")
+            else W - panel_w - corner_margin
+        )
+        py = (
+            corner_margin
+            if position in ("top-left", "top-right")
+            else H - panel_h - corner_margin
+        )
     tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
@@ -2354,12 +2450,22 @@ def main(argv: list[str] | None = None) -> int:
     out.write_text(svg)
     print(f"wrote {out}  ({out.stat().st_size // 1024} KB)")
     if args.render:
-        import subprocess
+        # Was: shell out to render_diagram.py, a script that lives in
+        # sprezzature-figures and has never existed in this repository. With
+        # ``check=False`` the failure was swallowed and the line below printed
+        # "rendered <path>" for a PNG that was never written — the command
+        # reported success for work it had not done. This repo owns a
+        # rasteriser (``_render._svg_to_png_bytes``, resvg via Rust); calling
+        # it directly removes the cross-repo dependency and the false report.
+        from _render import _svg_to_png_bytes
 
         png = out.with_suffix(".png")
-        script = Path(__file__).with_name("render_diagram.py")
-        subprocess.run(["python3", str(script), str(out), "--out", str(png)], check=False)
-        print(f"rendered {png}")
+        try:
+            png.write_bytes(_svg_to_png_bytes(svg))
+        except Exception as exc:  # a rasteriser fault must not look like a success
+            print(f"could not rasterise {png}: {exc}", file=sys.stderr)
+            return 1
+        print(f"rendered {png}  ({png.stat().st_size // 1024} KB)")
     return 0
 
 
