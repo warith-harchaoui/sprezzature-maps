@@ -218,3 +218,55 @@ def test_the_name_does_not_overclaim() -> None:
     data = json.loads(Path(module._RIVERS_GEOJSON).read_text(encoding="utf-8"))
     props = set(data["features"][0]["properties"])
     assert props == {"name", "scalerank"}, f"river attributes changed: {sorted(props)}"
+
+
+# ── caption ───────────────────────────────────────────────────────────────
+
+
+def test_caption_is_off_unless_asked() -> None:
+    """An existing plate must not suddenly grow a footer under it."""
+    module = _msm()
+    # Nothing at all, not an empty group: an existing plate has to come out
+    # of this byte-for-byte as it did before, and 20 bytes of empty <g> is
+    # still a difference.
+    assert module._caption_block({}, {"ts": 1.0, "width": 100, "height": 100}) == ""
+    assert module._caption_height({}, 1.0) == 0.0
+
+
+def test_caption_refuses_to_be_empty() -> None:
+    """
+    A caption with nothing in it is worse than none.
+
+    It looks like provenance, occupies the space provenance would, and says
+    nothing — which is how a plate ends up claiming a rigour it does not have.
+    """
+    import pytest
+
+    module = _msm()
+    with pytest.raises(ValueError, match="needs at least one"):
+        module._caption_block({"caption": "full"}, {"ts": 1.0, "width": 100, "height": 100})
+
+
+def test_caption_reserves_room_for_itself() -> None:
+    """
+    The scale bar and the caption share the bottom-left corner.
+
+    They landed on top of each other the first time: legible text over a
+    legible bar, both unreadable. The height is what lets the furniture
+    move out of the way.
+    """
+    module = _msm()
+    cfg = {"caption": "full", "method": "m", "source": "s", "as_of": "a"}
+    assert module._caption_height(cfg, 1.0) > 40
+    assert module._caption_height({"caption": "full", "method": "m"}, 1.0) < (
+        module._caption_height(cfg, 1.0)
+    )
+
+
+def test_unknown_caption_mode_is_refused() -> None:
+    """A typo must not silently render nothing."""
+    import pytest
+
+    module = _msm()
+    with pytest.raises(ValueError, match="unknown caption"):
+        module._caption_block({"caption": "short"}, {"ts": 1.0, "width": 100, "height": 100})
