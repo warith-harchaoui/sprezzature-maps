@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One builder for every shipped situation-map example, so there is a single source of truth.
 
-Author: Warith Harchaoui
+Author: Warith HARCHAOUI
 
 Generates every example configuration for ``make_situation_map.py`` the
 same consistent way, so the shipped example gallery looks uniform and can

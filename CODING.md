@@ -75,7 +75,7 @@ Module docstring: what this map is, when to use it.
 
 Author
 ------
-Warith Harchaoui, Ph.D. <warith.harchaoui@gmail.com>
+Warith HARCHAOUI, Ph.D. <warith.harchaoui@gmail.com>
 """
 
 from __future__ import annotations

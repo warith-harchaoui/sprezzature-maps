@@ -12,7 +12,7 @@ external files) rather than keeping a second copy of that code.
 
 Author
 ------
-`Warith Harchaoui, Ph.D. <https://www.linkedin.com/in/warith-harchaoui/>`_
+`Warith HARCHAOUI, Ph.D. <https://www.linkedin.com/in/warith-harchaoui/>`_
 """
 
 from __future__ import annotations
