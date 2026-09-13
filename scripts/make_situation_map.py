@@ -92,7 +92,7 @@ import sys
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
@@ -181,7 +181,7 @@ _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
 #: sea to separate at a glance; and the coastline is a light hairline rather
 #: than a dark one, because on a dark plate the shore is where light is, not
 #: where ink is.
-_PLATES: Dict[str, Dict[str, str]] = {
+_PLATES: dict[str, dict[str, str]] = {
     "day": {
         "plate": "#ffffff",
         "panel": "#ffffff",
@@ -1654,7 +1654,7 @@ def build_map(cfg: dict[str, Any]) -> str:
 
 def _bathymetry_layer(
     land_proj: Any, sea_proj: Any, vp: dict[str, Any], bath: dict[str, Any],
-    palette: "Dict[str, Any] | None" = None,
+    palette: dict[str, Any] | None = None,
 ) -> str:
     """Return concentric depth-contour halos buffered out from the coast into the sea."""
     palette = palette or _PLATES["day"]
@@ -2023,7 +2023,7 @@ def _admin2_borders_layer(
 #: ``scalerank``, which is a cartographic prominence rank. Sizing by it
 #: gives the same read at a glance, and claiming it measured water would be
 #: a lie a reader could not check.
-_RIVER_WIDTHS: Dict[int, float] = {1: 3.0, 2: 2.3, 3: 1.8, 4: 1.4, 5: 1.1, 6: 0.85}
+_RIVER_WIDTHS: dict[int, float] = {1: 3.0, 2: 2.3, 3: 1.8, 4: 1.4, 5: 1.1, 6: 0.85}
 
 
 def _river_width(rank: int, mode: str, ts: float) -> float:
@@ -2359,7 +2359,7 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     leading = 11.5 * ts
     top = H - (len(lines) * leading) - 10 * ts
     out = [
-        f'<g id="caption">',
+        '<g id="caption">',
         f'<line x1="{26 * ts:.1f}" y1="{top - 7 * ts:.1f}" x2="{W - 26 * ts:.1f}" '
         f'y2="{top - 7 * ts:.1f}" stroke="{palette["panel_edge"]}" stroke-width="1"/>',
     ]
@@ -2440,7 +2440,7 @@ def _attribution_layer(
     )
 
 
-def _pal(cfg: dict[str, Any]) -> Dict[str, str]:
+def _pal(cfg: dict[str, Any]) -> dict[str, str]:
     """The resolved plate palette, or the day plate for a caller that never set one."""
     return cfg.get("_plate", _PLATES["day"])
 
@@ -2540,7 +2540,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
         f'rx="{9 * ts:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
         f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-        f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)['chrome_ink']}" letter-spacing="1.2">'
+        f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" letter-spacing="1.2">'
         f"AREAS OF CONTROL</text>",
     ]
     fill_op = float(aoc.get("fill_opacity", 0.78))
@@ -2559,7 +2559,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             )
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
-            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="{_pal(cfg)['legend_ink']}">{_esc(name)}</text>'
+            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="{_pal(cfg)["legend_ink"]}">{_esc(name)}</text>'
         )
     idx = len(rows)
     # Front-line key row.
@@ -2572,7 +2572,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         )
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{row_fs:.1f}" fill="{_pal(cfg)['legend_ink']}">{_esc(front.get("legend_label", "Approx. front line"))}</text>'
+            f'font-size="{row_fs:.1f}" fill="{_pal(cfg)["legend_ink"]}">{_esc(front.get("legend_label", "Approx. front line"))}</text>'
         )
         idx += 1
     # Marker key, separated by a hairline divider.

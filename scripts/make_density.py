@@ -51,8 +51,8 @@ from __future__ import annotations
 
 import math
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -65,7 +65,7 @@ DEFAULT_BINS: int = 120
 #: Ten steps from the plate to near-white. Sequential and luminance-ordered,
 #: so the ramp survives greyscale and colour blindness: the reading is
 #: carried by lightness, and hue only makes it pleasant.
-RAMP: Tuple[str, ...] = (
+RAMP: tuple[str, ...] = (
     "#0b1b3a", "#12306b", "#1a4a9c", "#2168c8", "#3b8ae0",
     "#63a9ee", "#8fc4f5", "#b6dcfa", "#d8eefd", "#f2f9ff",
 )
@@ -83,7 +83,7 @@ SUBTLE: str = "#8f9bab"
 _OVERLAP: float = 0.6
 
 
-def demo_points(n: int = 400_000, seed: int = 20260912) -> List[Tuple[float, float]]:
+def demo_points(n: int = 400_000, seed: int = 20260912) -> list[tuple[float, float]]:
     """
     A synthetic strike field over the continental United States.
 
@@ -132,7 +132,7 @@ def demo_points(n: int = 400_000, seed: int = 20260912) -> List[Tuple[float, flo
 _MASK_NX: int = 480
 
 #: ``(west, south, east, north, nx, ny, bits)`` for the cached mask.
-_MASK: "Tuple[float, float, float, float, int, int, List[bool]] | None" = None
+_MASK: tuple[float, float, float, float, int, int, list[bool]] | None = None
 
 
 def _on_land(lon: float, lat: float) -> bool:
@@ -154,7 +154,7 @@ def _on_land(lon: float, lat: float) -> bool:
     return bits[j * nx + i]
 
 
-def _land_mask() -> "Tuple[float, float, float, float, int, int, List[bool]]":
+def _land_mask() -> tuple[float, float, float, float, int, int, list[bool]]:
     """Build (once) a boolean grid of land over the demo window."""
     global _MASK
     if _MASK is not None:
@@ -170,7 +170,7 @@ def _land_mask() -> "Tuple[float, float, float, float, int, int, List[bool]]":
          max(p[0] for p in r), max(p[1] for p in r), r)
         for r in rings
     ]
-    bits: List[bool] = [False] * (nx * ny)
+    bits: list[bool] = [False] * (nx * ny)
     for j in range(ny):
         lat = south + (j + 0.5) / ny * (north - south)
         row = j * nx
@@ -184,7 +184,7 @@ def _land_mask() -> "Tuple[float, float, float, float, int, int, List[bool]]":
     return _MASK
 
 
-def _us_rings() -> List[List[Tuple[float, float]]]:
+def _us_rings() -> list[list[tuple[float, float]]]:
     """The US outline, loaded once and kept."""
     global _US_RINGS
     if _US_RINGS is None:
@@ -202,10 +202,10 @@ def _us_rings() -> List[List[Tuple[float, float]]]:
 
 #: Cache for :func:`_us_rings`; the demo runs point-in-polygon a few hundred
 #: thousand times and reloading the atlas each call would dominate.
-_US_RINGS: "List[List[Tuple[float, float]]] | None" = None
+_US_RINGS: list[list[tuple[float, float]]] | None = None
 
 
-def _point_in_ring(x: float, y: float, ring: Sequence[Tuple[float, float]]) -> bool:
+def _point_in_ring(x: float, y: float, ring: Sequence[tuple[float, float]]) -> bool:
     """Ray-casting point-in-polygon, the textbook one."""
     inside = False
     n = len(ring)
@@ -220,10 +220,10 @@ def _point_in_ring(x: float, y: float, ring: Sequence[Tuple[float, float]]) -> b
 
 
 def bin_points(
-    points: Sequence[Tuple[float, float]],
-    bbox: Tuple[float, float, float, float],
+    points: Sequence[tuple[float, float]],
+    bbox: tuple[float, float, float, float],
     bins: int,
-) -> Tuple[List[List[int]], int, int, int]:
+) -> tuple[list[list[int]], int, int, int]:
     """
     Count points into a grid.
 
@@ -267,9 +267,9 @@ def bin_points(
 
 
 def build_svg(
-    points: "Sequence[Tuple[float, float]] | None" = None,
+    points: Sequence[tuple[float, float]] | None = None,
     *,
-    bbox: Tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0),
+    bbox: tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0),
     bins: int = DEFAULT_BINS,
     width: int = 1000,
     title: str = "Where the lightning fell",
@@ -320,7 +320,7 @@ def build_svg(
 
     # One bucket per level; every cell of a level becomes one subpath, so the
     # whole field is as many <path> elements as there are levels.
-    buckets: Dict[int, List[str]] = {}
+    buckets: dict[int, list[str]] = {}
     for i in range(nx):
         column = grid[i]
         for j in range(ny):
@@ -336,7 +336,7 @@ def build_svg(
                 f"M{x:.1f} {y:.1f}h{cw + _OVERLAP:.1f}v{ch + _OVERLAP:.1f}h-{cw + _OVERLAP:.1f}z"
             )
 
-    out: List[str] = [
+    out: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{plate_h}" '
         f'viewBox="0 0 {width} {plate_h}" role="img" aria-labelledby="dens-title dens-desc" '
         f'shape-rendering="crispEdges">',
@@ -365,7 +365,7 @@ def build_svg(
     return "\n".join(out)
 
 
-def _ramp_legend(x: float, y: float, peak: int) -> List[str]:
+def _ramp_legend(x: float, y: float, peak: int) -> list[str]:
     """
     A bare gradient bar with two words under it.
 
@@ -373,7 +373,7 @@ def _ramp_legend(x: float, y: float, peak: int) -> List[str]:
     supports is "more here than there", and printing counts invites a
     precision the binning does not have.
     """
-    parts: List[str] = []
+    parts: list[str] = []
     step = 16
     for k, colour in enumerate(RAMP):
         parts.append(
