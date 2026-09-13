@@ -148,9 +148,16 @@ class SituationMapRequest(BaseModel):
     )
 
 
-@app.get("/health", tags=["meta"], operation_id="health")
+@app.get(
+    "/health",
+    tags=["meta"],
+    operation_id="health",
+    summary="Check that this map server is up",
+)
 def health() -> dict:
     """Liveness probe -- no dependency check, just proves the app is up.
+
+    Call this only to diagnose a connection problem.
 
     Returns
     -------
@@ -160,9 +167,21 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.get("/v1/kinds", tags=["meta"], operation_id="list_kinds")
+@app.get(
+    "/v1/kinds",
+    tags=["meta"],
+    operation_id="list_kinds",
+    summary="List the two kinds of map this server draws",
+)
 def kinds() -> list[str]:
     """List the map kinds this repo carries.
+
+    Two, and the distinction is the whole routing decision: a **choropleth**
+    shades real territories by a value ("cases per country", "turnout by
+    département"), a **situation map** shows who holds what ground, with
+    fronts and areas of control. Anything else map-shaped -- binned grids,
+    hex maps, dot density, spike maps -- belongs to sprezzature-figures,
+    which plots points and cells rather than real coastlines.
 
     Returns
     -------
@@ -238,9 +257,22 @@ def _render_to_response(make_fn: Any, kwargs: dict[str, Any], fmt: str, stem: st
     return Response(content=content, media_type=_MEDIA_TYPES[fmt])
 
 
-@app.post("/v1/choropleth", tags=["actions"], operation_id="render_choropleth")
+@app.post(
+    "/v1/choropleth",
+    tags=["actions"],
+    operation_id="render_choropleth",
+    summary="Shade real territories by a value",
+)
 def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response:
     """Render a choropleth map and return the file bytes.
+
+    This is the tool for "map this by country", "colour the regions by
+    value", "a heat map of Europe", « une carte par département ». Real
+    coastlines and a real projection (Natural Earth, auto-centred Lambert
+    conformal conic) -- not a schematic grid.
+
+    Every field is optional: send none and you get the demo map, which is the
+    quick way to show someone the format before committing data to it.
 
     Parameters
     ----------
@@ -267,9 +299,24 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
     return _render_to_response(make_choropleth, kwargs, body.format, "choropleth")
 
 
-@app.post("/v1/situation-map", tags=["actions"], operation_id="render_situation_map")
+@app.post(
+    "/v1/situation-map",
+    tags=["actions"],
+    operation_id="render_situation_map",
+    summary="Draw who controls which ground, with front lines",
+)
 def render_situation_map(body: SituationMapRequest = SituationMapRequest()) -> Response:
     """Render a situation map and return the file bytes.
+
+    This is the tool for "areas of control", "who holds what", "a conflict
+    map", "front line", « carte de situation », « qui contrôle quoi ». A
+    professional-desk plate: national outline, controlled zones, fronts,
+    labelled legend.
+
+    It draws exactly what you send it. It has no view on whether a claim of
+    control is true, and a map that looks authoritative is read as
+    authoritative -- so say where the underlying assessment came from when
+    you pass one on.
 
     Parameters
     ----------

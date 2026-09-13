@@ -12,6 +12,8 @@ Author
 
 from __future__ import annotations
 
+import contextlib
+
 # ── vendored assets ───────────────────────────────────────────────────────
 
 
@@ -160,10 +162,11 @@ def test_a_named_plate_overrides_config_colours_audibly() -> None:
     }
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        try:
+        # The render may need assets this test does not provide; the warning
+        # under test fires before that, so a failure here is not a failure of
+        # the thing being asserted.
+        with contextlib.suppress(Exception):
             module.build_map(cfg)
-        except Exception:
-            pass  # the render may need assets; the warning fires before that
     assert any("overrides" in str(w.message) for w in caught), [str(w.message) for w in caught]
 
 
