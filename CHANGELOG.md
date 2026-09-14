@@ -2,20 +2,60 @@
 
 All notable changes to sprezzature-maps are documented here.
 
-## [Unreleased] - 2026-09-11
+## [0.2.0] - 2026-09-14: four modes, a provenance block, and a first publication
+
+### Added
+
+- **A night plate**, as a mode and nothing more — the same geography, read in
+  the dark.
+- **Rivers tapered by prominence**, opt-in. A river that matters is drawn
+  thicker than one that does not, which is the only reason to draw rivers on a
+  situation plate at all.
+- **An accumulation map** (`scripts/make_density.py`), where the data draws the
+  geography: point events binned to a luminous field, no coastline, no border,
+  no graticule. The United States appears because events fell on it. Vector,
+  binned, one path per level — measured rather than guessed: on 381,406 points
+  a rect per cell costs 972 KB, quantising the ramp and merging each level into
+  one path lands at ~100 KB in ten paths, and past ~260 bins the field becomes
+  grain, so the visual limit arrives before the size limit.
+- **A provenance caption the plate carries when it travels alone.** `source`,
+  `as_of` and `method` are printed on the map itself, because a plate that
+  looks like an intelligence product gets separated from the message that
+  introduced it.
+
+### Fixed
+
+- **`make_situation_map.py` never parsed on Python 3.10 or 3.11.** It used
+  PEP 701 f-strings, which are 3.12+, while `requires-python` says `>=3.10`.
+  Invisible because CI only ran 3.12; the matrix covers 3.10, 3.11 and 3.12 now.
+- **The dependency on `sprezzature-figures` was a direct git URL**, which PyPI
+  refuses outright — a 400 on upload, not a warning. It is a version
+  constraint now.
+- **`…-mcp --help` started the server instead of answering.** Argument parsing
+  before anything binds, `--host` / `--port` options, and the default host
+  moved from `0.0.0.0` to `127.0.0.1`.
+- **Every MCP tool carried a summary FastAPI invented from the function name**
+  — the headline "Kinds" told an agent nothing. Written by hand now, with two
+  tests that fail the build if a summary or description regresses.
+- Three README links that would have 404'd on PyPI, caught before the first
+  publication rather than after it.
 
 ### Changed
 
+- **`TRIGGERS.md` routes on data attached to places**, not on the word "map",
+  and names the trap explicitly: a hex map or dot density belongs to
+  `sprezzature-figures`, because it is a layout convention rather than
+  geography.
 - No charting library is named anywhere in this repository any more. The
-  package description, both READMEs, `_render.py`, `make_choropleth.py`
-  and the two relief-figure scripts described what this code *does not*
-  use — a migration note that outlived the migration. Each now states
-  the positive fact: every line is authored as SVG directly, and the
-  relief panels are composited with Pillow. The competitive-landscape
-  documents (`LANDSCAPE.md` / `PAYSAGE.md`) keep their names: comparing
-  against the alternatives is what they are for.
+  package description, both READMEs, `_render.py`, `make_choropleth.py` and the
+  two relief-figure scripts described what this code *does not* use — a
+  migration note that outlived the migration. Each now states the positive
+  fact: every line is authored as SVG directly, and the relief panels are
+  composited with Pillow. `LANDSCAPE.md` / `PAYSAGE.md` keep their names:
+  comparing against the alternatives is what they are for.
 
-## [Unreleased] - 2026-08-20
+## [0.1.1] - 2026-08-20: maintenance
+
 
 Maintenance pass: no behavior change to the two generators or any of
 their five access surfaces.

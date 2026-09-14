@@ -1,3 +1,47 @@
+Metadata-Version: 2.4
+Name: sprezzature-maps
+Version: 0.2.0
+Summary: Hand-authored SVG world maps for the sprezzature stack: choropleth and layered areas-of-control situation maps, every line authored as SVG directly. Depends on sprezzature-figures for shared rendering primitives.
+Author-email: Warith HARCHAOUI <warith.harchaoui@gmail.com>
+License-Expression: BSD-3-Clause
+Project-URL: Homepage, https://harchaoui.org/warith/sprezzature/
+Project-URL: Repository, https://github.com/warith-harchaoui/sprezzature-maps
+Keywords: maps,choropleth,situation-map,geospatial,svg,hand-authored-svg,sprezzature
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Scientific/Engineering :: Visualization
+Classifier: Topic :: Scientific/Engineering :: GIS
+Requires-Python: <3.14,>=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: sprezzature-figures>=2.0.0
+Requires-Dist: resvg-py>=0.3
+Requires-Dist: pillow>=10.0
+Requires-Dist: pyproj>=3.6
+Requires-Dist: shapely>=2.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: numpy>=1.24
+Provides-Extra: cli
+Requires-Dist: click>=8.1; extra == "cli"
+Provides-Extra: api
+Requires-Dist: fastapi>=0.115; extra == "api"
+Requires-Dist: uvicorn[standard]>=0.30; extra == "api"
+Provides-Extra: mcp
+Requires-Dist: fastapi-mcp>=0.3; extra == "mcp"
+Requires-Dist: mcp<2.0; extra == "mcp"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: httpx>=0.27; extra == "dev"
+Dynamic: license-file
+
 # sprezzature-maps
 
 [🇫🇷 LISEZMOI.md](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/LISEZMOI.md) · 🇬🇧 README.md
