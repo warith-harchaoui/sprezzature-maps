@@ -2,6 +2,46 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.3.0] - 2026-09-14: the choropleth can finally be classed, and says how
+
+### Added
+
+- **`classes` and `method` on the choropleth, across all five surfaces.** The
+  generator had one rule for turning numbers into colours: stretch the ramp
+  linearly from the smallest value to the largest. That is unclassed equal
+  interval, and cartography is unanimous that it is the weakest choice for the
+  right-skewed data indicators are made of. Measured rather than asserted: on
+  GDP per head for twenty countries it puts nine of them in the bottom quarter
+  of the ramp, and of the pairs a five-class quantile separates, four come out
+  closer than the eye can resolve — India, at ten times Burundi's figure, lands
+  0.0115 apart in OKLab where 0.02 is the threshold.
+
+  Four methods, because no default is right for every dataset:
+
+  - `quantile` — equal count per class. Supports ranking; flattens skew by
+    construction, and two very different values can share a class.
+  - `equal` — equal width. Honest about the number line, and the failure above
+    on skewed data. Right when the classes must mean something outside the
+    data.
+  - `jenks` — Fisher–Jenks natural breaks, the exact dynamic program rather
+    than the iterative approximation often shipped under that name. Verified
+    against brute-force optimal partitions. Shows the groupings the data has.
+  - `headtail` — head/tail breaks (Jiang 2013) for heavy tails; the class count
+    comes from the data.
+
+  **The legend prints the method and the boundaries.** That is the half that
+  makes classification honest rather than merely prettier: the same values
+  classed four ways tell four stories, so a map that does not say how it was
+  classed is asking to be misread by a reader with no way to know it.
+
+  `classes=None` stays the default and renders byte for byte what it always
+  did. Classing is a decision, and this package does not make editorial
+  decisions on the caller's behalf — it makes them available and names them.
+
+- `scripts/_classify.py`, standard library only, and `tests/test_classify.py`,
+  which pins each method's defining property, the Jenks solver against
+  exhaustive search, and the perceptual measurement that justifies the feature.
+
 ## [0.2.0] - 2026-09-14: four modes, a provenance block, and a first publication
 
 ### Added

@@ -129,6 +129,30 @@ class ChoroplethRequest(BaseModel):
         description="Force the diverging ramp on/off. Omit to auto-detect from the data's sign.",
     )
     relief: bool = Field(default=True, description="Composite the vendored hillshade texture.")
+    classes: int | None = Field(
+        default=None,
+        ge=2,
+        le=12,
+        description=(
+            "Class the values into this many colour classes instead of stretching "
+            "the ramp linearly from min to max. Reach for it whenever the values "
+            "are skewed -- income, density, counts, GDP per head -- because the "
+            "unclassed default then puts most territories in the bottom of the "
+            "ramp and leaves very different numbers looking identical. Omit for "
+            "the unclassed ramp."
+        ),
+    )
+    method: Literal["quantile", "equal", "jenks", "headtail"] = Field(
+        default="quantile",
+        description=(
+            "Where to put the class boundaries, used only with `classes`. "
+            "`quantile` gives every class the same count and supports ranked "
+            "comparison. `equal` gives every class the same width and is poor on "
+            "skewed data. `jenks` finds the groupings the data itself suggests. "
+            "`headtail` suits heavy tails. No default is right for every dataset, "
+            "so the legend prints whichever was used."
+        ),
+    )
     format: Literal["svg", "png", "pdf", "jpg"] = Field(
         default="svg", description="Output format; picks the response Content-Type."
     )
@@ -289,6 +313,8 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
         "height": body.height,
         "diverging": body.diverging,
         "relief": body.relief,
+        "classes": body.classes,
+        "method": body.method,
     }
     if body.data is not None:
         kwargs["data"] = [row.model_dump() for row in body.data]

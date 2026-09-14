@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # In the source tree the generators live in scripts/; once installed they
 # ship (collision-free) as the sibling package sprezzature_maps_scripts/,
