@@ -32,13 +32,22 @@ schématiques par points ou par grille restés dans `sprezzature-figures`
 | `choropleth` (une carte où chaque région est remplie d'une couleur qui code un nombre, la carte classique du « quel pays a le score le plus élevé ») | `scripts/make_choropleth.py` | Une carte du monde, une couleur de remplissage par pays sur une seule échelle allant du pâle au bleu marine ; les pays sans donnée retombent sur un gris neutre. |
 | `situation_map` | `scripts/make_situation_map.py` | Une planche en couches « qui contrôle quoi » pour n'importe quelle région : la carte se recentre automatiquement sur cette région via une projection conique conforme de Lambert (voir plus bas), trace de vrais contours nationaux depuis un fond de carte Natural Earth intégré, ombre le plancher océanique près des côtes, remplit les zones par catégorie en couleurs pastel, marque les points chauds, et ajoute une échelle en deux unités à la fois (kilomètres et miles). |
 
-## Installation (locale, avant publication sur PyPI)
+## Installation
 
-Ni `sprezzature-maps` ni `sprezzature-figures` ne sont encore publiés
-sur PyPI (l'index officiel des paquets Python, celui que `pip install
-<nom>` interroge par défaut). Installez les deux en mode éditable, l'un
-à côté de l'autre, pour que toute modification locale de l'un ou
-l'autre prenne effet immédiatement sans réinstallation :
+```bash
+pip install sprezzature-maps                 # les deux générateurs
+pip install 'sprezzature-maps[api,mcp]'      # plus l'API HTTP et le serveur MCP
+```
+
+`sprezzature-maps` dépend de `sprezzature-figures` pour les primitives de rendu
+que les deux produits partagent (intégrer les polices directement dans le
+fichier SVG pour qu'il ait le même rendu sur une machine sans ces polices
+installées, et choisir entre un SVG autonome et un SVG qui renvoie vers des
+fichiers externes). Il réutilise ce code plutôt que d'en garder sa propre
+copie, et pip l'installe pour vous.
+
+Pour travailler sur l'un ou l'autre, installez les deux en mode éditable, côte
+à côte, pour que toute modification locale prenne effet sans réinstallation :
 
 ```bash
 git clone https://github.com/warith-harchaoui/sprezzature-figures ~/sprezzature-figures
@@ -47,13 +56,6 @@ pip install -e ~/sprezzature-figures
 git clone https://github.com/warith-harchaoui/sprezzature-maps ~/sprezzature-maps
 pip install -e ~/sprezzature-maps
 ```
-
-`sprezzature-maps` dépend de `sprezzature-figures` pour les
-primitives de rendu que les deux produits partagent (intégrer les
-polices directement dans le fichier SVG pour qu'il ait le même rendu
-sur une machine sans ces polices installées, et choisir entre un SVG
-autonome et un SVG qui renvoie vers des fichiers externes). Il
-réutilise ce code plutôt que d'en garder sa propre copie.
 
 ## Utilisation
 
@@ -95,7 +97,7 @@ au vert (lint, tests et doctests à chaque push et pull request vers
 `main` ; voir `.github/workflows/ci.yml`) : `pytest` passe, les deux
 types de carte se rendent depuis leurs données de démonstration
 intégrées, et la ligne de commande produit de vrais fichiers SVG pour
-les deux. Pas encore de publication sur PyPI, pas encore de page de
+les deux. Pas encore de page de
 catalogue façon FIGURES.md (avec seulement deux types pour l'instant,
 ce LISEZMOI en tient lieu).
 

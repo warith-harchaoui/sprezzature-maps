@@ -30,12 +30,21 @@ which plot points or grid cells rather than real coastlines:
 | `choropleth` (a map where each region is filled with a colour that encodes a number, the classic "which country scores highest" map) | `scripts/make_choropleth.py` | A world map, one fill colour per country on a single pale-to-navy blue scale; countries with no data fall back to neutral grey. |
 | `situation_map` | `scripts/make_situation_map.py` | A layered "who controls what" plate for any region: the map auto-centres itself on that region using a Lambert conformal conic projection (see below), draws real national outlines from a bundled Natural Earth base map, shades the sea floor near the coast, fills zones by category in pastel colours, marks flashpoints, and adds a scale bar in two units at once (kilometres and miles). |
 
-## Install (local, pre-PyPI)
+## Install
 
-Neither `sprezzature-maps` nor `sprezzature-figures` is published on PyPI
-(the Python Package Index, the standard `pip install <name>` registry)
-yet. Install both editable, side by side, so local edits to either take
-effect immediately without reinstalling:
+```bash
+pip install sprezzature-maps                 # the two generators
+pip install 'sprezzature-maps[api,mcp]'      # plus the HTTP API and the MCP server
+```
+
+`sprezzature-maps` depends on `sprezzature-figures` for rendering primitives
+the two products share (embedding fonts inside the SVG file so it looks the
+same on a machine without those fonts installed, and choosing between a
+self-contained SVG and one that links to external files). It reuses that code
+rather than keeping its own copy, and pip pulls it in for you.
+
+To work on either, install both editable side by side so local edits take
+effect without reinstalling:
 
 ```bash
 git clone https://github.com/warith-harchaoui/sprezzature-figures ~/sprezzature-figures
@@ -44,12 +53,6 @@ pip install -e ~/sprezzature-figures
 git clone https://github.com/warith-harchaoui/sprezzature-maps ~/sprezzature-maps
 pip install -e ~/sprezzature-maps
 ```
-
-`sprezzature-maps` depends on `sprezzature-figures` for rendering
-primitives the two products share (embedding fonts inside the SVG file
-so it looks the same on a machine without those fonts installed, and
-choosing between a self-contained SVG and one that links to external
-files). It reuses that code rather than keeping its own copy.
 
 ## Use
 
