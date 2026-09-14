@@ -56,3 +56,9 @@ demo-data/
 *.run.xml
 *.synctex.gz
 *.toc
+
+# `python -m build` unpacks the sdist beside the sources as
+# <name>-<version>/, a full second copy of the tree. pytest then collects
+# tests/test_smoke.py twice under the same module name and errors on every
+# module it touches. Never commit it.
+sprezzature_maps-*/
