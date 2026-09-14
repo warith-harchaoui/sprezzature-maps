@@ -17,7 +17,7 @@ Part of the [sprezzature](https://harchaoui.org/warith/sprezzature/) suite.
 
 ## What's here
 
-Two generators. Both draw on a real base map with a real geographic
+Three generators. Two draw on a real base map with a real geographic
 projection (a projection is the mathematical recipe that flattens the
 round Earth onto a flat image; every recipe distorts something, and the
 choice of recipe below is deliberate). That sets them apart from the
@@ -29,11 +29,12 @@ which plot points or grid cells rather than real coastlines:
 |---|---|---|
 | `choropleth` (a map where each region is filled with a colour that encodes a number, the classic "which country scores highest" map) | `scripts/make_choropleth.py` | A world map, one fill colour per country on a single pale-to-navy blue scale; countries with no data fall back to neutral grey. |
 | `situation_map` | `scripts/make_situation_map.py` | A layered "who controls what" plate for any region: the map auto-centres itself on that region using a Lambert conformal conic projection (see below), draws real national outlines from a bundled Natural Earth base map, shades the sea floor near the coast, fills zones by category in pastel colours, marks flashpoints, and adds a scale bar in two units at once (kilometres and miles). |
+| `density` (an accumulation map: where events *fell*, rather than a value per territory) | `scripts/make_density.py` | No coastline, no border, no graticule. Point events are binned into a luminous field; the land appears because events fell on it and the sea stays dark because none did, so a reader recognises the shape without being shown it. Vector, binned, one path per level. |
 
 ## Install
 
 ```bash
-pip install sprezzature-maps                 # the two generators
+pip install sprezzature-maps                 # the three generators
 pip install 'sprezzature-maps[api,mcp]'      # plus the HTTP API and the MCP server
 ```
 
@@ -78,8 +79,9 @@ Unicode-aware typesetter and its bibliography tool) into
 
 ## Why a separate repo, not a chart type in sprezzature-figures
 
-Both generators used to sit inside `sprezzature-figures`' catalogue of
-126 chart kinds. Splitting them out was a deliberate product decision:
+`choropleth` and `situation_map` used to sit inside `sprezzature-figures`'
+catalogue of 126 chart kinds (`density` was born here, after the split).
+Splitting them out was a deliberate product decision:
 Sprezzature Studio, the conversational chart editor that ships with
 `sprezzature-figures`, will not grow map support. Maps get their own,
 separate Studio once that is built. Until then, this repo is library and

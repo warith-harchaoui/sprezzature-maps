@@ -19,7 +19,7 @@ Fait partie de la suite [sprezzature](https://harchaoui.org/warith/sprezzature/)
 
 ## Ce qu'on trouve ici
 
-Deux générateurs. Tous deux s'appuient sur un vrai fond de carte avec
+Trois générateurs. Deux s'appuient sur un vrai fond de carte avec
 une vraie projection géographique (une projection est la recette
 mathématique qui aplatit la Terre ronde sur une image plate ; chaque
 recette déforme quelque chose, et le choix ci-dessous n'a rien
@@ -31,11 +31,12 @@ schématiques par points ou par grille restés dans `sprezzature-figures`
 |---|---|---|
 | `choropleth` (une carte où chaque région est remplie d'une couleur qui code un nombre, la carte classique du « quel pays a le score le plus élevé ») | `scripts/make_choropleth.py` | Une carte du monde, une couleur de remplissage par pays sur une seule échelle allant du pâle au bleu marine ; les pays sans donnée retombent sur un gris neutre. |
 | `situation_map` | `scripts/make_situation_map.py` | Une planche en couches « qui contrôle quoi » pour n'importe quelle région : la carte se recentre automatiquement sur cette région via une projection conique conforme de Lambert (voir plus bas), trace de vrais contours nationaux depuis un fond de carte Natural Earth intégré, ombre le plancher océanique près des côtes, remplit les zones par catégorie en couleurs pastel, marque les points chauds, et ajoute une échelle en deux unités à la fois (kilomètres et miles). |
+| `density` (une carte d'accumulation : *où* les événements sont tombés, plutôt qu'une valeur par territoire) | `scripts/make_density.py` | Aucun trait de côte, aucune frontière, aucun graticule. Les événements ponctuels sont agrégés en un champ lumineux ; la terre apparaît parce que des événements y sont tombés et la mer reste sombre parce qu'aucun n'y est tombé, si bien qu'un lecteur reconnaît la forme sans qu'on la lui montre. Vectoriel, agrégé, un tracé par niveau. |
 
 ## Installation
 
 ```bash
-pip install sprezzature-maps                 # les deux générateurs
+pip install sprezzature-maps                 # les trois générateurs
 pip install 'sprezzature-maps[api,mcp]'      # plus l'API HTTP et le serveur MCP
 ```
 
@@ -82,8 +83,9 @@ figures en résolution d'impression, compilé avec `xelatex`/`biber`
 
 ## Pourquoi un dépôt séparé plutôt qu'un type de graphique dans sprezzature-figures
 
-Les deux générateurs vivaient autrefois dans le catalogue de 126 types
-de graphiques de `sprezzature-figures`. Les en extraire a été une
+`choropleth` et `situation_map` vivaient autrefois dans le catalogue de
+`sprezzature-figures` (126 types à l'époque ; `density` est né ici, après
+la scission). Les en extraire a été une
 décision de produit délibérée : Sprezzature Studio, l'éditeur de
 graphiques conversationnel livré avec `sprezzature-figures`, ne gagnera
 pas le support des cartes. Les cartes auront leur propre Studio séparé,
