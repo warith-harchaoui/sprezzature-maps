@@ -219,3 +219,60 @@ def test_given_breaks_override_any_method_and_say_so() -> None:
 
     printed = re.findall(r'font-size="9" text-anchor="middle"[^>]*>([^<]+)<', svg)
     assert printed == ["5", "10", "25"], printed
+
+
+def test_no_class_straddles_zero_on_a_diverging_ramp() -> None:
+    """
+    A diverging scale exists to show which side of zero a value falls on.
+
+    A class spanning zero destroys exactly that: the class takes the colour of
+    its own centre, so a country in recession comes out the blue of growth.
+    This was not a theoretical risk — over random growth-rate data all four
+    methods produced one, quantile in roughly two thirds of cases. Zero is a
+    boundary now, and each side is classified on its own values so the method
+    still answers the question it was picked for.
+    """
+    from _classify import diverging_classify
+
+    rng = random.Random(1)
+    straddling_before = 0
+    checked = 0
+
+    for _ in range(600):
+        values = [round(rng.uniform(-6, 9), 1) for _ in range(rng.randint(8, 30))]
+        if not (min(values) < 0 < max(values)):
+            continue
+        checked += 1
+        for method in METHODS:
+            plain = classify(values, 5, method)
+            if plain and _straddles_zero(values, plain):
+                straddling_before += 1
+
+            fixed = diverging_classify(values, 5, method)
+            assert not _straddles_zero(values, fixed), (
+                f"{method}: a class still spans zero — {values}"
+            )
+            if len(values) > 5:
+                assert 0.0 in fixed, f"{method}: zero is not a boundary — {fixed}"
+
+    assert checked > 100, "the generator produced too few diverging datasets to be a test"
+    assert straddling_before > 100, (
+        "the unguarded classifiers used to straddle zero constantly; if they no "
+        "longer do, this test is measuring the wrong thing"
+    )
+
+
+def _straddles_zero(values: list[float], breaks: list[float]) -> bool:
+    """True when some class holds values on both sides of zero."""
+    buckets: list[list[float]] = [[] for _ in range(len(breaks) + 1)]
+    for value in values:
+        buckets[class_index(value, breaks)].append(value)
+    return any(bucket and min(bucket) < 0 < max(bucket) for bucket in buckets)
+
+
+def test_one_sided_data_is_classified_normally() -> None:
+    """Nothing to straddle: the diverging path must not distort the breaks."""
+    from _classify import diverging_classify
+
+    for method in METHODS:
+        assert diverging_classify(GDP, 5, method) == classify(GDP, 5, method)

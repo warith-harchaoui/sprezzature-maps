@@ -61,7 +61,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _assets import figures_scripts_dir, geo_dir  # noqa: E402
-from _classify import METHOD_LABELS, class_index, classify
+from _classify import METHOD_LABELS, class_index, classify, diverging_classify
 from _geo_colors import diverging_ramp_hex, sequential_ramp_hex  # noqa: E402
 from _interactive import fullscreen_control  # noqa: E402
 from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
@@ -656,7 +656,14 @@ def build_svg(
         class_breaks = sorted(dict.fromkeys(float(b) for b in breaks))
         method = "given"
     elif classes and classes > 1 and all_values:
-        class_breaks = classify(all_values, classes, method)
+        # A diverging ramp needs zero to be a boundary. Letting a class
+        # straddle it paints a value on one side with the colour of the
+        # other -- the one thing a diverging scale exists to prevent.
+        class_breaks = (
+            diverging_classify(all_values, classes, method)
+            if use_diverging
+            else classify(all_values, classes, method)
+        )
 
     #: Representative value per class, taken from the data that actually
     #: falls in it rather than from the nominal interval -- the outer classes
