@@ -219,6 +219,46 @@ def classify(values: Sequence[float], k: int, method: str) -> list[float]:
     return headtail_breaks(values, k)
 
 
+def diverging_classify(
+    values: Sequence[float], k: int, method: str, *, centre: float = 0.0
+) -> list[float]:
+    """
+    Breaks for a diverging ramp, where no class may straddle `centre`.
+
+    A diverging scale exists to show which side of a midpoint each value falls,
+    and a class spanning that midpoint destroys exactly that. It is not a
+    theoretical risk: on random growth-rate data all four methods produce one.
+    A quantile class holding −1.2 and +2.9 paints both the colour of its own
+    centre, +0.85 — so a country in recession comes out the blue of growth.
+
+    Each side is classified on its own values, so the boundaries still answer
+    the question the method was picked for; `centre` is always a boundary. The
+    class budget is split by how many values sit on each side, with at least
+    one class per side, because a side with no class of its own would have
+    nowhere to put its values.
+
+    One-sided data has nothing to straddle and falls through to
+    :func:`classify` unchanged.
+    """
+    data = _clean(values)
+    below = [v for v in data if v < centre]
+    above = [v for v in data if v > centre]
+    if not below or not above or k < 2:
+        return classify(data, k, method)
+
+    share = len(below) / (len(below) + len(above))
+    k_below = min(max(1, round(k * share)), k - 1)
+    k_above = k - k_below
+
+    breaks: list[float] = []
+    if k_below > 1:
+        breaks += classify(below, k_below, method)
+    breaks.append(float(centre))
+    if k_above > 1:
+        breaks += classify(above, k_above, method)
+    return _dedupe_breaks(sorted(breaks))
+
+
 def class_index(value: float, breaks: Sequence[float]) -> int:
     """Which class `value` falls in, given interior `breaks`. 0-based."""
     index = 0

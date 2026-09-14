@@ -2,6 +2,33 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.5.0] - 2026-09-15: no class may straddle zero on a diverging ramp
+
+### Fixed
+
+- **A classed diverging map could paint a recession the colour of growth.**
+  A diverging scale exists to show which side of the midpoint a value falls
+  on, and 0.3.0's classification had nothing stopping a class from spanning
+  it. The class then takes the colour of its own centre: a quantile class
+  holding −1.2 and +2.9 came out `#CFDBEC`, a blue from the positive side, for
+  both.
+
+  Not a theoretical risk. Over 3 986 random datasets with values of both
+  signs, a class straddled zero in 2 537 of them under `quantile`, 1 573 under
+  `jenks`, 1 203 under `headtail` and 985 under `equal`. After the fix: none,
+  by any method.
+
+  `diverging_classify` makes zero a boundary and classifies each side on its
+  own values, so the breaks still answer the question the method was picked
+  for. The class budget is split by how many values sit on each side, with at
+  least one class per side — a side with no class of its own would have
+  nowhere to put its values. One-sided data has nothing to straddle and is
+  classified exactly as before.
+
+  This is the failure mode a continuous ramp did *not* have: it passes through
+  the neutral point, so the sign always showed. Classing is the better choice
+  on skewed data and it brought its own way of lying; both are now closed.
+
 ## [0.4.0] - 2026-09-14: the accumulation map becomes a kind, not a script
 
 ### Added
