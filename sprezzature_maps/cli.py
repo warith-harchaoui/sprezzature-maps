@@ -30,6 +30,25 @@ def main(argv: list[str] | None = None) -> int:
     p_choro.add_argument("--data", help="JSON file of rows ({id, value}); defaults to demo data.")
     p_choro.add_argument("--out", help="Output SVG path.")
     p_choro.add_argument("--title", default=None)
+    p_choro.add_argument(
+        "--classes",
+        type=int,
+        default=None,
+        metavar="K",
+        help="Class the values into K colour classes instead of stretching the ramp "
+        "linearly from min to max. On skewed data -- which most indicators are -- "
+        "the linear default puts most territories in the bottom of the ramp. "
+        "Omit for the unclassed ramp.",
+    )
+    p_choro.add_argument(
+        "--method",
+        default="quantile",
+        choices=["quantile", "equal", "jenks", "headtail"],
+        help="How to place the class boundaries, when --classes is given. "
+        "quantile: equal count per class, supports ranking. equal: equal width, "
+        "poor on skewed data. jenks: natural breaks, shows the data's own groups. "
+        "headtail: for heavy tails. The legend names whichever you pick.",
+    )
 
     p_sit = sub.add_parser("situation_map", help="Layered areas-of-control situation map.")
     p_sit.add_argument("--config", help="YAML config; defaults to the bundled demo.")
@@ -45,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
             kwargs["title"] = args.title
         if args.out:
             kwargs["out"] = args.out
+        if args.classes:
+            kwargs["classes"] = args.classes
+            kwargs["method"] = args.method
         path = make_choropleth(**kwargs)
     else:
         kwargs = {}

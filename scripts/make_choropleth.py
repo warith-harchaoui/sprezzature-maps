@@ -60,6 +60,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _assets import figures_scripts_dir, geo_dir  # noqa: E402
+from _classify import METHOD_LABELS, class_index, classify
 from _geo_colors import diverging_ramp_hex, sequential_ramp_hex  # noqa: E402
 from _interactive import fullscreen_control  # noqa: E402
 from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
@@ -482,6 +483,71 @@ def _load_countries() -> list[dict[str, Any]]:
     return countries
 
 
+
+def _classed_legend(
+    *,
+    class_colors: list[str],
+    breaks: list[float],
+    method: str,
+    x0: float,
+    y: float,
+    swatch_top: float,
+    no_data_x: float,
+) -> list[str]:
+    """
+    Legend for a classed choropleth: swatches, boundaries, and the method.
+
+    An unclassed ramp is a gradient a reader eyeballs; a classed one is a
+    lookup table, and it is only usable if the boundaries are printed. The
+    method goes on the legend for a different reason: the same values classed
+    four ways tell four stories, so a map that does not say how it was classed
+    is asking to be misread.
+    """
+    parts: list[str] = []
+    swatch_w, gap = 30.0, 2.0
+    for i, colour in enumerate(class_colors):
+        x = x0 + i * (swatch_w + gap)
+        parts.append(
+            f'<rect x="{x:.1f}" y="{swatch_top:.1f}" width="{swatch_w:.1f}" height="12" fill="{colour}"/>'
+        )
+        # The boundary sits between two swatches, so it is labelled under the
+        # seam rather than under either one -- the value belongs to neither
+        # class, it separates them.
+        if i < len(breaks):
+            seam = x + swatch_w + gap / 2.0
+            parts.append(
+                f'<text x="{seam:.1f}" y="{y:.1f}" font-size="9" text-anchor="middle" '
+                f'fill="{SECONDARY}">{_tick_label(breaks[i])}</text>'
+            )
+    strip_end = x0 + len(class_colors) * (swatch_w + gap)
+    parts.append(
+        f'<text x="{x0:.1f}" y="{swatch_top - 4:.1f}" font-size="9" fill="{SECONDARY}">'
+        f'{len(class_colors)} classes, {METHOD_LABELS[method]}</text>'
+    )
+    parts.append(
+        f'<rect x="{no_data_x:.1f}" y="{swatch_top:.1f}" width="14" height="12" '
+        f'fill="{NO_DATA}" stroke="{NO_DATA_EDGE}"/>'
+    )
+    parts.append(
+        f'<text x="{no_data_x + 20:.1f}" y="{y:.1f}" font-size="11" fill="{SECONDARY}">No data</text>'
+    )
+    if strip_end > no_data_x:  # pragma: no cover - only at absurd class counts
+        parts.append(f"<!-- legend strip {strip_end:.0f}px overruns the no-data key -->")
+    return parts
+
+
+def _tick_label(value: float) -> str:
+    """A class boundary, short enough to sit under a 30px swatch seam."""
+    magnitude = abs(value)
+    if magnitude >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M".replace(".0M", "M")
+    if magnitude >= 1_000:
+        return f"{value / 1_000:.1f}k".replace(".0k", "k")
+    if magnitude >= 10:
+        return f"{value:.0f}"
+    return f"{value:.2g}"
+
+
 def build_svg(
     data: list[dict[str, Any]] | None = None,
     title: str = "Global Exposure Index, by Country",
@@ -492,6 +558,8 @@ def build_svg(
     accessibility: str = "universal",
     diverging: bool | None = None,
     relief: bool = True,
+    classes: int | None = None,
+    method: str = "quantile",
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -566,8 +634,40 @@ def build_svg(
     # tail stays inside [-1, 1] and reads proportionally lighter.
     v_abs_max = max(abs(v_min), abs(v_max)) or 1.0
 
+    # ---- classification -------------------------------------------------
+    # Unclassed by default, which is what this generator has always done and
+    # what `classes=None` keeps byte for byte. It is also, for the skewed
+    # data most indicators are, the weakest choice available: stretching the
+    # ramp linearly from min to max puts nine of twenty countries in the
+    # bottom quarter on GDP per head and leaves India indistinguishable from
+    # Burundi at ten times its figure. `classes=5` asks for a real
+    # classification; `method` says which question it should answer. Nothing
+    # is chosen silently, and the legend states what was chosen -- without
+    # that statement two readers of one map see two different truths.
+    breaks: list[float] = []
+    if classes and classes > 1 and all_values:
+        breaks = classify(all_values, classes, method)
+
+    #: Representative value per class, taken from the data that actually
+    #: falls in it rather than from the nominal interval -- the outer classes
+    #: are unbounded, so their midpoint does not exist.
+    class_colors: list[str] = []
+    if breaks:
+        buckets: list[list[float]] = [[] for _ in range(len(breaks) + 1)]
+        for value in all_values:
+            buckets[class_index(value, breaks)].append(value)
+        for bucket in buckets:
+            centre = (min(bucket) + max(bucket)) / 2.0 if bucket else v_min
+            class_colors.append(
+                diverging_ramp_hex(centre / v_abs_max)
+                if use_diverging
+                else _ramp_hex((centre - v_min) / v_span)
+            )
+
     def _color_for_value(value: float) -> str:
         """Map one data value to a ramp hex, honouring ``use_diverging``."""
+        if class_colors:
+            return class_colors[class_index(value, breaks)]
         if use_diverging:
             return diverging_ramp_hex(value / v_abs_max)
         return _ramp_hex((value - v_min) / v_span)
@@ -804,10 +904,31 @@ def build_svg(
             f"{bubble}"
         )
 
-    # ---- legend: ramp swatches + min/median/max labels ----
+    # ---- legend ----
+    # Classed and unclassed need different legends, and giving a classed map
+    # the unclassed one is how a reader ends up unable to tell which class a
+    # colour belongs to. The classed legend prints one swatch per class, the
+    # boundary values between them, and the name of the method that produced
+    # them: a method nobody can name is a method nobody can question.
     ly = height - 16.0
     swatch_top = ly - 11.0
     lx0 = side_margin
+    if class_colors:
+        parts.extend(
+            _classed_legend(
+                class_colors=class_colors,
+                breaks=breaks,
+                method=method,
+                x0=lx0,
+                y=ly,
+                swatch_top=swatch_top,
+                no_data_x=width - side_margin - 92.0,
+            )
+        )
+        parts.append(fullscreen_control(width, height, mode))
+        parts.append("</svg>")
+        return "\n".join(parts)
+
     parts.append(
         f'<text x="{lx0:.1f}" y="{ly:.1f}" font-size="11" fill="{SECONDARY}">{v_min:.0f}</text>'
     )
@@ -867,6 +988,8 @@ def make_choropleth(
     accessibility: str = "universal",
     diverging: bool | None = None,
     relief: bool = True,
+    classes: int | None = None,
+    method: str = "quantile",
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -910,6 +1033,8 @@ def make_choropleth(
         accessibility=accessibility,
         diverging=diverging,
         relief=relief,
+        classes=classes,
+        method=method,
     )
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)

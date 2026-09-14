@@ -84,3 +84,41 @@ def test_gallery_page_serves_html() -> None:
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert response.text.count("<article") == 2
+
+
+def test_a_classed_map_always_names_its_method() -> None:
+    """
+    The legend states the classification, because omitting it misleads.
+
+    The same values classed four ways tell four stories. A map that does not
+    say how it was classed asks to be misread, and the reader has no way to
+    know they are being asked. So this is not cosmetic: the method belongs on
+    the artefact, not only in the call that made it.
+    """
+    rows = [
+        {"id": "356", "value": 2485},
+        {"id": "108", "value": 238},
+        {"id": "442", "value": 128259},
+        {"id": "250", "value": 44461},
+        {"id": "840", "value": 82769},
+    ]
+    for method, label in (
+        ("quantile", "quantiles"),
+        ("equal", "equal intervals"),
+        ("jenks", "natural breaks"),
+        ("headtail", "head/tail breaks"),
+    ):
+        resp = client.post(
+            "/v1/choropleth", json={"data": rows, "classes": 3, "method": method}
+        )
+        assert resp.status_code == 200, resp.text
+        assert label in resp.text, f"{method}: the legend does not name the method"
+
+
+def test_an_unclassed_map_is_unchanged() -> None:
+    """Omitting `classes` renders exactly what this generator always did."""
+    rows = [{"id": "250", "value": 3.0}, {"id": "840", "value": 9.0}]
+    without = client.post("/v1/choropleth", json={"data": rows})
+    explicit_none = client.post("/v1/choropleth", json={"data": rows, "classes": None})
+    assert without.status_code == explicit_none.status_code == 200
+    assert without.content == explicit_none.content
