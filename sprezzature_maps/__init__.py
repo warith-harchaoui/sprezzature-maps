@@ -1,9 +1,10 @@
-"""sprezzature-maps: hand-authored SVG world maps, a choropleth generator and a situation-map generator.
+"""sprezzature-maps: hand-authored SVG world maps — choropleth, situation map, accumulation map.
 
 A focused sibling of `sprezzature-figures <https://github.com/warith-harchaoui/sprezzature-figures>`_,
-carrying just its two "real basemap" geospatial generators, `choropleth`
-(a map where each country is filled with a colour encoding a number) and
-`situation_map` (a layered "who controls what" plate for any region), as
+carrying its "real basemap" geospatial generators: `choropleth` (each
+country filled with a colour encoding a number), `situation_map` (a layered
+"who controls what" plate for any region) and `density` (point events binned
+to a field, where the events draw the geography and no coastline is), as
 an independent product with its own release schedule and, eventually,
 its own visual editor. Depends on ``sprezzature-figures`` for the
 rendering primitives the two products share (embedding fonts inside the
@@ -22,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # In the source tree the generators live in scripts/; once installed they
 # ship (collision-free) as the sibling package sprezzature_maps_scripts/,
@@ -93,4 +94,9 @@ def make_situation_map(*args: Any, **kwargs: Any) -> Path:
     return _load_script("make_situation_map").make_situation_map(*args, **kwargs)
 
 
-__all__ = ["make_choropleth", "make_situation_map"]
+def make_density(*args: Any, **kwargs: Any) -> Path:
+    """Render an accumulation map, where the events draw the geography. See ``scripts/make_density.py``."""
+    return _load_script("make_density").make_density(*args, **kwargs)
+
+
+__all__ = ["make_choropleth", "make_density", "make_situation_map"]

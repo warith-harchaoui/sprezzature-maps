@@ -56,7 +56,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _render import render_cli  # noqa: E402
+from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 
 #: Bin count along the long axis. 120 is the measured sweet spot: the field
 #: still reads as a field, and the plate lands near 150 KB.
@@ -394,6 +394,65 @@ def _esc(text: str) -> str:
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         .replace('"', "&quot;").replace("'", "&apos;")
     )
+
+
+def make_density(
+    points: Sequence[tuple[float, float]] | None = None,
+    *,
+    out: Path | str | None = None,
+    bbox: tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0),
+    bins: int = DEFAULT_BINS,
+    width: int = 1000,
+    title: str = "Where the lightning fell",
+    subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
+    caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
+) -> Path:
+    """Render an accumulation map and write the SVG to *out*.
+
+    The third kind this package draws, and the one that inverts the other two:
+    no coastline, no border, no graticule. Point events are binned to a
+    luminous field, and the land appears because events fell on it while the
+    sea stays dark because none did. A reader recognises the shape without
+    being shown it, which is a stronger recognition than reading a label.
+
+    Until 0.4.0 this existed only as a script somebody had to run by hand: no
+    library function, no CLI kind, no route. A map nobody can reach is a map
+    this package does not have.
+
+    Parameters
+    ----------
+    points : sequence of (lon, lat), optional
+        Event positions in degrees. Defaults to the synthetic demo set.
+    out : Path, str, or None
+        Output path (.svg). Defaults to the bundled example location.
+    bbox : (west, south, east, north)
+        Geographic extent to bin over, in degrees.
+    bins : int
+        Cells across the image. Past roughly 260 the field stops being a field
+        and becomes grain, so the visual limit arrives before the size limit.
+    width : int
+        Canvas width in pixels.
+    title, subtitle, caption : str
+        Chart chrome. The caption is where provenance goes, and the demo's
+        says its data is synthetic *on the plate* — this form is persuasive
+        enough to be believed otherwise.
+
+    Returns
+    -------
+    Path
+        Absolute path to the written SVG file.
+    """
+    svg = build_svg(
+        points,
+        bbox=bbox,
+        bins=bins,
+        width=width,
+        title=title,
+        subtitle=subtitle,
+        caption=caption,
+    )
+    dest = Path(out) if out else svg_example_path(__file__, "density")
+    return write_svg(dest, svg)
 
 
 def main() -> None:

@@ -158,6 +158,44 @@ class ChoroplethRequest(BaseModel):
     )
 
 
+class DensityRequest(BaseModel):
+    """Body for ``POST /v1/density``."""
+
+    points: list[tuple[float, float]] | None = Field(
+        default=None,
+        description=(
+            "Event positions as [longitude, latitude] pairs, in degrees. Omit "
+            "to render the built-in demo set."
+        ),
+    )
+    bbox: tuple[float, float, float, float] = Field(
+        default=(-125.0, 25.0, -67.0, 49.0),
+        description="Extent to bin over: (west, south, east, north) in degrees.",
+    )
+    bins: int = Field(
+        default=120,
+        ge=10,
+        le=400,
+        description=(
+            "Cells across the image. Past roughly 260 the field stops being a "
+            "field and becomes grain, so the visual limit arrives first."
+        ),
+    )
+    width: int = Field(default=1000, ge=100, le=8000, description="Canvas width in pixels.")
+    title: str | None = Field(default=None, description="Chart title. Omit for the default.")
+    subtitle: str | None = Field(default=None, description="Chart subtitle.")
+    caption: str | None = Field(
+        default=None,
+        description=(
+            "Printed on the plate itself. This is where provenance goes: a field "
+            "this persuasive is believed, so say where the events came from."
+        ),
+    )
+    format: Literal["svg", "png", "pdf", "jpg"] = Field(
+        default="svg", description="Output format; picks the response Content-Type."
+    )
+
+
 class SituationMapRequest(BaseModel):
     """Body for ``POST /v1/situation-map``."""
 
@@ -195,25 +233,30 @@ def health() -> dict:
     "/v1/kinds",
     tags=["meta"],
     operation_id="list_kinds",
-    summary="List the two kinds of map this server draws",
+    summary="List the three kinds of map this server draws",
 )
 def kinds() -> list[str]:
     """List the map kinds this repo carries.
 
-    Two, and the distinction is the whole routing decision: a **choropleth**
-    shades real territories by a value ("cases per country", "turnout by
-    département"), a **situation map** shows who holds what ground, with
-    fronts and areas of control. Anything else map-shaped -- binned grids,
-    hex maps, dot density, spike maps -- belongs to sprezzature-figures,
-    which plots points and cells rather than real coastlines.
+    Three, and the distinction between them is the whole routing decision.
+    A **choropleth** shades real territories by a value ("cases per country",
+    "turnout by département"). A **situation map** shows who holds what
+    ground, with fronts and areas of control. A **density** map inverts both:
+    it draws no coastline at all, bins point events into a luminous field, and
+    lets the land appear because events fell on it — reach for it when you
+    have *where things happened* rather than a value per territory.
+
+    Anything map-shaped that is not real geography — binned grids, hex maps,
+    dot density over a schematic outline, spike maps — belongs to
+    sprezzature-figures, which plots points and cells rather than coastlines.
 
     Returns
     -------
     list of str
-        Always ``["choropleth", "situation_map"]`` today: this repo's
-        whole scope is exactly those two map kinds.
+        ``["choropleth", "density", "situation_map"]``: this repo's whole
+        scope is exactly those three map kinds.
     """
-    return ["choropleth", "situation_map"]
+    return ["choropleth", "density", "situation_map"]
 
 
 @app.get("/", include_in_schema=False)
@@ -360,6 +403,60 @@ def render_situation_map(body: SituationMapRequest = SituationMapRequest()) -> R
     if body.title is not None:
         kwargs["title"] = body.title
     return _render_to_response(make_situation_map, kwargs, body.format, "situation_map")
+
+
+@app.post(
+    "/v1/density",
+    tags=["actions"],
+    operation_id="render_density",
+    summary="Let the events draw the geography, with no coastline at all",
+)
+def render_density(body: DensityRequest = DensityRequest()) -> Response:
+    """Render an accumulation map and return the file bytes.
+
+    This is the tool for "where did this happen", "plot these incidents",
+    "show me where the strikes / outages / sightings fell", « où est-ce que
+    ça tombe ». Reach for it when you have **positions of events** rather than
+    a value per territory — that is the line between this and
+    `render_choropleth`, and choosing wrong is the common mistake: a
+    choropleth of raw counts draws population, not your phenomenon.
+
+    What it does that the other two do not: it draws no coastline, no border
+    and no graticule. Events are binned into a luminous field, and the land
+    appears because events fell on it while the sea stays dark because none
+    did. A reader recognises the shape without being shown it.
+
+    Send nothing and you get the demo, whose caption says on the plate that
+    its data is synthetic. Keep that habit: a field this persuasive is
+    believed, so `caption` is where the events' provenance goes.
+
+    Parameters
+    ----------
+    body : DensityRequest
+        See the model's field descriptions; every field is optional.
+
+    Returns
+    -------
+    fastapi.responses.Response
+        The rendered file with the matching ``Content-Type``.
+    """
+    from sprezzature_maps import make_density
+
+    kwargs: dict[str, Any] = {
+        "bbox": tuple(body.bbox),
+        "bins": body.bins,
+        "width": body.width,
+    }
+    if body.points is not None:
+        kwargs["points"] = [tuple(point) for point in body.points]
+    if body.title is not None:
+        kwargs["title"] = body.title
+    if body.subtitle is not None:
+        kwargs["subtitle"] = body.subtitle
+    if body.caption is not None:
+        kwargs["caption"] = body.caption
+    return _render_to_response(make_density, kwargs, body.format, "density")
+
 
 
 def main() -> None:

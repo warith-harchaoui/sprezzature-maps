@@ -19,7 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import make_choropleth, make_situation_map
+from . import make_choropleth, make_density, make_situation_map
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,6 +50,24 @@ def main(argv: list[str] | None = None) -> int:
         "headtail: for heavy tails. The legend names whichever you pick.",
     )
 
+    p_den = sub.add_parser(
+        "density",
+        help="Accumulation map: point events binned to a luminous field, no coastline.",
+    )
+    p_den.add_argument(
+        "--points",
+        help="JSON file of [[lon, lat], ...] event positions; defaults to demo points.",
+    )
+    p_den.add_argument("--out", help="Output SVG path.")
+    p_den.add_argument("--title", default=None)
+    p_den.add_argument(
+        "--bins",
+        type=int,
+        default=None,
+        help="Cells across the image. Past roughly 260 the field becomes grain, so the "
+        "visual limit arrives before the size limit.",
+    )
+
     p_sit = sub.add_parser("situation_map", help="Layered areas-of-control situation map.")
     p_sit.add_argument("--config", help="YAML config; defaults to the bundled demo.")
     p_sit.add_argument("--out", help="Output SVG path.")
@@ -68,6 +86,17 @@ def main(argv: list[str] | None = None) -> int:
             kwargs["classes"] = args.classes
             kwargs["method"] = args.method
         path = make_choropleth(**kwargs)
+    elif args.kind == "density":
+        kwargs = {}
+        if args.points:
+            kwargs["points"] = [tuple(p) for p in json.loads(Path(args.points).read_text())]
+        if args.title:
+            kwargs["title"] = args.title
+        if args.out:
+            kwargs["out"] = args.out
+        if args.bins:
+            kwargs["bins"] = args.bins
+        path = make_density(**kwargs)
     else:
         kwargs = {}
         if args.config:
