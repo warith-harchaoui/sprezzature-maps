@@ -65,13 +65,13 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
-See [`EXAMPLES.md`](EXAMPLES.md) for more recipes, including the HTTP API.
-See [`doc/CARTOGRAPHY.tex`](doc/CARTOGRAPHY.tex) for the full method
+See [`EXAMPLES.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/EXAMPLES.md) for more recipes, including the HTTP API.
+See [`doc/CARTOGRAPHY.tex`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/doc/CARTOGRAPHY.tex) for the full method
 behind every projection, colour scale, and relief (shaded-terrain)
 technique this repo uses: the underlying maths, TikZ diagrams, citations,
 and print-resolution figures, compiled with `xelatex`/`biber` (LaTeX's
 Unicode-aware typesetter and its bibliography tool) into
-[`doc/CARTOGRAPHY.pdf`](doc/CARTOGRAPHY.pdf).
+[`doc/CARTOGRAPHY.pdf`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/doc/CARTOGRAPHY.pdf).
 
 ## Why a separate repo, not a chart type in sprezzature-figures
 
