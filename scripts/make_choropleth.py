@@ -53,6 +53,7 @@ import json
 import math
 import statistics
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -560,6 +561,7 @@ def build_svg(
     relief: bool = True,
     classes: int | None = None,
     method: str = "quantile",
+    breaks: Sequence[float] | None = None,
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -644,18 +646,26 @@ def build_svg(
     # classification; `method` says which question it should answer. Nothing
     # is chosen silently, and the legend states what was chosen -- without
     # that statement two readers of one map see two different truths.
-    breaks: list[float] = []
-    if classes and classes > 1 and all_values:
-        breaks = classify(all_values, classes, method)
+    # Explicit boundaries win over any algorithm. Some classes have to mean
+    # something outside the data -- a regulatory band, a percentage the
+    # newsroom already published, a threshold a reader arrives with -- and no
+    # method will place them there by luck. When they are given, the legend
+    # says "given" rather than naming a method that did not run.
+    class_breaks: list[float] = []
+    if breaks:
+        class_breaks = sorted(dict.fromkeys(float(b) for b in breaks))
+        method = "given"
+    elif classes and classes > 1 and all_values:
+        class_breaks = classify(all_values, classes, method)
 
     #: Representative value per class, taken from the data that actually
     #: falls in it rather than from the nominal interval -- the outer classes
     #: are unbounded, so their midpoint does not exist.
     class_colors: list[str] = []
-    if breaks:
-        buckets: list[list[float]] = [[] for _ in range(len(breaks) + 1)]
+    if class_breaks:
+        buckets: list[list[float]] = [[] for _ in range(len(class_breaks) + 1)]
         for value in all_values:
-            buckets[class_index(value, breaks)].append(value)
+            buckets[class_index(value, class_breaks)].append(value)
         for bucket in buckets:
             centre = (min(bucket) + max(bucket)) / 2.0 if bucket else v_min
             class_colors.append(
@@ -667,7 +677,7 @@ def build_svg(
     def _color_for_value(value: float) -> str:
         """Map one data value to a ramp hex, honouring ``use_diverging``."""
         if class_colors:
-            return class_colors[class_index(value, breaks)]
+            return class_colors[class_index(value, class_breaks)]
         if use_diverging:
             return diverging_ramp_hex(value / v_abs_max)
         return _ramp_hex((value - v_min) / v_span)
@@ -917,7 +927,7 @@ def build_svg(
         parts.extend(
             _classed_legend(
                 class_colors=class_colors,
-                breaks=breaks,
+                breaks=class_breaks,
                 method=method,
                 x0=lx0,
                 y=ly,
@@ -990,6 +1000,7 @@ def make_choropleth(
     relief: bool = True,
     classes: int | None = None,
     method: str = "quantile",
+    breaks: Sequence[float] | None = None,
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -1035,6 +1046,7 @@ def make_choropleth(
         relief=relief,
         classes=classes,
         method=method,
+        breaks=breaks,
     )
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)

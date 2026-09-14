@@ -185,3 +185,37 @@ def test_the_map_separates_what_it_claims_to_separate() -> None:
         f"classed map's closest separated pair is {worst_classed:.4f}, under the "
         f"{JND} threshold: it claims a distinction the eye cannot make"
     )
+
+
+def test_given_breaks_override_any_method_and_say_so() -> None:
+    """
+    Editorial boundaries win, and the legend reports them as given.
+
+    Some bands have to mean something outside the data — a regulatory
+    threshold, a percentage the newsroom already published, a number the
+    reader arrives with. No algorithm lands on those by luck, so passing them
+    has to be possible; and once passed, naming a method that did not run
+    would be a lie about where the boundaries came from.
+    """
+    import importlib.util
+    import re
+
+    spec = importlib.util.spec_from_file_location("mc", SCRIPTS / "make_choropleth.py")
+    assert spec and spec.loader
+    mc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mc)
+
+    rows = [
+        {"id": "250", "value": 3.2},
+        {"id": "840", "value": 12.0},
+        {"id": "156", "value": 27.5},
+        {"id": "356", "value": 41.0},
+    ]
+    svg = mc.build_svg(rows, breaks=[5, 10, 25], classes=7, method="jenks")
+
+    legend = re.search(r">(\d+ classes, [a-z/ ]+)<", svg)
+    assert legend, "the classed legend is missing"
+    assert legend.group(1) == "4 classes, given breaks", legend.group(1)
+
+    printed = re.findall(r'font-size="9" text-anchor="middle"[^>]*>([^<]+)<', svg)
+    assert printed == ["5", "10", "25"], printed

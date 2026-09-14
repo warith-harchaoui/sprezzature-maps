@@ -41,6 +41,15 @@ def main(argv: list[str] | None = None) -> int:
         "Omit for the unclassed ramp.",
     )
     p_choro.add_argument(
+        "--breaks",
+        default=None,
+        metavar="V,V,V",
+        help="Class boundaries you choose yourself, comma-separated, e.g. '5,10,25'. "
+        "Overrides --classes/--method: some bands have to mean something outside the "
+        "data (a regulatory threshold, a figure already published) and no algorithm "
+        "will land on them by luck. The legend then says the breaks were given.",
+    )
+    p_choro.add_argument(
         "--method",
         default="quantile",
         choices=["quantile", "equal", "jenks", "headtail"],
@@ -82,7 +91,9 @@ def main(argv: list[str] | None = None) -> int:
             kwargs["title"] = args.title
         if args.out:
             kwargs["out"] = args.out
-        if args.classes:
+        if args.breaks:
+            kwargs["breaks"] = [float(v) for v in args.breaks.split(",") if v.strip()]
+        elif args.classes:
             kwargs["classes"] = args.classes
             kwargs["method"] = args.method
         path = make_choropleth(**kwargs)

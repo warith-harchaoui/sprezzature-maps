@@ -26,6 +26,15 @@ All notable changes to sprezzature-maps are documented here.
   advertises, the library exports and the HTTP surface renders. The next kind
   cannot ship half-wired.
 
+### Added (0.4.0, continued)
+
+- **`breaks=[…]` — class boundaries the caller chooses.** Overrides both
+  `classes` and `method`, on every surface. Some bands have to mean something
+  outside the data: a regulatory threshold, a percentage the newsroom already
+  published, a number the reader arrives with. No algorithm lands on those by
+  luck, and a map whose classes are editorial should say so — the legend
+  reports them as *given* rather than naming a method that never ran.
+
 ### Fixed
 
 - **`list_kinds` said "two" in the summary an MCP host displays** and in its
