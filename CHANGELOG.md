@@ -2,6 +2,36 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.4.0] - 2026-09-14: the accumulation map becomes a kind, not a script
+
+### Added
+
+- **`density` is a map kind now**, on all five surfaces: `make_density()`,
+  `make-map density`, `POST /v1/density`, the `render_density` MCP tool, and a
+  row in the skill. It shipped in 0.2.0 as `scripts/make_density.py` — a file
+  somebody had to run by hand. Not exported, no CLI kind, no route, and absent
+  from `list_kinds`, so the map existed in the repository and nowhere else. A
+  map nobody can reach is a map this package does not have.
+
+  It is also the kind that inverts the other two: no coastline, no border, no
+  graticule. Point events are binned into a luminous field, and the land
+  appears because events fell on it while the sea stays dark because none did.
+  The routing line that matters: a **choropleth** answers "what is the rate
+  here" and needs one number per territory — fill it with a raw count and it
+  draws population rather than your phenomenon. **`density`** answers "where
+  did this happen" and needs no territories at all.
+
+- `test_every_kind_this_repo_draws_is_reachable_from_every_surface`, which
+  pins the doctrine rather than this one instance: whatever `list_kinds`
+  advertises, the library exports and the HTTP surface renders. The next kind
+  cannot ship half-wired.
+
+### Fixed
+
+- **`list_kinds` said "two" in the summary an MCP host displays** and in its
+  docstring, while returning three. That summary is most of what an agent
+  reads when choosing between tools from several servers.
+
 ## [0.3.0] - 2026-09-14: the choropleth can finally be classed, and says how
 
 ### Added

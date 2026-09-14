@@ -34,10 +34,10 @@ def test_health() -> None:
 
 
 def test_list_kinds() -> None:
-    """The two map kinds this repo carries are discoverable, not hardcoded by callers."""
+    """The map kinds this repo carries are discoverable, not hardcoded by callers."""
     response = client.get("/v1/kinds")
     assert response.status_code == 200
-    assert response.json() == ["choropleth", "situation_map"]
+    assert response.json() == ["choropleth", "density", "situation_map"]
 
 
 def test_render_choropleth_demo_svg() -> None:
@@ -122,3 +122,43 @@ def test_an_unclassed_map_is_unchanged() -> None:
     explicit_none = client.post("/v1/choropleth", json={"data": rows, "classes": None})
     assert without.status_code == explicit_none.status_code == 200
     assert without.content == explicit_none.content
+
+
+def test_every_kind_this_repo_draws_is_reachable_from_every_surface() -> None:
+    """
+    A map nobody can reach is a map this package does not have.
+
+    `make_density` shipped as a script somebody had to run by hand: not
+    exported, no CLI kind, no route, and absent from `list_kinds` — so the
+    accumulation map existed in the repository and nowhere else. This pins the
+    doctrine: whatever `list_kinds` advertises, the library exports and the
+    HTTP surface can render.
+    """
+    import sprezzature_maps
+
+    advertised = client.get("/v1/kinds").json()
+    assert advertised == ["choropleth", "density", "situation_map"]
+
+    for kind in advertised:
+        assert hasattr(sprezzature_maps, f"make_{kind}"), f"{kind}: no library function"
+        assert f"make_{kind}" in sprezzature_maps.__all__, f"{kind}: not exported"
+
+    operations = {
+        route.operation_id
+        for route in app.routes
+        if getattr(route, "operation_id", None)
+    }
+    for kind in advertised:
+        assert f"render_{kind}" in operations, f"{kind}: no route, so no MCP tool either"
+
+
+def test_the_density_route_renders_the_demo() -> None:
+    """The accumulation map answers over HTTP, with its own defaults."""
+    resp = client.post("/v1/density", json={"bins": 40})
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("image/svg")
+    body = resp.content.decode("utf-8")
+    assert "SYNTHETIC" in body, (
+        "the demo plate must keep saying its data is synthetic: a field this "
+        "persuasive is believed, and the caption is the only thing that stops it"
+    )
