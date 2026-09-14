@@ -142,6 +142,16 @@ class ChoroplethRequest(BaseModel):
             "the unclassed ramp."
         ),
     )
+    breaks: list[float] | None = Field(
+        default=None,
+        description=(
+            "Class boundaries you choose yourself, e.g. [5, 10, 25]. Overrides "
+            "`classes` and `method`: some bands have to mean something outside "
+            "the data — a regulatory threshold, a figure already published, a "
+            "number the reader arrives with — and no algorithm will land on "
+            "them by luck. The legend then reports the breaks as given."
+        ),
+    )
     method: Literal["quantile", "equal", "jenks", "headtail"] = Field(
         default="quantile",
         description=(
@@ -358,6 +368,7 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
         "relief": body.relief,
         "classes": body.classes,
         "method": body.method,
+        "breaks": body.breaks,
     }
     if body.data is not None:
         kwargs["data"] = [row.model_dump() for row in body.data]

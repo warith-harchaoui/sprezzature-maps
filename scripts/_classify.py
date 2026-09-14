@@ -72,6 +72,10 @@ METHOD_LABELS: dict[str, str] = {
     "equal": "equal intervals",
     "jenks": "natural breaks",
     "headtail": "head/tail breaks",
+    # Not a member of METHODS: nothing computed these, the caller supplied
+    # them. The legend still has to say so, because "given" is exactly the
+    # provenance a reader needs -- it means the boundaries are editorial.
+    "given": "given breaks",
 }
 
 
