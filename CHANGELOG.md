@@ -2,6 +2,26 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.6.0] - 2026-09-15: a mistyped config key is refused, not ignored
+
+### Fixed
+
+- **A one-letter slip in a situation-map config silently dropped whatever it
+  configured.** The plate is driven by two dozen optional keys, hand-edited in
+  YAML, and an unrecognised key was simply never read. `canvas_widthl`
+  rendered at the default width without a word. A slip on `areas_of_control`
+  would have dropped an entire layer — and the plate would still have looked
+  like a finished intelligence product, which is the worst possible response
+  to a typo: the map is wrong and nothing says so.
+
+  `validate_config` refuses any key the generator does not read, and names the
+  closest known one, because the realistic cause is a typo and the realistic
+  fix is one character. A missing `region` now explains what a region is
+  instead of raising a bare `KeyError` from deep inside the layout code.
+
+  `CONFIG_KEYS` is the list, and it is the generator's own: every key the code
+  actually reads, nothing aspirational.
+
 ## [0.5.0] - 2026-09-15: no class may straddle zero on a diverging ramp
 
 ### Fixed
