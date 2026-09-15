@@ -88,5 +88,11 @@ def test_situation_map_config_dir_default_is_cwd_not_install_path(
         return "<svg></svg>"
 
     monkeypatch.setattr(m, "build_map", _fake_build_map)
-    m.make_situation_map(config={"title": "test"}, out=tmp_path / "out.svg")
+    # `region` is not incidental: the generator has always required it, and
+    # this config only got away without one because build_map is faked here.
+    # Config validation (0.6.0) now says so before the fake is reached.
+    m.make_situation_map(
+        config={"title": "test", "region": "western-europe"},
+        out=tmp_path / "out.svg",
+    )
     assert captured["_config_dir"] == "."

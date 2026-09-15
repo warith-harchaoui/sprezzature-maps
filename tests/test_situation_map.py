@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import contextlib
 
+import pytest
+
 # ── vendored assets ───────────────────────────────────────────────────────
 
 
@@ -273,3 +275,63 @@ def test_unknown_caption_mode_is_refused() -> None:
     module = _msm()
     with pytest.raises(ValueError, match="unknown caption"):
         module._caption_block({"caption": "short"}, {"ts": 1.0, "width": 100, "height": 100})
+
+
+def test_a_mistyped_config_key_is_refused_not_ignored() -> None:
+    """
+    A typo must not silently drop a layer.
+
+    The plate is configured by two dozen optional keys, hand-edited in YAML,
+    and an unrecognised key was simply never read: `canvas_widthl` rendered at
+    the default width without a word, and a slip on `areas_of_control` would
+    have dropped a whole layer while the plate still looked like a finished
+    intelligence product. That is the worst possible response to a typo — the
+    map is wrong and nothing says so.
+    """
+    import tempfile
+    from pathlib import Path
+
+    module = _situation_module()
+    demo = dict(module._DEMO_CONFIG)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # The untouched demo still renders: validation must not cost anything
+        # to a caller who did nothing wrong.
+        assert module.make_situation_map(out=str(Path(tmp) / "ok.svg")).exists()
+
+        for bad_key, expected_hint in (
+            ("canvas_widthl", "canvas_width"),
+            ("areas_of_controll", "areas_of_control"),
+        ):
+            broken = dict(demo)
+            broken[bad_key] = broken.pop(expected_hint, [])
+            with pytest.raises(ValueError) as caught:
+                module.make_situation_map(config=broken, out=str(Path(tmp) / "x.svg"))
+            message = str(caught.value)
+            assert bad_key in message
+            assert expected_hint in message, (
+                f"the error must name the likely intended key: {message}"
+            )
+
+
+def test_a_config_without_a_region_says_what_is_missing() -> None:
+    """A bare KeyError told the caller nothing about what a region is."""
+    module = _situation_module()
+    with pytest.raises(ValueError, match="region"):
+        module.make_situation_map(config={"title": "no region here"})
+
+
+def _situation_module():
+    """Load the generator the way every surface does."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    scripts = Path(__file__).resolve().parent.parent / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    spec = importlib.util.spec_from_file_location("ms", scripts / "make_situation_map.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module

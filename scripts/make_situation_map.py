@@ -91,6 +91,7 @@ import math
 import sys
 import warnings
 from collections.abc import Iterable
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
@@ -2611,6 +2612,55 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------- #
 
 
+#: Every key ``build_map`` reads. A situation plate is configured by a YAML
+#: file with two dozen optional keys, hand-edited, and an unrecognised key is
+#: simply never read -- so a one-letter slip silently drops a whole layer and
+#: the plate still looks like a finished intelligence product. That is the
+#: worst possible response to a typo, and it is why this list exists.
+CONFIG_KEYS: frozenset[str] = frozenset({
+    "areas_of_control", "as_of", "attribution", "basemap", "canvas_width",
+    "caption", "events", "forces", "frame", "front", "frontiers",
+    "infrastructure", "internal_borders", "labels", "legend_footer",
+    "legend_position", "marker_legend", "method", "padding", "projection",
+    "region", "rivers", "source", "subtitle", "title",
+})
+
+#: Keys the loaders set themselves; a caller never writes these.
+_INTERNAL_KEYS: frozenset[str] = frozenset({"_config_dir", "_plate"})
+
+
+def validate_config(cfg: dict[str, Any]) -> None:
+    """
+    Refuse a config with keys this generator does not read.
+
+    Raises
+    ------
+    ValueError
+        If a required key is missing, or a key is not one this generator
+        reads. Unknown keys name their closest known neighbour, because the
+        realistic cause is a typo and the realistic fix is one character.
+    """
+    if "region" not in cfg:
+        raise ValueError(
+            "situation map config needs a 'region': the area the plate covers, "
+            "which is what the projection auto-centres on. "
+            f"Got keys: {sorted(k for k in cfg if not k.startswith('_')) or 'none'}"
+        )
+
+    unknown = sorted(set(cfg) - CONFIG_KEYS - _INTERNAL_KEYS)
+    if unknown:
+        hints = []
+        for key in unknown:
+            near = get_close_matches(key, sorted(CONFIG_KEYS), n=1, cutoff=0.7)
+            hints.append(f"{key!r}" + (f" (did you mean {near[0]!r}?)" if near else ""))
+        raise ValueError(
+            "situation map config has key(s) this generator never reads, so "
+            "whatever they configure would be silently dropped: "
+            + ", ".join(hints)
+            + f". Known keys: {', '.join(sorted(CONFIG_KEYS))}"
+        )
+
+
 # A neutral, self-contained demo config so the figure registry can render this
 # generator like every other one. It shows Western Europe as a clean reference
 # situation map -- coastline, international frontiers, country labels, sea
@@ -2671,6 +2721,7 @@ def make_situation_map(
     cfg.setdefault("_config_dir", ".")
     if title:
         cfg["title"] = title
+    validate_config(cfg)
     svg = build_map(cfg)
     dest = Path(out) if out else svg_example_path(__file__, "situation_map")
     return write_svg(dest, svg)
