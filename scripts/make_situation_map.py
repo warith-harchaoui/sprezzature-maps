@@ -97,6 +97,7 @@ from typing import Any
 
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
+from _places import cities_in_view, place_labels
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 
@@ -1557,6 +1558,10 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 5b. rivers (over the fills so the water reads) ------------------------ #
     layers.append(_rivers_layer(cfg, proj, vp, region_box))
 
+    # 5b-bis. cities: the map is populated by default, so a reader always has
+    #         somewhere to stand.
+    layers.append(_cities_layer(cfg, proj, vp, bbox))
+
     # 5c. front line: the emphasised contact line between the control zones,
     #     the single most-read feature of a situation plate.
     layers.append(_front_line_layer(cfg, proj, vp))
@@ -2217,6 +2222,78 @@ def _markers_layer(
     return f'<g id="{layer_id}">{"".join(out)}</g>'
 
 
+def _cities_layer(
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    bbox: tuple[float, float, float, float],
+) -> str:
+    """
+    Return automatic populated places for the region in view.
+
+    A plate carrying terrain, borders and control zones and no cities leaves a
+    reader with nowhere to stand: they can see which valley is contested and
+    not which town is in it. The `labels` layer above places names by hand,
+    which is right for the handful a plate argues about — this draws the rest
+    from the vendored list, selected by Natural Earth's cartographic
+    prominence, so the map is populated by default and the hand-placed names
+    stay for what the author actually wants to say.
+
+    Set ``cities.show: false`` to suppress it, or ``cities.max_rank`` /
+    ``cities.limit`` to widen or narrow the selection.
+    """
+    settings = cfg.get("cities", {})
+    if settings.get("show", True) is False:
+        return '<g id="cities"></g>'
+
+    west, south, east, north = bbox
+    hand_placed = {
+        str(place.get("name", "")).strip().lower()
+        for place in cfg.get("labels", {}).get("places", [])
+    }
+    chosen = [
+        city
+        for city in cities_in_view(
+            west,
+            south,
+            east,
+            north,
+            limit=int(settings.get("limit", 28)),
+            rank_ceiling=settings.get("max_rank"),
+        )
+        # A name the author placed by hand wins: this layer must not draw it
+        # twice, at two positions, in two styles.
+        if city.name.lower() not in hand_placed
+    ]
+
+    ts = vp["ts"]
+    size = float(settings.get("size", 11)) * ts
+
+    def to_svg(lon: float, lat: float) -> tuple[float, float]:
+        return vp["to_svg"](*proj.transform(lon, lat))
+
+    out: list[str] = []
+    # Without the plate's own bounds a label near the edge runs off it --
+    # "Istanbul" came out as "Ista". A name half outside the frame is worse
+    # than no name: the reader sees a dot with a truncated word beside it.
+    plate = (0.0, 0.0, float(vp["width"]), float(vp["height"]))
+    for city, dot_x, dot_y, label_x, label_y in place_labels(
+        chosen, to_svg, font_size=size, dot_radius=2.0 * ts, bounds_px=plate
+    ):
+        out.append(
+            f'<circle cx="{dot_x:.1f}" cy="{dot_y:.1f}" r="{2.0 * ts:.1f}" '
+            f'fill="#2B2B2E" fill-opacity="0.8"/>'
+        )
+        out.append(
+            f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="{size:.1f}" '
+            f'fill="#2B2B2E" paint-order="stroke" stroke="#FFFFFF" '
+            f'stroke-width="{2.4 * ts:.1f}" stroke-linejoin="round">'
+            f"{_esc(city.name)}</text>"
+        )
+    return '<g id="cities">' + "".join(out) + "</g>"
+
+
+
 def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
     """Return populated-place dots with offset names, plus a tracked water label.
 
@@ -2622,7 +2699,7 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "caption", "events", "forces", "frame", "front", "frontiers",
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
-    "region", "rivers", "source", "subtitle", "title",
+    "cities", "region", "rivers", "source", "subtitle", "title",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.

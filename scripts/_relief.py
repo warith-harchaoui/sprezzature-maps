@@ -611,6 +611,40 @@ DEFAULT_TEXTURE_ALPHA: float = 0.5
 DEFAULT_HILLSHADE_WEIGHT: float = 0.35
 
 
+def _extend_land_into_sea(elevation: np.ndarray, iterations: int = 8) -> np.ndarray:
+    """
+    Fill flat sea with the nearest land values, so the coast is not a cliff.
+
+    The vendored elevation grids store sea as a flat zero — 64 % of the world
+    grid — so every coastline is a one-pixel step from 0 to whatever the land
+    rises to. Texture shading is a high-pass filter, and a step edge is the
+    purest high-frequency signal there is: it rings, and the ringing shows as a
+    bright halo tracing every coast plus broad ripples out over open water,
+    where there is no terrain at all to depict.
+
+    Growing the land outward a few pixels removes the cliff before the
+    transform ever sees it. The filled values are never displayed — the caller
+    masks the sea back out afterwards — they exist only so the FFT has a
+    continuous surface to work on.
+    """
+    filled = elevation.astype(np.float32, copy=True)
+    land = filled > 0.0
+    for _ in range(iterations):
+        if land.all():
+            break
+        total = np.zeros_like(filled)
+        count = np.zeros_like(filled)
+        for shift in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            axis = (0, 1)
+            total += np.roll(np.where(land, filled, 0.0), shift, axis)
+            count += np.roll(land.astype(np.float32), shift, axis)
+        fresh = (~land) & (count > 0)
+        filled[fresh] = total[fresh] / count[fresh]
+        land = land | fresh
+    return filled
+
+
+
 def _compute_terrain_shade(
     elevation: np.ndarray,
     res_lon_deg: float,
@@ -620,6 +654,7 @@ def _compute_terrain_shade(
     vertical_exaggeration: float = DEFAULT_VERTICAL_EXAGGERATION,
     texture_alpha: float = DEFAULT_TEXTURE_ALPHA,
     hillshade_weight: float = DEFAULT_HILLSHADE_WEIGHT,
+    flatten_sea: bool = True,
 ) -> np.ndarray:
     """Blend a directional hillshade with fractional-Laplacian texture shading.
 
@@ -718,8 +753,15 @@ def _compute_terrain_shade(
         np.sin(alt) * np.cos(slope) + np.cos(alt) * np.sin(slope) * np.cos(az - aspect), 0.0, 1.0
     )
 
+    # The sea is a flat zero in these grids, so every coast is a step edge and
+    # a high-pass filter rings on it. Grow the land outward before the
+    # transform, then put the sea back as neutral afterwards: the transform
+    # gets a continuous surface, and open water gets no invented texture.
+    sea = elevation <= 0.0
+    terrain = _extend_land_into_sea(elevation) if flatten_sea and sea.any() else elevation
+
     window = np.hanning(h)[:, None] * np.hanning(w)[None, :]
-    elevation_windowed = (elevation - elevation.mean()) * window
+    elevation_windowed = (terrain - terrain.mean()) * window
     spectrum = np.fft.fft2(elevation_windowed)
     freq_y = np.fft.fftfreq(h)[:, None]
     freq_x = np.fft.fftfreq(w)[None, :]
@@ -741,6 +783,9 @@ def _compute_terrain_shade(
     blended = np.clip(
         hillshade_weight * hillshade + (1.0 - hillshade_weight) * texture_norm, 0.0, 1.0
     )
+    if flatten_sea and sea.any():
+        # Neutral grey, the value the duotone maps to "no relief here".
+        blended = np.where(sea, 0.5, blended)
     return (blended * 255).astype(np.uint8)
 
 

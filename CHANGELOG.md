@@ -2,6 +2,59 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.7.0] - 2026-09-16: a planet with rivers, cities and terrain that is computed
+
+### Added
+
+- **Cities on every map, by default.** A map of the Earth with nobody on it is
+  a map of an empty planet: a reader could see where the Andes are and not
+  where Lima is, and had no anchor for the scale of what they were looking at.
+
+  Chosen by Natural Earth's cartographic prominence, **not** by "is it a
+  capital" — that is a political list and it omits New York, Mumbai, São
+  Paulo, Shanghai, Los Angeles and Karachi, six of the world's twelve largest.
+  The vendored list carries 1 251 places, 1 051 of which are not capitals, and
+  the selection widens as the map zooms in because prominence is exactly the
+  question "does this belong at this scale".
+
+  Labels that would collide are **dropped, never moved**. A name nudged clear
+  of its own dot points at the wrong place and says nothing about it, which is
+  worse than a name that simply is not there. The same rule catches a label
+  that would run off the plate — "Istanbul" was coming out as "Ista".
+
+- **Rivers on the choropleth**, tapered by prominence so a trunk reads thick
+  and a tributary thin. The situation map already drew them; the world map had
+  no water at all. Drawn **over** the country fills, not under: beneath them
+  they were in the file and invisible on the page, which is also why every
+  published choropleth puts its water above the thematic fill.
+
+### Changed
+
+- **The world choropleth's relief is computed now**, from the vendored
+  elevation pyramid — a Lambertian hillshade blended with Brown's
+  fractional-Laplacian texture shading — instead of resampling a pre-shaded
+  picture. The old path was justified on two grounds, and neither survived
+  measurement: the whole world transforms in 0.24 s at 8 arc-minutes, and at
+  the plot area's own resolution the computed shade carries 3.7x the fine
+  structure of the baked raster (the Himalaya 2.8x its contrast, the Andes
+  2.7x, the Alps 3.0x).
+
+  Said plainly, because it matters more than the headline: **under the country
+  fills this is barely visible** — 1.0 to 1.4x in the finished map. The
+  algorithm was never the bottleneck there; the compositing is. What the
+  change buys is honest provenance and a relief that holds up wherever it is
+  shown at strength.
+
+### Fixed
+
+- **Every coastline was ringing.** The elevation grids store sea as a flat
+  zero — 64 % of the world grid — so each coast is a one-pixel step from 0 to
+  whatever the land rises to, and texture shading is a high-pass filter: a
+  step edge is the purest high-frequency signal there is. It came out as a
+  bright halo tracing every coast plus broad ripples over open water, where
+  there is no terrain to depict at all. The land is grown outward before the
+  transform and the sea put back as neutral after it.
+
 ## [0.6.0] - 2026-09-15: a mistyped config key is refused, not ignored
 
 ### Fixed
