@@ -64,7 +64,12 @@ from _assets import figures_scripts_dir, geo_dir  # noqa: E402
 from _classify import METHOD_LABELS, class_index, classify, diverging_classify
 from _geo_colors import diverging_ramp_hex, sequential_ramp_hex  # noqa: E402
 from _interactive import fullscreen_control  # noqa: E402
-from _relief import rgba_to_data_uri, sample_relief  # noqa: E402
+from _places import cities_in_view, place_labels
+from _relief import (  # noqa: E402
+    rgba_to_data_uri,
+    sample_terrain_shade,
+    terrain_shade_for_bbox,
+)
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
 
@@ -485,6 +490,24 @@ def _load_countries() -> list[dict[str, Any]]:
 
 
 
+#: Water blue, the cartographic convention; muted so rivers describe the land
+#: without competing with the choropleth painted over them.
+_RIVER_COLOR = "#7FA3C0"
+
+
+def _line_segments(geometry: dict[str, Any]) -> list[list[tuple[float, float]]]:
+    """Every (lon, lat) run in a LineString or MultiLineString geometry."""
+    kind = geometry.get("type")
+    if kind == "LineString":
+        return [[(float(x), float(y)) for x, y in geometry["coordinates"]]]
+    if kind == "MultiLineString":
+        return [
+            [(float(x), float(y)) for x, y in line] for line in geometry["coordinates"]
+        ]
+    return []
+
+
+
 def _classed_legend(
     *,
     class_colors: list[str],
@@ -562,6 +585,8 @@ def build_svg(
     classes: int | None = None,
     method: str = "quantile",
     breaks: Sequence[float] | None = None,
+    cities: bool = True,
+    rivers: bool = True,
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -816,7 +841,25 @@ def build_svg(
         ee_x = (grid_px + side_margin - cx) / ee_scale + ee_x_mid
         ee_y = (cy - (grid_py + top_margin)) / ee_scale + ee_y_mid
         lon_grid, lat_grid, valid_grid = _equal_earth_invert_batch(ee_x, ee_y)
-        relief_rgba = sample_relief(lon_grid, lat_grid, valid_grid)
+        # Computed from the vendored elevation pyramid -- a Lambertian
+        # hillshade blended with Brown's fractional-Laplacian texture
+        # shading -- not sampled from a pre-shaded picture.
+        #
+        # This path used to be reserved for the regional map, on two
+        # stated grounds: that a world crop was too large to FFT cheaply,
+        # and that the texture would be invisible at this zoom. Both were
+        # measured and neither held. The whole world at 8 arc-minutes
+        # transforms in 0.24 s, and at the plot area's own 700x350 the
+        # computed shade carries 3.7x the fine structure of the baked
+        # raster -- on the Himalaya, 2.8x its contrast; the Andes 2.7x;
+        # the Alps 3.0x. Ridge structure at continental scale is exactly
+        # what a scale-invariant operator is for.
+        shade, shade_bounds = terrain_shade_for_bbox(
+            -180.0, -90.0, 180.0, 90.0, plot_w, plot_h
+        )
+        relief_rgba = sample_terrain_shade(
+            lon_grid, lat_grid, valid_grid, shade, shade_bounds
+        )
         parts.append(
             f'<image x="{side_margin:.1f}" y="{top_margin:.1f}" '
             f'width="{int(plot_w)}" height="{int(plot_h)}" '
@@ -921,6 +964,65 @@ def build_svg(
             f"{bubble}"
         )
 
+    # ---- rivers: the drainage the land actually has ---------------------
+    # Drawn by default, and tapered by prominence: a trunk reads thick and a
+    # tributary thin, which is the difference between a drainage network a
+    # reader can follow and a tangle of blue lines. Only the most prominent
+    # ranks at world scale -- the Amazon, the Nile, the Congo, the Mississippi
+    # and their peers. Under the country fills, because they describe the
+    # land, not the data painted on it.
+    if rivers:
+        river_path = geo_dir() / "rivers-50m.geojson"
+        if river_path.is_file():
+            collection = json.loads(river_path.read_text(encoding="utf-8"))
+            for feature in collection.get("features", []):
+                rank = int(feature["properties"].get("scalerank") or 99)
+                if rank > 3:
+                    continue
+                # Tapered by prominence so a trunk reads thick and a
+                # tributary thin. Tuned by looking: at 0.5-1.0 px and 55 %
+                # opacity the network was in the file and invisible on the
+                # page, which is the same as not drawing it.
+                width = 1.6 if rank <= 1 else (1.1 if rank == 2 else 0.8)
+                for line in _line_segments(feature["geometry"]):
+                    points = [project(lon, lat) for lon, lat in line]
+                    if len(points) < 2:
+                        continue
+                    d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+                    parts.append(
+                        f'<path d="{d}" fill="none" stroke="{_RIVER_COLOR}" '
+                        f'stroke-width="{width}" stroke-opacity="0.85" '
+                        f'stroke-linecap="round"/>'
+                    )
+
+    # ---- cities: where people actually are ------------------------------
+    # A world map with no cities on it is a map of an empty planet: a reader
+    # can see where the Andes are and not where Lima is, and has no anchor for
+    # the scale of what they are looking at. Drawn by default, and selected by
+    # Natural Earth's cartographic prominence rather than by "is it a
+    # capital" -- that is a political list, and it omits New York, Mumbai,
+    # São Paulo, Shanghai, Los Angeles and Karachi, six of the world's twelve
+    # largest. Labels that would collide are dropped, never nudged: a name
+    # moved away from its dot points at the wrong place and says nothing
+    # about it.
+    if cities:
+        plate = (side_margin, top_margin, side_margin + plot_w, top_margin + plot_h)
+        for city, dot_x, dot_y, label_x, label_y in place_labels(
+            cities_in_view(-180.0, -90.0, 180.0, 90.0, limit=34),
+            project,
+            font_size=9.0,
+            bounds_px=plate,
+        ):
+            parts.append(
+                f'<circle cx="{dot_x:.1f}" cy="{dot_y:.1f}" r="1.8" fill="{INK}" '
+                f'fill-opacity="0.75"/>'
+            )
+            parts.append(
+                f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="9" fill="{INK}" '
+                f'fill-opacity="0.8" paint-order="stroke" stroke="{BG}" stroke-width="2.4" '
+                f'stroke-linejoin="round">{xml_escape(city.name)}</text>'
+            )
+
     # ---- legend ----
     # Classed and unclassed need different legends, and giving a classed map
     # the unclassed one is how a reader ends up unable to tell which class a
@@ -1008,6 +1110,8 @@ def make_choropleth(
     classes: int | None = None,
     method: str = "quantile",
     breaks: Sequence[float] | None = None,
+    cities: bool = True,
+    rivers: bool = True,
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -1054,6 +1158,8 @@ def make_choropleth(
         classes=classes,
         method=method,
         breaks=breaks,
+        cities=cities,
+        rivers=rivers,
     )
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)

@@ -41,6 +41,19 @@ def main(argv: list[str] | None = None) -> int:
         "Omit for the unclassed ramp.",
     )
     p_choro.add_argument(
+        "--no-cities",
+        action="store_true",
+        help="Do not name the major cities. They are drawn by default: a map with "
+        "nobody on it gives a reader nowhere to stand, and the selection is by "
+        "cartographic prominence, not by 'is it a capital'.",
+    )
+    p_choro.add_argument(
+        "--no-rivers",
+        action="store_true",
+        help="Do not draw the major rivers. They are drawn by default, tapered by "
+        "prominence so a trunk reads thick and a tributary thin.",
+    )
+    p_choro.add_argument(
         "--breaks",
         default=None,
         metavar="V,V,V",
@@ -91,6 +104,10 @@ def main(argv: list[str] | None = None) -> int:
             kwargs["title"] = args.title
         if args.out:
             kwargs["out"] = args.out
+        if args.no_cities:
+            kwargs["cities"] = False
+        if args.no_rivers:
+            kwargs["rivers"] = False
         if args.breaks:
             kwargs["breaks"] = [float(v) for v in args.breaks.split(",") if v.strip()]
         elif args.classes:

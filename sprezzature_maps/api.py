@@ -142,6 +142,22 @@ class ChoroplethRequest(BaseModel):
             "the unclassed ramp."
         ),
     )
+    cities: bool = Field(
+        default=True,
+        description=(
+            "Name the major cities. On by default: a map with nobody on it "
+            "gives a reader nowhere to stand. Chosen by cartographic "
+            "prominence, not by 'is it a capital' — that list omits New York, "
+            "Mumbai, São Paulo, Shanghai, Los Angeles and Karachi."
+        ),
+    )
+    rivers: bool = Field(
+        default=True,
+        description=(
+            "Draw the major rivers, tapered by prominence so a trunk reads "
+            "thick and a tributary thin. On by default."
+        ),
+    )
     breaks: list[float] | None = Field(
         default=None,
         description=(
@@ -369,6 +385,8 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
         "classes": body.classes,
         "method": body.method,
         "breaks": body.breaks,
+        "cities": body.cities,
+        "rivers": body.rivers,
     }
     if body.data is not None:
         kwargs["data"] = [row.model_dump() for row in body.data]
