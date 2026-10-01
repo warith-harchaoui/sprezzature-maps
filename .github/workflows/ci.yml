@@ -35,10 +35,14 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          # sprezzature-figures is not on PyPI yet (see README.md § Install);
-          # pull the same sibling checkout the local dev workflow uses.
-          git clone --depth 1 https://github.com/warith-harchaoui/sprezzature-figures ../sprezzature-figures
-          pip install -e ../sprezzature-figures
+          # sprezzature-figures resolves from PyPI, like every other
+          # dependency. This used to clone its GitHub HEAD and install that,
+          # under a comment saying it was not published yet — true when
+          # written, false since, and the workaround outlived it. The cost
+          # was not the extra step: it meant CI tested against whatever that
+          # repository's HEAD happened to be at the minute the job ran, so a
+          # green build was not reproducible and a red one could appear with
+          # no change here at all.
           pip install -e ".[dev,cli,api,mcp]"
 
       - name: Lint

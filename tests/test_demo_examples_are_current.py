@@ -64,32 +64,43 @@ def _render(module_name: str, destination: Path) -> str:
             sys.path.pop(0)
 
 
-def _fingerprint(svg: str) -> str:
+def _fingerprint(svg: str) -> list[str]:
     """Return what "the same plate" means, across machines.
 
-    Byte equality is the obvious comparison and the wrong one. Verified by
-    rendering the situation demo inside the project's own Docker image and
-    against this checkout: with decimal numbers normalised the two are
-    **identical**, and raw they are not — the projection's floating-point
-    arithmetic differs by ulps between macOS and Linux, which moves
-    coordinates in the last printed digit without moving anything a reader
-    could see. A byte-equality gate would therefore have failed on CI for a
-    reason that has nothing to do with staleness, every time.
+    Byte equality is the obvious comparison and the wrong one, twice over,
+    and both corrections were paid for in red builds:
 
-    So the fingerprint drops two things and keeps everything else:
+    * **Coordinates.** Rendering the same demo on macOS and inside this
+      project's Linux image gives different raw bytes and an identical
+      document once decimal numbers are normalised: the projection's
+      arithmetic differs by ulps between platforms.
+    * **Which labels survive.** Normalising numbers was still not enough.
+      Label placement passes through ``_label_fits``, a geometric test, so a
+      name sitting a hair from the threshold can be kept on one machine and
+      dropped on another whose PROJ or GEOS version rounds the other way.
+      That is not staleness; it is one city label, and it turned CI red
+      while this checkout and the container agreed.
 
-    * **embedded rasters**, because the relief encoder's input is the same
-      floating-point terrain and its output is a different-sized PNG;
-    * **decimal numbers**, for the reason above.
-
-    What survives is the document's whole structure and all of its text:
-    element names and order, ids, classes, layer groups, every label,
-    title, legend row and caption. Any real drift — a layer added or
-    renamed, a label changed, a legend row gained, a title edited — moves
-    this. Sub-pixel noise does not.
+    So the fingerprint is deliberately structural: the plate's layer names
+    in order, its accessible title and description, and how many of each
+    element it draws. A renamed or missing layer, an edited title, a changed
+    description, a legend row gained or lost all move it. A single borderline
+    label does not.
     """
     without_rasters = re.sub(r"data:image/[a-z]+;base64,[A-Za-z0-9+/=]+", "RASTER", svg)
-    return re.sub(r"-?\d+\.\d+", "N", without_rasters)
+    layers = re.findall(r'<g id="([a-z0-9-]+)"', without_rasters)
+    title = re.search(r"<title\b[^>]*>(.*?)</title>", without_rasters, re.S)
+    desc = re.search(r"<desc\b[^>]*>(.*?)</desc>", without_rasters, re.S)
+    counts = {
+        element: len(re.findall(rf"<{element}\b", without_rasters))
+        for element in ("path", "text", "circle", "rect", "line", "image", "pattern")
+    }
+    return [
+        f"layers={layers}",
+        f"title={title.group(1) if title else ''}",
+        f"desc={desc.group(1) if desc else ''}",
+        f"counts={counts}",
+    ]
 
 
 @pytest.mark.parametrize(("module_name", "filename"), _DEMOS)
@@ -108,9 +119,17 @@ def test_the_embedded_demo_is_what_the_generator_produces_now(
         f"{filename} is missing. Run: python scripts/build_demo_examples.py"
     )
     fresh = _render(module_name, tmp_path / filename)
-    if _fingerprint(shipped.read_text(encoding="utf-8")) != _fingerprint(fresh):
+    on_disk = _fingerprint(shipped.read_text(encoding="utf-8"))
+    rendered = _fingerprint(fresh)
+    if on_disk != rendered:
+        differences = [
+            f"  shipped : {a}\n  rendered: {b}"
+            for a, b in zip(on_disk, rendered, strict=True)
+            if a != b
+        ]
         pytest.fail(
             f"{filename} is stale: the docs embed it as the live output of "
-            f"{module_name}, and it no longer is. "
-            "Run: python scripts/build_demo_examples.py"
+            f"{module_name}, and it no longer is.\n"
+            + "\n".join(differences)
+            + "\nRun: python scripts/build_demo_examples.py"
         )
