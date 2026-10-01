@@ -2,6 +2,48 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.9.1] - 2026-10-01: the two debts the roadmap kept naming
+
+Both of these were known, written down, and carried anyway — one in a
+docstring, one in the README's own roadmap. Neither was hard; they were just
+never the thing in front of us.
+
+### Fixed
+
+- **Lake Urmia was drawn at an extent the world no longer has.** Natural
+  Earth carries it near its historic ~4 200 km², and it has repeatedly fallen
+  below a fifth of that since the 2010s. The two existing escape hatches both
+  lie about it: `lakes.skip` hides the question, and `lakes.former` asserts a
+  disappearance that has not happened — the lake still exists, at a fraction
+  of the polygon on file.
+
+  There is now a third treatment for the case that actually applies, and
+  Urmia is drawn that way **by default**: a faded fill inside a dashed edge,
+  the name suffixed `(historic extent)`. It says the outline is the historic
+  maximum and declines to assert that the water fills it, which is the most
+  that can be said honestly — there is no single current extent to vendor in
+  its place, and one pinned today would be wrong by next season.
+
+  `lakes.historic` replaces the built-in list, and `lakes.historic: []`
+  restores the basemap's own extents. A default rather than an opt-in because
+  the alternative is that every caller who draws this region is silently
+  wrong until they happen to read a docstring.
+
+- **The TopoJSON decoder was duplicated**, as the README's roadmap had been
+  saying for three releases. `make_choropleth` and `make_situation_map` each
+  carried their own delta decoding and their own ring stitching — two places
+  for the same off-by-one to hide, and they had already drifted on one edge
+  case (which arc contributes its first point when the first arc is empty).
+
+  New `scripts/_topojson.py` is the single reader. It stops at coordinates:
+  what a caller does with a ring — stitch it into a repaired shapely polygon
+  to clip against, or project it straight to a path — is legitimately
+  different between the two, and that difference stays where it belongs.
+
+  Follows `_svg.py`'s rule for extracted code, and the extraction was held to
+  it: all five shipped plates and the choropleth demo render **byte-identical**
+  across the change. 57 lines removed, 7 added.
+
 ## [0.9.0] - 2026-10-01: drawing how sure you are, and fitting in a column
 
 Two questions, asked one after the other. First: this generator could draw

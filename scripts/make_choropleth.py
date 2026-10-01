@@ -73,6 +73,7 @@ from _relief import (  # noqa: E402
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
+from _topojson import decode_arcs, stitch_ring  # noqa: E402
 
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py, not in this
 # repo's own scripts/_svg.py (see that module's docstring, "Deliberately not
@@ -424,37 +425,6 @@ DEMO_DATA: list[dict[str, Any]] = [
 ]
 
 
-def _decode_arc(
-    arc: list[list[int]], scale: tuple[float, float], translate: tuple[float, float]
-) -> list[tuple[float, float]]:
-    """Decode one TopoJSON delta-encoded arc to absolute (lon, lat) points."""
-    sx, sy = scale
-    tx, ty = translate
-    x = y = 0
-    points: list[tuple[float, float]] = []
-    for dx, dy in arc:
-        x += dx
-        y += dy
-        points.append((x * sx + tx, y * sy + ty))
-    return points
-
-
-def _ring_coords(
-    indices: list[int], arcs: list[list[tuple[float, float]]]
-) -> list[tuple[float, float]]:
-    """Assemble one polygon ring's (lon, lat) points from TopoJSON arc indices.
-
-    A negative index ``i`` means "arc ``~i``, reversed" (the TopoJSON arc-
-    sharing convention); consecutive arcs share their join point, so every
-    arc after the first contributes all but its own first point.
-    """
-    coords: list[tuple[float, float]] = []
-    for idx in indices:
-        pts = arcs[idx] if idx >= 0 else list(reversed(arcs[~idx]))
-        coords.extend(pts if not coords else pts[1:])
-    return coords
-
-
 def _load_countries() -> list[dict[str, Any]]:
     """Return ``[{id, name, rings: [[(lon, lat), ...], ...]}, ...]`` for every
     country polygon/multipolygon in the vendored TopoJSON atlas, each
@@ -463,10 +433,7 @@ def _load_countries() -> list[dict[str, Any]]:
     plain nonzero fill, close enough at this figure's scale).
     """
     topo = json.loads(_GEO.read_text(encoding="utf-8"))
-    transform = topo["transform"]
-    scale = tuple(transform["scale"])
-    translate = tuple(transform["translate"])
-    arcs = [_decode_arc(a, scale, translate) for a in topo["arcs"]]
+    arcs = decode_arcs(topo)
 
     countries: list[dict[str, Any]] = []
     for geom in topo["objects"]["countries"]["geometries"]:
@@ -479,7 +446,7 @@ def _load_countries() -> list[dict[str, Any]]:
             continue
         for polygon in polygons:
             for ring in polygon:
-                rings.append(_ring_coords(ring, arcs))
+                rings.append(stitch_ring(ring, arcs))
         countries.append(
             {
                 "id": geom.get("id", ""),

@@ -303,10 +303,10 @@ for the whole-world Equal Earth view, reworked for the region-scale
 projection's own analytic inverse. A few lower-priority items from the
 full cartography plan are tracked but not scheduled yet: relief built
 from the ETOPO global elevation dataset, alternate projections better
-suited to editorial maps (Robinson, Mollweide), and a single shared
-reader for the TopoJSON format (a compact way of storing map boundaries
-that records each shared border only once, instead of once per
-neighbouring country).
+suited to editorial maps (Robinson, Mollweide). The shared reader for the
+TopoJSON format (a compact way of storing map boundaries that records each
+shared border only once, instead of once per neighbouring country) was the
+third item here and is now `scripts/_topojson.py`.
 
 ## Data credits
 

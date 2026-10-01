@@ -102,6 +102,7 @@ from _places import cities_in_view, place_labels
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
+from _topojson import decode_arcs, stitch_ring
 
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py -- a genuinely
 # new capability (see that module's docstring), not something this repo's
@@ -485,28 +486,10 @@ def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
     shapely geometry
         The dissolved geometry of the requested object, in WGS84 lon/lat.
     """
-    scale = topo["transform"]["scale"]
-    translate = topo["transform"]["translate"]
-    raw_arcs = topo["arcs"]
+    arcs = decode_arcs(topo)
 
-    def decode_arc(index: int) -> list[list[float]]:
-        # Negative index => reversed arc (~index).
-        reverse = index < 0
-        arc = raw_arcs[~index if reverse else index]
-        points: list[list[float]] = []
-        x = y = 0
-        for dx, dy in arc:
-            x += dx
-            y += dy
-            points.append([x * scale[0] + translate[0], y * scale[1] + translate[1]])
-        return points[::-1] if reverse else points
-
-    def stitch(arc_indices: Iterable[int]) -> list[list[float]]:
-        ring: list[list[float]] = []
-        for j, idx in enumerate(arc_indices):
-            pts = decode_arc(idx)
-            ring.extend(pts if j == 0 else pts[1:])
-        return ring
+    def stitch(arc_indices: Iterable[int]) -> list[tuple[float, float]]:
+        return stitch_ring(arc_indices, arcs)
 
     geoms = []
     obj = topo["objects"][name]
@@ -2234,6 +2217,38 @@ def build_map(cfg: dict[str, Any]) -> str:
     )
 
 
+#: Lakes the vendored basemap draws at an extent the world no longer has.
+#:
+#: ``lakes.former`` says "this water is gone" and ``lakes.skip`` says "do not
+#: draw it". Neither fits a lake that still exists and is a fraction of the
+#: polygon on file: drawing it solid asserts water that is not there, and
+#: drawing it as former asserts a disappearance that has not happened.
+#:
+#: Applied by default, because the alternative is that every caller who draws
+#: this region is silently wrong until they happen to read a docstring. A
+#: config that sets ``lakes.historic`` replaces this list outright, and
+#: ``lakes.historic: []`` restores the basemap's own extents.
+_HISTORIC_EXTENT_LAKES: frozenset[str] = frozenset({
+    # Natural Earth carries roughly its historic ~4 200 km2. It has
+    # repeatedly fallen below a fifth of that since the 2010s, with partial
+    # recoveries in wet years; there is no single current extent to vendor in
+    # its place, which is exactly why the outline is drawn as historic rather
+    # than silently corrected to a number that would be wrong by next season.
+    "lake urmia",
+})
+
+
+def _lake_water_color(cfg: dict[str, Any]) -> str:
+    """Return the colour this plate fills lakes with.
+
+    A reader who has learnt one blue for water should not have to learn a
+    second, so lakes follow the sea unless the config says otherwise.
+    """
+    settings = cfg.get("lakes", {})
+    basemap = cfg.get("basemap", {})
+    return settings.get("color", basemap.get("sea_color", _pal(cfg)["sea"]))
+
+
 def _lakes_layer(
     cfg: dict[str, Any],
     proj: Transformer,
@@ -2270,6 +2285,14 @@ def _lakes_layer(
         the geography will look for the water, and an empty space answers
         nothing while a dashed outline answers exactly.
 
+    ``lakes.historic``
+        A list of names whose vendored polygon is the *historic maximum* of a
+        lake that still exists at a fraction of it: faded fill inside a dashed
+        edge, the name suffixed ``(historic extent)``. Defaults to
+        :data:`_HISTORIC_EXTENT_LAKES` rather than to nothing, because a
+        caller who has not read this docstring should not be silently wrong;
+        pass ``[]`` to draw the basemap's extents as they are.
+
     The cases this repo has had to handle, with dates, so the next caller does
     not have to discover them by being wrong in public:
 
@@ -2278,7 +2301,11 @@ def _lakes_layer(
       marsh, and is being used for infantry infiltration; it is not water and
       has not been for years. The bundled Ukraine example draws it as former.
     * **Lake Urmia** — the vendored polygon is near its historic extent,
-      roughly 4 200 km². It has repeatedly fallen below a fifth of that.
+      roughly 4 200 km², and the lake has repeatedly fallen below a fifth of
+      that since the 2010s. Neither ``former`` nor ``skip`` fits a lake that
+      still exists at a fraction of its outline, so it is drawn by default as
+      a *historic extent*: faded fill, dashed edge, name suffixed. See
+      :data:`_HISTORIC_EXTENT_LAKES`.
     * **Lake Chad** — already the modern, shrunken lake here (~1 300 km²), so
       no correction is needed; noted because it is the one most people expect
       to be wrong.
@@ -2298,6 +2325,7 @@ def _lakes_layer(
     always = {n.lower() for n in settings.get("always_label", [])}
     skip = {n.lower() for n in settings.get("skip", [])}
     former = {n.lower() for n in settings.get("former", [])}
+    historic = {n.lower() for n in settings.get("historic", _HISTORIC_EXTENT_LAKES)}
     plate_area = float(vp["width"]) * float(vp["height"])
 
     shapes: list[str] = []
@@ -2318,11 +2346,23 @@ def _lakes_layer(
         if not d:
             continue
         is_former = bool(key) and key in former
+        is_historic = bool(key) and not is_former and key in historic
         if is_former:
             # No fill, because there is no water: a dashed outline is the
             # cartographic form for a body that was there and is not.
             shapes.append(
                 f'<path d="{d}" fill="none" stroke="{edge}" '
+                f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="0.7" '
+                f'stroke-dasharray="{3.6 * ts:.1f} {2.8 * ts:.1f}"/>'
+            )
+        elif is_historic:
+            # There *is* water, and much less of it than this outline. A
+            # faded fill inside a dashed edge says that without inventing a
+            # current shoreline nobody has: the reader is told the water is
+            # somewhere in here and does not fill it, and the label names the
+            # outline for what it is.
+            shapes.append(
+                f'<path d="{d}" fill="{color}" fill-opacity="0.4" stroke="{edge}" '
                 f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="0.7" '
                 f'stroke-dasharray="{3.6 * ts:.1f} {2.8 * ts:.1f}"/>'
             )
@@ -2335,6 +2375,8 @@ def _lakes_layer(
             continue
         if is_former:
             name = f"{name} (former)"
+        elif is_historic:
+            name = f"{name} (historic extent)"
         biggest = max(getattr(gp, "geoms", [gp]), key=lambda g: g.area)
         # Area in plate units: the same "is it big enough to carry a name"
         # question the river layer asks about length.
