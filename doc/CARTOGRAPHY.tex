@@ -1007,6 +1007,205 @@ showed was needed, while Western Europe's much larger bounding box
 drops to 1 arc-minute with no visible loss at that render scale.
 
 \clearpage
+\section{Symbology of uncertainty}
+\label{sec:uncertainty}
+
+Every section above concerns getting the geometry right. This one
+concerns a different kind of correctness: whether the finished plate
+claims more than its sources support. A map has no neutral setting here.
+A filled polygon asserts control; a hard dot asserts a position. Drawing
+a doubtful assessment with the same ink as a firm one does not leave the
+question open, it answers it in the confident direction.
+
+The three publishers working at scale in this genre each solved one part
+of the problem, and none of them ships a generator, so the conventions
+are available to borrow but the code is not.
+
+\subsection{Three tiers of control}
+
+ISW's control-of-terrain plates \cite{isw-control-of-terrain} separate
+three claims a single fill runs together:
+
+\begin{enumerate}
+  \item \emph{assessed} control: ground a force is judged actually to
+        hold, on evidence of an entrenched and maintained presence;
+  \item \emph{reported} activity: ground where movement or fighting is
+        documented, but which is not assessed as held;
+  \item \emph{claimed} control: ground a belligerent asserts and nobody
+        has independently verified.
+\end{enumerate}
+
+The separation is not decoration. It is what allows a reader to set the
+map against a ministry's communiqué and see where the two disagree, which
+is the principal analytical use of a plate like this.
+
+\texttt{make\_situation\_map.py} encodes the ladder in
+\texttt{\_CONFIDENCE\_TIERS} as a rendering rule per tier: a fill opacity
+expressed as a multiple of the zone's configured opacity, a texture, and
+whether the outline is broken. Writing $\alpha_0$ for that configured
+opacity, the three tiers render at $\alpha = \alpha_0$, $\alpha =
+0.6\,\alpha_0$ with a diagonal hatch, and $\alpha = 0$ with a dotted
+texture inside a dashed outline.
+
+The zero is the substantive choice. A claimed zone receives \emph{no}
+solid fill, because any fill in the class colour places that class's
+colour on the ground, and that is precisely the proposition under
+dispute. The texture keeps the zone visible and attributable without
+asserting it.
+
+The texture vocabulary --- hatches, dots, squares, dashes --- is
+mapshaper's \texttt{fill-pattern} set \cite{mapshaper}. Four is the
+useful number: enough to key an orthogonal variable, few enough to stay
+learnable, and all four survive conversion to greyscale, which a
+hue-coded alternative would not. Each is drawn in the zone's own colour,
+so hue continues to carry \emph{whose} and texture carries \emph{how
+sure}, without the two competing.
+
+An unreadable tier value raises rather than defaulting. The asymmetry
+matters: the harmless failure direction is to refuse to draw, and the
+harmful one is to silently promote an unverified claim to assessed
+control on a plate that still looks finished.
+
+\subsection{Locational precision}
+
+ACLED records a code from 1 to 3 beside every event
+\cite{acled-codebook}, explicitly \emph{to reflect the fact that the
+precise location of the incident may not be known}. Precision~1 is a
+named populated place with coordinates. Precision~2 is a town chosen to
+stand for a general area. Precision~3 is a \emph{provincial capital
+chosen to stand for an entire province}. The project is equally explicit
+that the coordinates it publishes, to four decimal places, do not
+indicate a block or a street corner within the named place.
+
+A map that renders all three as the same filled dot discards that code
+and asserts a precision no source supplied. The convention adopted here:
+
+\begin{itemize}
+  \item precision 1: a filled dot, which means what a filled dot has
+        always meant --- the place is known;
+  \item precision 2: a hollow ring, the long-standing cartographic signal
+        for an approximate position;
+  \item precision 3: a hollow ring with a broken stroke, one step further
+        from being a place at all.
+\end{itemize}
+
+A hollow ring is chosen over a disc of estimated radius because it makes
+no areal claim. A disc states a distance, and absent a stated radius that
+distance would be fabricated. Where a caller does supply one
+(\texttt{radius\_km}), it is drawn to the plate's own scale by
+$r_{\mathrm{svg}} = 10^{3} \cdot r_{\mathrm{km}} / \mu$, with $\mu$ the
+viewport's metres per SVG unit; measured against the viewport on a
+test plate this reproduces 40\,km and 90\,km radii to within 0.06\,\%.
+
+Two quantities are deliberately \emph{not} conflated here. ACLED also
+publishes per-event-type buffer radii for its conflict-exposure measure
+--- 5\,km for battles and explosions, 2\,km for riots and violence
+against civilians --- but those estimate how far an event's effect
+reached, not how badly its position is known. Defaulting a locational
+uncertainty from an impact buffer would present a guess with the
+appearance of a measurement, and is not done.
+
+Temporal precision follows the same code
+(\texttt{time\_precision}: exact day, week, month) and is spoken in the
+tooltip rather than implied, so a date known only to the month reads as
+\emph{month of March 2026} rather than as a day.
+
+\subsection{Provenance at the mark}
+
+Liveuamap \cite{liveuamap} attaches a source to each event rather than to
+the page. A plate-level caption reading ``open sources'' documents the
+map and tells a reader nothing about the single mark they are trying to
+check, so a marker carries its own \texttt{source}.
+
+\subsection{Reading the plate back}
+
+svgis \cite{svgis} writes a feature's own attribute fields into
+\texttt{data-*} attributes on the SVG elements it emits, so the drawing
+remains queryable after it has been drawn. The same idea applies here to
+the fields that carry the claim: control zones emit
+\texttt{data-category}, \texttt{data-confidence} and
+\texttt{data-area-share}; markers emit \texttt{data-precision},
+\texttt{data-lon}, \texttt{data-lat} and, where stated,
+\texttt{data-radius-km}.
+
+The motivation is the same one behind keeping the worked examples'
+polygons in readable Python rather than an opaque data file: a plate of
+this kind is an argument, and an argument a reader can extract and
+recompute is stronger than one they can only look at.
+
+\subsection{Furniture against labels}
+
+A plate carries two kinds of text that are placed by different means and
+never consulted each other. Labels --- place names, territory names,
+neighbours --- are placed from the data, by layers that run early. The
+furniture --- scale bar, north arrow, legend, locator inset --- is placed
+from the canvas, by code that runs last and therefore paints over whatever
+the label layers decided. On the bundled plates this produced a scale bar
+printed across \textsc{tanzania} in the eastern Congo view and across
+\emph{Amman} and \emph{Jerusalem} in the Syrian one: two of five.
+
+The resolution is a priority rather than a negotiation. Furniture owns its
+rectangles and labels yield, because the two failures are not symmetric: a
+name with a bar struck through it is not a name at all, whereas a name that
+is simply absent costs the reader one place out of the thirty a plate
+carries. The rectangles are computed before any layer draws and consulted
+by the single predicate every label placement already passes through, so a
+layer added later inherits the behaviour without knowing about it.
+
+The one invariant this depends on is that the rectangle reserved is the
+rectangle the furniture occupies. The scale bar's corner moves when a
+legend card claims it, and its length depends on a rounding of the mapped
+distance; both are therefore computed once and read by the drawing code and
+the reservation alike. Deriving them twice is how a reservation comes to
+protect empty paper while the bar prints over a name elsewhere on the page.
+
+\subsection{The locator inset}
+
+Newsroom practice treats the locator map as the default map, and states its
+rule as \emph{zoom out for perspective, zoom in for detail}. A plate that
+only ever zooms in satisfies half of it. The detail is of no use to a reader
+who cannot place the region: a map of North Kivu informs only someone who
+already knows where North Kivu is.
+
+The inset answers the other half in about a fifth of the plate's width. Its
+context extent defaults to the region scaled by six and clamped to the
+latitudes the vendored basemap actually covers --- a figure settled by
+rendering, since at three the context is barely wider than the map and
+answers nothing, while at ten a European region lands in a view of the
+Atlantic and the region rectangle degenerates to a dot. It is drawn from the
+coarsest vendored atlas, on the principle that governs
+\S\ref{sec:uncertainty} throughout: detail below what the output can resolve
+is not detail, it is weight. The region itself is a filled rectangle rather
+than an outline, because at that scale an outline is indistinguishable from
+a border.
+
+\subsection{An aside on shared boundaries}
+
+A defect found while this section's features were being built belongs
+with them, because its symptom was also a lost convention rather than a
+lost shape. The frontier layer iterated the basemap's countries and
+stroked each one's outline clipped to the region. Every border between
+two countries both inside the frame is therefore stroked twice: measured
+on the bundled Ukraine plate, 506 of 783 distinct segments, for 1.63
+times the real frontier length.
+
+The visible consequence was not merely a darker line. Two coincident
+dashed strokes begin at different vertices, so their dash phases
+interleave and each fills the other's gaps. Measured on a rendered crop
+of an inland border, the stroke's duty cycle was 94\,\% --- a solid line
+in all but name --- against 51\,\% once corrected. The dashed hairline is
+the international-boundary convention, and it was being destroyed
+precisely on international boundaries, while the coastline alongside,
+belonging to one country only, stayed correctly dashed.
+
+The remedy is mapshaper's \texttt{-innerlines} \cite{mapshaper}, which
+exists for this: derive the shared boundaries as their own layer carrying
+no per-polygon attribute data. Here the clipped outlines are collected
+and passed through a single \texttt{unary\_union} before projection, so
+coincident runs merge and each line is stroked once, with one dash phase
+and one weight.
+
+\clearpage
 \section{Data provenance and licensing}
 
 \begin{table}[htbp]

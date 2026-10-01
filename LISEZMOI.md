@@ -164,11 +164,145 @@ arrows:
     label: "SPLM-N (reported)"
 ```
 
+### Dire à quel point on est sûr
+
+Une carte incapable de dire « probablement » dit « certainement » par
+défaut. Deux options existent uniquement pour permettre à une planche
+d'être moins affirmative que son encre ne le laisserait croire.
+
+**Le degré de certitude de l'évaluation**, sur une zone de contrôle. Le
+vocabulaire est celui d'[ISW](https://www.understandingwar.org) : leurs
+planches de contrôle du terrain distinguent visuellement trois choses
+qu'un aplat unique confond — le terrain qu'une force est évaluée comme
+tenant, celui où un mouvement est *rapporté* sans être évalué comme tenu,
+et celui qu'un belligérant *revendique* sans que personne ne l'ait
+vérifié. C'est cette séparation qui permet de confronter la carte au
+communiqué d'un ministère. Toute zone peut porter une propriété
+`confidence` :
+
+```yaml
+areas_of_control:
+  confidence_field: confidence     # la valeur par défaut
+  palette: { "Gouvernement": "#9cc3d5", "Opposition": "#d98880" }
+  source: zones.geojson            # chaque entité porte : confidence: claimed
+```
+
+`assessed` est la valeur par défaut et se dessine en aplat plein, comme
+avant. `reported` garde la couleur de la classe, abaissée, sous une
+hachure diagonale : toujours visiblement le même acteur, visiblement moins
+sûr. `claimed` ne reçoit **aucun aplat** : seulement une trame de points
+dans un contour tireté, parce que peindre une revendication de la couleur
+du terrain tenu affirme précisément ce que personne n'a vérifié. Une
+valeur illisible est refusée plutôt qu'arrondie discrètement vers
+`assessed`.
+
+**La précision de la localisation**, sur un marqueur. Les codes sont le
+`geo_precision` d'[ACLED](https://acleddata.com), que ce projet consigne à
+côté de chaque événement « pour refléter le fait que la localisation
+précise de l'incident peut ne pas être connue » — la précision 3
+signifiant une capitale provinciale qui tient lieu de province entière.
+Dessiner les trois comme le même point plein affirme un coin de rue que la
+source n'a jamais donné :
+
+```yaml
+events:
+  - lon: 38.0008
+    lat: 48.5947
+    precision: 2             # un lieu nommé qui tient lieu de zone générale
+    radius_km: 25            # facultatif : tracé à l'échelle de la carte
+    date: "mars 2026"
+    time_precision: 3        # l'infobulle lit « month of mars 2026 »
+    source: "https://example.org/rapport"   # provenance de ce marqueur-ci
+```
+
+La précision 1 est le point plein et garde son sens d'origine. Une
+position approximative renonce à son centre plein plutôt que de
+s'inventer une surface — un anneau creux, le vieux signe cartographique
+du « à peu près ici » — et la précision 3 brise en outre l'anneau. Un
+rayon n'est tracé que si vous en énoncez un : le générateur ne devinera
+pas une incertitude à partir du type d'événement, parce que les tampons
+publiés pour cela mesurent la portée d'un effet, non la mauvaise
+connaissance d'une position.
+
+### Quand la carte illustre un article
+
+L'article est le livrable ; la carte lui est subordonnée. Cela change
+plusieurs réglages par défaut.
+
+**Elle doit tenir dans la colonne.** Un graphique sur une colonne fait 595
+pixels de large à The Economist, Datawrapper publie à 600 par défaut, et une
+colonne de téléphone fait environ 375. La carte de légende fait 262 pixels
+fixes : acceptable à 1000, elle recouvre la carte à 375. `legend_position`
+accepte donc `below` (une bande pleine largeur sous la carte) et `auto`, qui
+choisit d'après la largeur de la planche :
+
+```yaml
+canvas_width: 375
+legend_position: auto     # garde la carte flottante tant qu'elle reste petite
+```
+
+**La note est l'essentiel.** La pratique des rédactions est unanime : c'est
+l'annotation qui fait la carte de presse, les autres couches sont là pour la
+soutenir. `annotations:` prend un point, une phrase, et éventuellement un
+rayon en kilomètres au sol :
+
+```yaml
+annotations:
+  - at: [30.5, 51.3]
+    text: "Les colonnes se sont retirées au nord de Kyiv en avril 2022."
+    place: left
+    color: "#2f5d92"
+    circle_km: 90
+```
+
+Un cercle plutôt qu'une flèche, parce qu'une pointe de flèche désigne un
+pixel et revendique une précision qu'une note sur une région n'a pas. La
+note prend la couleur de ce qu'elle décrit, pour se poser sur la carte au
+lieu d'en sauter.
+
+**Elle devrait dire où c'est sur Terre.** « Dézoomer pour la perspective,
+zoomer pour le détail » est la règle unique de la carte de localisation, et
+une planche qui ne fait que zoomer n'en honore que la moitié :
+
+```yaml
+inset:
+  position: top-right     # ou n'importe quel coin
+  zoom: 6                 # l'ampleur du dézoom, faute de bbox
+```
+
+**La page autour a besoin de mots et de chiffres.** `article_sidecar(svg)`
+les relit dans le fichier fini, pour qu'une légende saisie dans un CMS ne
+puisse pas diverger de la planche au-dessus :
+
+```python
+from sprezzature_maps import article_sidecar
+card = article_sidecar(svg)
+card["alt"]      # la description, plus une conclusion calculée
+card["zones"]    # [{"category", "confidence", "area_share"}, ...]
+card["markers"]  # [{"lon", "lat", "precision", "radius_km"}, ...]
+```
+
+Le texte alternatif porte une conclusion, ce que la description accessible
+n'avait pas — « Ukrainian government control covers the largest mapped
+share, 81% » —, calculée sur ce qui a été dessiné et non affirmée, et
+formulée « is claimed to cover » lorsque la plus grande part n'est qu'une
+revendication.
+
+**Elle doit être assez légère pour être publiée.** La géométrie est allégée à
+la résolution du rendu après projection (`simplify: 0` désactive), et le
+raster de relief est écrit en palette indexée exacte plutôt qu'en couleur 32
+bits. Ensemble, cela divise à peu près par deux le poids d'une planche —
+l'Ukraine passe de 2094 Ko à 1006 Ko — sans changement visible.
+
 Comme les deux autres types, la planche s'ouvre désormais sur une racine
 accessible (`role="img"` reliée à un couple `<title>`/`<desc>`), et sa
-description nomme les classes dessinées et reprend la réserve que porte
-la mention de provenance : la carte dessine l'évaluation qu'on lui a
-donnée, elle ne la vérifie pas.
+description nomme les classes dessinées, nomme tout palier de certitude
+inférieur à `assessed`, et reprend la réserve que porte la mention de
+provenance : la carte dessine l'évaluation qu'on lui a donnée, elle ne la
+vérifie pas. Chaque zone et chaque marqueur portent en outre leurs propres
+attributs `data-*` (`data-confidence`, `data-precision`,
+`data-area-share`), pour que l'évaluation se relise hors du fichier fini
+au lieu de seulement se regarder.
 
 La bibliothèque se joint de cinq façons : par import Python ; par la
 ligne de commande argparse (la bibliothèque standard de Python pour

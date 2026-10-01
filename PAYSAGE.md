@@ -99,10 +99,39 @@ pour que les formes et les angles locaux le restent.
 Le type `situation_map` est le cas le plus net. Zones de contrôle, ligne de
 contact, axes de progression fuselés, relief, rivières et lacs, échelle en
 deux unités et mention de provenance, depuis un fichier YAML : c'est un
-genre qui ne manque pas de *publications* (ISW, LiveUAMap, ACLED) et, à
+genre qui ne manque pas de *publications* (ISW, Liveuamap, ACLED) et, à
 notre connaissance, pas de *générateur* libre. Ces organisations publient
 des cartes et des données ; aucune ne livre une bibliothèque qui transforme
 votre propre évaluation en planche.
+
+Ne pas livrer de générateur ne veut pas dire n'avoir rien à enseigner, et
+ce qu'elles enseignent n'est pas de la géométrie. C'est **comment être
+moins affirmatif à dessein** :
+
+- **ISW** distingue visuellement le contrôle évalué, le mouvement rapporté
+  et la revendication non vérifiée d'un belligérant, ce qui permet de
+  confronter la carte au communiqué d'un ministère. `areas_of_control`
+  accepte un `confidence` valant `assessed` / `reported` / `claimed`, et
+  une zone revendiquée ne reçoit aucun aplat.
+- **ACLED** consigne un `geo_precision` de 1 à 3 à côté de chaque
+  événement parce que la localisation précise est souvent inconnue — la
+  précision 3 étant une capitale provinciale qui tient lieu de province
+  entière. Les marqueurs acceptent le même code, et un marqueur
+  approximatif se dessine en anneau creux plutôt qu'en point affirmatif.
+- **Liveuamap** attache une source à chaque événement plutôt qu'à la page.
+  Un marqueur accepte son propre `source:`.
+
+Le versant dessin a ses deux leçons. Le `-innerlines` de **mapshaper**
+existe parce que parcourir des polygones en traçant le contour de chacun
+dessine deux fois chaque frontière partagée ; ce dépôt faisait exactement
+cela, à 1,63× sur la planche Ukraine, et le décalage des phases de tiret
+avait silencieusement transformé la convention de frontière
+internationale en trait plein. Son vocabulaire `fill-pattern=` — hachures,
+points, carrés, tirets — est le jeu de trames qui dessine les paliers de
+certitude. Le `--data-fields` de **svgis** inscrit les champs d'une entité
+en attributs `data-*` pour que le dessin reste interrogeable une fois
+dessiné ; les zones et les marqueurs portent désormais les leurs, afin que
+l'argument d'une planche s'extraie au lieu de seulement se regarder.
 
 **Utilisez svgis** quand vous voulez la géométrie et aucun avis : des
 données réelles en entrée, un SVG propre et classé en sortie, la mise en

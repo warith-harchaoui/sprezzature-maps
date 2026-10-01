@@ -85,6 +85,7 @@ and plain dict-shaped records in preference to purpose-built classes.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import json
 import math
@@ -100,6 +101,7 @@ from _assets import figures_scripts_dir, geo_dir
 from _places import cities_in_view, place_labels
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
+from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
 
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py -- a genuinely
 # new capability (see that module's docstring), not something this repo's
@@ -124,6 +126,7 @@ from _render import svg_example_path, write_svg
 # fallback for a from-source dev setup.
 if "_svg_figures_tooltip" in sys.modules:
     tooltip_bubble = sys.modules["_svg_figures_tooltip"].tooltip_bubble
+    wrap_no_orphan = sys.modules["_svg_figures_tooltip"].wrap_no_orphan
 else:
     _tooltip_spec = importlib.util.spec_from_file_location(
         "_svg_figures_tooltip", figures_scripts_dir() / "_svg.py"
@@ -132,6 +135,9 @@ else:
     sys.modules["_svg_figures_tooltip"] = _svg_figures
     _tooltip_spec.loader.exec_module(_svg_figures)
     tooltip_bubble = _svg_figures.tooltip_bubble
+    # Same module, same reason: an annotation is wrapped prose, and wrapping
+    # it without leaving a one-word last line is the shared helper's job.
+    wrap_no_orphan = _svg_figures.wrap_no_orphan
 
 try:
     import yaml
@@ -1088,7 +1094,13 @@ def build_projection(bbox: list[float], epsg: str | None) -> Transformer:
 # --------------------------------------------------------------------------- #
 
 
-def make_viewport(proj: Transformer, bbox: list[float], width: float, pad: float) -> dict[str, Any]:
+def make_viewport(
+    proj: Transformer,
+    bbox: list[float],
+    width: float,
+    pad: float,
+    simplify: float = DEFAULT_TOLERANCE,
+) -> dict[str, Any]:
     """Project ``bbox`` and return a viewport mapping planar metres -> SVG units.
 
     Returns a dict-record with the canvas size, a ``to_svg(x, y)`` closure (flips y),
@@ -1147,6 +1159,9 @@ def make_viewport(proj: Transformer, bbox: list[float], width: float, pad: float
         "ts": max(1.0, width / 1000.0),
         "bbox": bbox,
         "proj": proj,
+        # Vertex-thinning tolerance in SVG units, carried on the viewport so
+        # every layer that draws a path picks it up without a new argument.
+        "simplify": simplify,
     }
 
 
@@ -1185,13 +1200,23 @@ def _project_geom(geom: Any, proj: Transformer) -> Any:
     return shp_transform(lambda xs, ys: proj.transform(xs, ys), geom)
 
 
-def _projected_ring_to_path(coords: Iterable[tuple[float, float]], vp: dict[str, Any]) -> str:
+def _projected_ring_to_path(
+    coords: Iterable[tuple[float, float]], vp: dict[str, Any], close: bool = True
+) -> str:
+    """Project one run of planar metres into an SVG path, minus what cannot be seen.
+
+    The vertices are thinned *after* the viewport transform, so the tolerance
+    is in the units actually drawn (see ``_simplify``). ``close`` tells the
+    thinner whether this run is a ring, which must keep at least three
+    points, or an open line, which may legitimately collapse to two.
+    """
     to_svg = vp["to_svg"]
-    out: list[str] = []
-    for i, (x, y) in enumerate(coords):
-        sx, sy = to_svg(x, y)
-        out.append(f"{'M' if i == 0 else 'L'}{sx:.2f},{sy:.2f}")
-    return "".join(out)
+    pts = [to_svg(x, y) for x, y in coords]
+    thin = simplify_ring if close else simplify_screen
+    pts = thin(pts, vp.get("simplify", DEFAULT_TOLERANCE))
+    return "".join(
+        f"{'M' if i == 0 else 'L'}{sx:.2f},{sy:.2f}" for i, (sx, sy) in enumerate(pts)
+    )
 
 
 def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) -> str:
@@ -1202,15 +1227,17 @@ def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) ->
         for poly in polys:
             if poly.is_empty:
                 continue
-            parts.append(_projected_ring_to_path(poly.exterior.coords, vp) + "Z")
+            parts.append(_projected_ring_to_path(poly.exterior.coords, vp, True) + "Z")
             for hole in poly.interiors:
-                parts.append(_projected_ring_to_path(hole.coords, vp) + "Z")
+                parts.append(_projected_ring_to_path(hole.coords, vp, True) + "Z")
     elif geom.geom_type in ("LineString", "MultiLineString"):
         lines = geom.geoms if geom.geom_type == "MultiLineString" else [geom]
         for line in lines:
             if line.is_empty:
                 continue
-            parts.append(_projected_ring_to_path(line.coords, vp) + ("Z" if close else ""))
+            parts.append(
+                _projected_ring_to_path(line.coords, vp, close) + ("Z" if close else "")
+            )
     return " ".join(parts)
 
 
@@ -1227,7 +1254,243 @@ _DEFAULT_FONT = "Roboto, 'Helvetica Neue', Arial, sans-serif"
 _MONO_FONT = "'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
 
 
-def svg_defs(contested_hatch: str = "#b03a3a") -> str:
+#: The four fill textures, named and shaped after mapshaper's ``-style
+#: fill-pattern=`` vocabulary ("there are four pattern types: hatches, dots,
+#: squares and dashes"). One texture is not enough once a zone has to say
+#: *how well known* it is as well as *whose* it is, and inventing a fifth
+#: ad-hoc hatch every time that need appears is how a legend stops being
+#: learnable. These four are distinguishable at plate scale, survive
+#: greyscale, and carry no hue of their own -- they take the actor's.
+_PATTERN_KINDS: frozenset[str] = frozenset({"hatches", "dots", "squares", "dashes"})
+
+
+def _pattern_id(kind: str, color: str) -> str:
+    """Return a stable, legal SVG id for the ``kind``/``color`` texture.
+
+    The sanitising rule is svgis's: drop everything that is not a letter,
+    digit or dash, and make sure the result cannot begin with a digit. A
+    colour reaches here as ``#9cc3d5`` or as a CSS name, and both have to
+    become an id two elements can agree on.
+
+    Examples
+    --------
+    >>> _pattern_id("hatches", "#9cc3d5")
+    'pat-hatches-9cc3d5'
+    >>> _pattern_id("dots", "rgb(1, 2, 3)")
+    'pat-dots-rgb123'
+    """
+    slug = "".join(ch for ch in color if ch.isalnum() or ch == "-")
+    return f"pat-{kind}-{slug or 'none'}"
+
+
+def _pattern_def(kind: str, color: str, scale: float = 1.0) -> str:
+    """Return one ``<pattern>`` element drawing ``kind`` in ``color``.
+
+    Every texture is built on the same 7-unit tile so two of them laid over
+    neighbouring zones beat at a comparable rhythm, and every one is drawn in
+    the zone's own colour rather than a fixed ink: the texture says how sure
+    the claim is, the hue says whose it is, and the two must not fight.
+
+    Parameters
+    ----------
+    kind : str
+        One of :data:`_PATTERN_KINDS`.
+    color : str
+        Any CSS colour; used for the texture's strokes and fills.
+    scale : float, optional
+        Multiplies the tile, so a large plate's textures do not shrink into
+        a flat wash. Tracks the viewport's type scale.
+
+    Raises
+    ------
+    ValueError
+        If ``kind`` is not one of the four. A mistyped texture that silently
+        drew nothing would leave a zone looking like plain assessed control,
+        which is the one reading this feature exists to prevent.
+    """
+    if kind not in _PATTERN_KINDS:
+        raise ValueError(
+            f"unknown fill pattern {kind!r}; known patterns are "
+            f"{', '.join(sorted(_PATTERN_KINDS))}"
+        )
+    t = 7.0 * scale  # tile side
+    pid = _pattern_id(kind, color)
+    head = (
+        f'<pattern id="{pid}" width="{t:.2f}" height="{t:.2f}" '
+        'patternUnits="userSpaceOnUse"'
+    )
+    if kind == "hatches":
+        # Rotated so the strokes never run parallel to a frontier dash.
+        return (
+            f'{head} patternTransform="rotate(45)">'
+            f'<line x1="0" y1="0" x2="0" y2="{t:.2f}" stroke="{color}" '
+            f'stroke-width="{2.0 * scale:.2f}" stroke-opacity="0.85"/></pattern>'
+        )
+    if kind == "dots":
+        return (
+            f"{head}>"
+            f'<circle cx="{t / 2:.2f}" cy="{t / 2:.2f}" r="{1.25 * scale:.2f}" '
+            f'fill="{color}" fill-opacity="0.9"/></pattern>'
+        )
+    if kind == "squares":
+        return (
+            f"{head}>"
+            f'<rect x="{t / 2 - 1.5 * scale:.2f}" y="{t / 2 - 1.5 * scale:.2f}" '
+            f'width="{3.0 * scale:.2f}" height="{3.0 * scale:.2f}" '
+            f'fill="{color}" fill-opacity="0.85"/></pattern>'
+        )
+    # dashes: short horizontal ticks, offset row to row so they do not line up
+    # into readable columns.
+    return (
+        f"{head}>"
+        f'<line x1="0" y1="{t / 4:.2f}" x2="{t / 2:.2f}" y2="{t / 4:.2f}" '
+        f'stroke="{color}" stroke-width="{1.6 * scale:.2f}" stroke-opacity="0.85"/>'
+        f'<line x1="{t / 2:.2f}" y1="{3 * t / 4:.2f}" x2="{t:.2f}" y2="{3 * t / 4:.2f}" '
+        f'stroke="{color}" stroke-width="{1.6 * scale:.2f}" stroke-opacity="0.85"/>'
+        "</pattern>"
+    )
+
+
+#: How sure the assessment is, as a rendering rule per tier.
+#:
+#: Taken from ISW, whose control-of-terrain plates keep three separate things
+#: apart that a single "controlled" fill runs together: ground they assess a
+#: force actually holds, ground where movement has been *reported* but not
+#: assessed as held, and ground a belligerent *claims* and nobody has
+#: verified. ISW draws those as solid, as a stripe, and in a hue of their own
+#: respectively, and the distinction is the whole reason their maps can be
+#: read against a ministry's communiqué. A plate that collapses the three
+#: into one fill is not simpler, it is making a stronger claim than its
+#: sources support.
+#:
+#: Each entry gives the fill opacity as a multiple of the zone's configured
+#: opacity, the texture laid over it, whether the outline is dashed, and the
+#: words the legend uses.
+#: Ink for the legend's texture key. Neutral on purpose: the swatch there
+#: teaches the *texture*, not a class, and borrowing one class's hue for it
+#: would read as "stripes mean the blue side".
+_LEGEND_TEXTURE_INK = "#6b7280"
+
+_CONFIDENCE_TIERS: dict[str, dict[str, Any]] = {
+    # The default, and what every plate drawn before this option existed means.
+    "assessed": {"fill": 1.0, "pattern": None, "dashed": False, "label": "assessed"},
+    # Still plainly the same class, plainly less certain: rendered at 0.45 of
+    # the zone opacity the stripes read but the band stopped looking like the
+    # same actor and started looking like a fifth colour on the plate.
+    "reported": {"fill": 0.6, "pattern": "hatches", "dashed": False, "label": "reported, not assessed"},
+    # No solid fill at all: a claim nobody has verified should not paint the
+    # ground the colour of ground that is held.
+    "claimed": {"fill": 0.0, "pattern": "dots", "dashed": True, "label": "claimed, unverified"},
+}
+
+
+def _confidence_of(raw: Any) -> str:
+    """Return the confidence tier named by ``raw``, defaulting to ``"assessed"``.
+
+    Parameters
+    ----------
+    raw : Any
+        Whatever the feature's confidence property held: usually a string,
+        possibly ``None`` on a feature that never set one.
+
+    Returns
+    -------
+    str
+        A key of :data:`_CONFIDENCE_TIERS`.
+
+    Raises
+    ------
+    ValueError
+        If ``raw`` names a tier this generator does not draw. Falling back to
+        "assessed" on a typo would quietly upgrade a claim nobody verified
+        into ground a force is assessed to hold -- the single most damaging
+        thing this layer can get wrong, and invisible on the finished plate.
+
+    Examples
+    --------
+    >>> _confidence_of(None), _confidence_of("Reported"), _confidence_of("claimed")
+    ('assessed', 'reported', 'claimed')
+    >>> _confidence_of("probably")
+    Traceback (most recent call last):
+      ...
+    ValueError: unknown confidence 'probably'; known tiers are assessed, claimed, reported
+    """
+    if raw is None or raw == "":
+        return "assessed"
+    tier = str(raw).strip().lower()
+    if tier not in _CONFIDENCE_TIERS:
+        raise ValueError(
+            f"unknown confidence {str(raw)!r}; known tiers are "
+            f"{', '.join(sorted(_CONFIDENCE_TIERS))}"
+        )
+    return tier
+
+
+def _plate_patterns(cfg: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return the ``(kind, colour)`` textures this plate's zones need in ``<defs>``.
+
+    Read off the config, before any geometry is projected, so ``<defs>`` can be
+    written at the top of the document the way SVG wants it -- and so a plate
+    with no non-assessed zone pays nothing for the feature existing.
+    """
+    aoc = cfg.get("areas_of_control", {})
+    palette = aoc.get("palette", {})
+    if not palette:
+        return []
+    wanted: list[tuple[str, str]] = []
+    for tier_name, classes in _zone_tiers(cfg).items():
+        kind = _CONFIDENCE_TIERS[tier_name]["pattern"]
+        if not kind:
+            continue
+        for cat in classes:
+            wanted.append((str(kind), palette.get(cat, "#dddddd")))
+        # The legend keys the texture itself, in a neutral ink, so the reader
+        # learns "stripes mean reported" once rather than once per class.
+        wanted.append((str(kind), _LEGEND_TEXTURE_INK))
+    return list(dict.fromkeys(wanted))
+
+
+def _zone_tiers(cfg: dict[str, Any]) -> dict[str, set[str]]:
+    """Return ``{confidence tier: {class names drawn at it}}`` for this plate.
+
+    The legend needs to show a tier only if a zone actually uses it, and to
+    show it in a colour the reader will meet on the map.
+
+    Called from four places that each take only ``cfg`` -- ``<defs>``, the
+    legend's sizing and its drawing, and the accessible description -- so a
+    config whose ``source`` is a *path* re-reads and re-parses that file once
+    per call. Measured on the Sudan example's 39 KB source: +0.07 s against a
+    1.50 s render, which is not worth threading a cache through four public
+    signatures for. An inline ``FeatureCollection``, which every bundled
+    example uses, costs nothing at all.
+    """
+    aoc = cfg.get("areas_of_control", {})
+    field = aoc.get("category_field", "actor")
+    conf_field = aoc.get("confidence_field", "confidence")
+    try:
+        features = _load_features(aoc.get("source"), Path(cfg.get("_config_dir", ".")))
+    except Exception:
+        return {}
+    out: dict[str, set[str]] = {}
+    for feat in features:
+        props = feat.get("properties", {})
+        out.setdefault(_confidence_of(props.get(conf_field)), set()).add(
+            str(props.get(field, ""))
+        )
+    return out
+
+
+def _tiers_present(cfg: dict[str, Any]) -> list[str]:
+    """Return the non-default confidence tiers this plate draws, in ladder order.
+
+    ``assessed`` is left out on purpose: it is what an unmarked zone already
+    means, so keying it would add a legend row that says "the normal one".
+    """
+    present = _zone_tiers(cfg)
+    return [t for t in _CONFIDENCE_TIERS if t != "assessed" and t in present]
+
+
+def svg_defs(contested_hatch: str = "#b03a3a", patterns: Iterable[tuple[str, str]] = ()) -> str:
     """Return the ``<defs>`` block: soft drop-shadows, the contested hatch, markers.
 
     Parameters
@@ -1236,7 +1499,13 @@ def svg_defs(contested_hatch: str = "#b03a3a") -> str:
         Stroke colour of the diagonal hatch used to render a contested zone; it
         tracks the map's contested fill so the hatch reads as "the same category,
         emphasised" rather than an unrelated red.
+    patterns : iterable of (str, str), optional
+        ``(kind, colour)`` pairs to emit as ``<pattern>`` elements, one per
+        confidence texture the plate actually uses. Deduplicated here, so a
+        caller may pass the same pair once per zone without producing
+        duplicate ids.
     """
+    extra = "".join(_pattern_def(k, c) for k, c in dict.fromkeys(patterns))
     return (
         "<defs>"
         '<filter id="panel-shadow" x="-10%" y="-10%" width="120%" height="120%">'
@@ -1254,6 +1523,7 @@ def svg_defs(contested_hatch: str = "#b03a3a") -> str:
         f'<line x1="0" y1="0" x2="0" y2="6.5" stroke="{contested_hatch}" stroke-width="1.25" '
         'stroke-opacity="0.6"/>'
         "</pattern>"
+        f"{extra}"
         "</defs>"
     )
 
@@ -1301,14 +1571,13 @@ def _nice_round(value: float) -> float:
 
 
 def scale_bar(x: float, y: float, vp: dict[str, Any], ink: str = "#1b2733") -> str:
-    """Return a dual-unit (km + mi) scale bar sized to a round distance on the map."""
-    m_per_unit = vp["m_per_unit"]
-    target_units = min(vp["width"] * 0.22, 180)  # aim ~1/5 canvas, capped
-    km = _nice_round(target_units * m_per_unit / 1000.0)
-    mi = _nice_round(target_units * m_per_unit / 1609.34)
-    km_len = km * 1000.0 / m_per_unit
-    mi_len = mi * 1609.34 / m_per_unit
+    """Return a dual-unit (km + mi) scale bar sized to a round distance on the map.
 
+    The distances themselves come from :func:`_scale_bar_lengths`, which
+    :func:`_reserved_boxes` also reads so the label layers know exactly how
+    much room this takes.
+    """
+    km, km_len, mi, mi_len = _scale_bar_lengths(vp)
     ts = vp["ts"]
     fs = 10 * ts
     hw = 2.8 * ts  # bar half-height
@@ -1332,6 +1601,109 @@ def scale_bar(x: float, y: float, vp: dict[str, Any], ink: str = "#1b2733") -> s
         f'<g id="scale-bar">{bar(y, km_len, _fmt_num(km), "KM")}'
         f"{bar(y + 20 * ts, mi_len, _fmt_num(mi), 'MI')}</g>"
     )
+
+
+def _scale_bar_lengths(vp: dict[str, Any]) -> tuple[float, float, float, float]:
+    """Return ``(km, km_units, mi, mi_units)`` for this viewport's scale bar.
+
+    Shared by :func:`scale_bar`, which draws it, and
+    :func:`_reserved_boxes`, which keeps labels out of the space it takes.
+    One computation, because two would drift and the symptom would be a
+    label half-covered by a bar.
+
+    Rounding the mile distance against the *kilometre bar's own length*,
+    rather than against the original target, keeps the stacked pair
+    comparable: rounded independently they could both land on "200" in
+    different units, and a mile is 1.609 km.
+    """
+    m_per_unit = vp["m_per_unit"]
+    target_units = min(vp["width"] * 0.22, 180)  # aim ~1/5 canvas, capped
+    ts = vp["ts"]
+    fs = 10 * ts
+
+    def fits(length: float, total: str, unit: str) -> bool:
+        text = len("0") + len(total) + len(unit)
+        return length >= text * fs * _GLYPH_WIDTH_RATIO + 8 * ts
+
+    def grow(value: float, metres: float, unit: str) -> tuple[float, float]:
+        for _ in range(6):
+            length = value * metres / m_per_unit
+            if fits(length, _fmt_num(value), unit):
+                return value, length
+            value = value * (2.5 if str(_fmt_num(value)).startswith("2") else 2)
+        return value, value * metres / m_per_unit
+
+    km, km_len = grow(_nice_round(target_units * m_per_unit / 1000.0), 1000.0, "KM")
+    mi, mi_len = grow(_nice_round(km_len * m_per_unit / 1609.34), 1609.34, "MI")
+    return km, km_len, mi, mi_len
+
+
+def _scale_bar_origin(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float]:
+    """Return where :func:`_furniture_layer` will put the scale bar.
+
+    Its home is bottom-left; a bottom-left legend card pushes it to the
+    opposite corner. Shared with :func:`_reserved_boxes` so the rectangle
+    labels are kept out of is the rectangle the bar actually occupies --
+    computing it twice is how a reservation ends up protecting empty paper
+    while the bar prints over a name somewhere else.
+    """
+    ts, W, H = vp["ts"], vp["width"], vp["height"]
+    x = 26 * ts
+    if _resolve_legend_position(cfg, ts, W) == "bottom-left" and cfg.get(
+        "areas_of_control", {}
+    ).get("palette"):
+        x = W - 176 * ts
+    return x, H - 44 * ts - _caption_height(cfg, ts)
+
+
+def _reserved_boxes(cfg: dict[str, Any], vp: dict[str, Any]) -> list[tuple[float, float, float, float]]:
+    """Return the plate rectangles furniture owns, which labels must not enter.
+
+    Furniture wins and labels yield. The alternative -- drawing the bar over
+    whatever is there -- is what the plates did before, and it put the scale
+    bar straight across ``TANZANIA`` on the eastern-DRC plate and across
+    ``Amman`` and ``Jerusalem`` on the Syrian one. A name with a bar through
+    it is not a name, while a name that is simply absent costs the reader
+    one place out of thirty.
+
+    Only the furniture whose position is fixed before the label layers run
+    is listed: the scale bar, and a legend card floating over the map. The
+    north arrow sits in a corner the label layers already avoid, and the
+    title block sits above the map's own content on every plate rendered so
+    far.
+    """
+    ts, W, H = vp["ts"], vp["width"], vp["height"]
+    boxes: list[tuple[float, float, float, float]] = []
+
+    _km, km_len, _mi, mi_len = _scale_bar_lengths(vp)
+    bar_x, bar_y = _scale_bar_origin(cfg, vp)
+    # The bar draws two rules, 20*ts apart, each labelled 6*ts above its
+    # own rule; the pad is the cap height of that 10*ts text plus slack.
+    boxes.append(
+        (
+            bar_x - 4 * ts,
+            bar_y - 18 * ts,
+            bar_x + max(km_len, mi_len) + 4 * ts,
+            bar_y + 26 * ts,
+        )
+    )
+
+    position = _resolve_legend_position(cfg, ts, W)
+    if position in ("bottom-right", "bottom-left", "top-left", "top-right"):
+        panel_w, panel_h, margin = _legend_panel_dims(cfg, ts)
+        if panel_w:
+            px = margin if position in ("bottom-left", "top-left") else W - panel_w - margin
+            py = (
+                margin
+                if position in ("top-left", "top-right")
+                else H - panel_h - margin - _caption_height(cfg, ts)
+            )
+            boxes.append((px, py, px + panel_w, py + panel_h))
+
+    inset = _inset_box(cfg, vp)
+    if inset is not None:
+        boxes.append(inset)
+    return boxes
 
 
 def _fmt_num(v: float) -> str:
@@ -1533,6 +1905,16 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
             f"{name} (contested)" if name in contested else str(name) for name in palette
         )
         sentences.append(f"Areas of control in {len(palette)} classes: {named}.")
+        # The confidence textures are the one thing on this plate a sighted
+        # reader gets for free and a screen-reader user gets not at all: a
+        # claimed zone and an assessed zone are the same <path> to them unless
+        # the description says which tiers are drawn.
+        tiers = _tiers_present(cfg)
+        if tiers:
+            spelled = ", ".join(str(_CONFIDENCE_TIERS[t]["label"]) for t in tiers)
+            sentences.append(
+                f"Some zones are drawn at a lower confidence than assessed control: {spelled}."
+            )
 
     if cfg.get("front", {}).get("line"):
         sentences.append("An approximate front line is drawn.")
@@ -1578,7 +1960,10 @@ def build_map(cfg: dict[str, Any]) -> str:
     proj = build_projection(bbox, cfg.get("projection", "auto"))
     width = float(cfg.get("canvas_width", 1000))
     pad = float(cfg.get("padding", 26))
-    vp = make_viewport(proj, bbox, width, pad)
+    vp = make_viewport(proj, bbox, width, pad, float(cfg.get("simplify", DEFAULT_TOLERANCE)))
+    # Computed before any layer draws, because the label layers run first and
+    # the furniture that would print over them is drawn last.
+    vp["reserved"] = _reserved_boxes(cfg, vp)
     W, H = vp["width"], vp["height"]
 
     basemap = cfg.get("basemap", {})
@@ -1759,9 +2144,15 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 8. annotation-labels -------------------------------------------------- #
     layers.append(_labels_layer(cfg, proj, vp))
+    # Editorial notes ride above every map layer and below the furniture:
+    # an annotation that a river or a label can cross is not an annotation.
+    layers.append(_annotations_layer(cfg, proj, vp))
 
     # 9. annotation-furniture ---------------------------------------------- #
     layers.append(_furniture_layer(cfg, vp))
+    # The locator inset is furniture too, and it answers the half of the
+    # locator rule the plate itself cannot: where on Earth this is.
+    layers.append(_inset_layer(cfg, vp))
 
     # The caption sits with the furniture, not with the geography: the geo
     # layers are clipped to the region polygon, and a footer under the map
@@ -1791,11 +2182,16 @@ def build_map(cfg: dict[str, Any]) -> str:
     # legend floating over map content), so the map's own W/H stay untouched
     # for every layer already drawn above -- only the outer plate/canvas size
     # changes here.
-    legend_pos = str(cfg.get("legend_position", "bottom-right"))
+    legend_pos = _resolve_legend_position(cfg, vp["ts"], W)
     if legend_pos == "right":
         panel_w, panel_h, corner_margin = _legend_panel_dims(cfg, vp["ts"])
         plate_w = W + corner_margin + panel_w + corner_margin
         plate_h = max(H, panel_h + 2 * corner_margin)
+    elif legend_pos == "below":
+        # The band is drawn under the map, so the plate grows downwards and
+        # the map's own W/H stay untouched for every layer already drawn.
+        band_h, _cols, _cw, _rh = _legend_band_dims(cfg, vp["ts"], W)
+        plate_w, plate_h = W, H + band_h
     else:
         plate_w, plate_h = W, H
     outer_w = plate_w + 2 * margin
@@ -1815,7 +2211,7 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'role="img" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
-        f"{svg_defs(hatch)[:-7]}{clip}</defs>"
+        f"{svg_defs(hatch, _plate_patterns(cfg))[:-7]}{clip}</defs>"
         # Hover-info bubbles for areas-of-control zones and forces/events
         # markers: same .hit/.tip convention as case-studies/financial-markets
         # and make_choropleth.py.
@@ -2036,6 +2432,10 @@ def _areas_of_control_layer(
     if not features:
         return '<g id="areas-of-control"></g>'
     field = aoc.get("category_field", "actor")
+    # How sure the assessment is, read per feature. Orthogonal to the category:
+    # "whose ground is this" and "how well do we know that" are two different
+    # questions, and a zone answers both. See :data:`_CONFIDENCE_TIERS`.
+    conf_field = aoc.get("confidence_field", "confidence")
     palette = aoc.get("palette", {})
     contested = set(aoc.get("contested", []))
     casing_w = float(aoc.get("casing_width", 2.4))
@@ -2067,6 +2467,7 @@ def _areas_of_control_layer(
     for feat in features:
         props = feat.get("properties", {})
         cat = props.get(field, "")
+        conf = _confidence_of(props.get(conf_field))
         src = shape(feat["geometry"])
         # Clip to the region before projecting. A caller who hands over a whole
         # country's outline for a plate showing one province of it was emitting
@@ -2086,13 +2487,14 @@ def _areas_of_control_layer(
         d = projected_geom_to_path(geom, vp)
         if not d:
             continue
-        zones.append({"cat": cat, "geom": geom, "d": d})
+        zones.append({"cat": cat, "conf": conf, "geom": geom, "d": d})
     total_area = sum(z["geom"].area for z in zones) or 1.0
 
     casings: list[str] = []
     fills: list[str] = []
     for z in zones:
-        cat, geom, d = z["cat"], z["geom"], z["d"]
+        cat, conf, geom, d = z["cat"], z["conf"], z["geom"], z["d"]
+        tier = _CONFIDENCE_TIERS[conf]
         # White casing drawn first (under the fill) so borders read as clean seams.
         casings.append(
             f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{casing_w}" '
@@ -2100,14 +2502,43 @@ def _areas_of_control_layer(
         )
         color = palette.get(cat, "#dddddd")
         is_contested = cat in contested
-        fills.append(
-            f'<path class="hit" tabindex="0" d="{d}" fill="{color}" fill-opacity="{fill_op:.2f}" '
-            f'stroke="{color}" stroke-width="0.7" stroke-opacity="0.95"{fill_style}/>'
+        # A claimed zone gets no solid fill and a dashed edge: painting it the
+        # same colour as ground a force is assessed to hold would assert
+        # exactly the thing nobody has verified.
+        zone_op = fill_op * float(tier["fill"])
+        edge = (
+            f' stroke-dasharray="{5.0:.1f} {3.2:.1f}"' if tier["dashed"] else ""
         )
+        # The zone's claim, readable back out of the file: svgis's
+        # ``--data-fields`` idea, kept to the three fields that *are* the
+        # claim. ``data-area-share`` is the same number the tooltip shows,
+        # computed from the projected geometry rather than asserted.
+        data = (
+            f' data-category="{_esc(str(cat))}" data-confidence="{conf}"'
+            f' data-area-share="{geom.area / total_area:.4f}"'
+        )
+        fills.append(
+            f'<path class="hit" tabindex="0" d="{d}" fill="{color}" fill-opacity="{zone_op:.2f}" '
+            f'stroke="{color}" stroke-width="{1.4 if tier["dashed"] else 0.7}" '
+            f'stroke-opacity="0.95"{edge}{data}{fill_style}/>'
+        )
+        # ``pointer-events="none"`` on every texture overlay. A pattern fill is
+        # painted, so by default it swallows the pointer -- and these sit
+        # *above* the ``.hit`` path, which is what the ``.hit:hover~.tip``
+        # rule needs to see the cursor. Without it a textured zone is the one
+        # kind of zone whose tooltip never opens, which was already true of
+        # every contested zone before the confidence textures arrived.
+        if tier["pattern"]:
+            fills.append(
+                f'<path d="{d}" fill="url(#{_pattern_id(tier["pattern"], color)})" '
+                'pointer-events="none"/>'
+            )
         if is_contested:
-            fills.append(f'<path d="{d}" fill="url(#hatch-contested)"/>')
+            fills.append(f'<path d="{d}" fill="url(#hatch-contested)" pointer-events="none"/>')
         share_pct = geom.area / total_area * 100
         detail = f"{share_pct:.1f}% of mapped area"
+        if conf != "assessed":
+            detail += f" · {tier['label']}"
         if is_contested:
             detail += " · contested"
         rp = geom.representative_point()
@@ -2183,6 +2614,21 @@ def _frontiers_layer(
     region_area = region_box.area
     lines: list[str] = []
     labels: list[str] = []
+    # Every shared border belongs to two countries, so walking the countries
+    # and drawing each one's whole outline draws the inland half of this layer
+    # **twice** -- measured at 1.63x the real frontier length on the bundled
+    # Ukraine plate. Two coincident strokes at 0.85 alpha composite to 0.98,
+    # and worse, their dash phases start at different vertices, so the two
+    # dash patterns interleave and fill each other's gaps: the inland borders
+    # came out darker *and* near-solid, while the coastline next to them
+    # stayed properly dashed. The dashed hairline is the international-border
+    # convention, and it was being lost precisely on the international
+    # borders. So collect the pieces and union them before drawing -- each
+    # line once, one dash phase, the same weight everywhere. This is what
+    # mapshaper's ``-innerlines`` is for: shared boundaries as their own
+    # layer, carrying no per-country attribute data (the labels below are
+    # per-country and stay in the loop).
+    pieces: list[Any] = []
     # region_box.bounds is (minx, miny, maxx, maxy) == (west, south, east,
     # north) -- exactly the bbox shape _land_topojson_for_bbox expects, so
     # the frontier layer picks the same 10m/50m tier the basemap itself did.
@@ -2193,14 +2639,7 @@ def _frontiers_layer(
             continue
         if vis.is_empty:
             continue
-        gp = _project_geom(poly.boundary.intersection(region_box), proj)
-        d = projected_geom_to_path(gp, vp, close=False)
-        if d:
-            lines.append(
-                f'<path d="{d}" fill="none" stroke="{color}" '
-                f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="0.85" '
-                f'stroke-dasharray="{3.4 * ts:.1f} {2.4 * ts:.1f}"/>'
-            )
+        pieces.append(poly.boundary.intersection(region_box))
         if do_label and name and name.lower() not in focus and vis.area >= min_frac * region_area:
             pt = _label_point(vis)
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
@@ -2210,6 +2649,16 @@ def _frontiers_layer(
                 labels.append(
                     tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
                 )
+    if pieces:
+        # unary_union nodes the collection and merges the coincident runs, so a
+        # border two countries share survives as one line rather than two.
+        d = projected_geom_to_path(_project_geom(unary_union(pieces), proj), vp, close=False)
+        if d:
+            lines.append(
+                f'<path d="{d}" fill="none" stroke="{color}" '
+                f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="0.85" '
+                f'stroke-dasharray="{3.4 * ts:.1f} {2.4 * ts:.1f}"/>'
+            )
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
 
 
@@ -2297,6 +2746,13 @@ def _label_fits(
     x1 = x0 + width
     # Cap height above the baseline, a little descender room below.
     y0, y1 = y - 0.78 * size, y + 0.24 * size
+    # Furniture owns its rectangles and labels yield: a name with a scale bar
+    # through it is not a name. Read off the viewport rather than passed in,
+    # so every layer that places text -- cities, territories, neighbours --
+    # obeys the same reservation without a new argument at each call site.
+    for rx0, ry0, rx1, ry1 in vp.get("reserved", ()):
+        if x0 < rx1 and x1 > rx0 and y0 < ry1 and y1 > ry0:
+            return False
     if region is None:
         return x0 >= 0.0 and x1 <= float(vp["width"]) and y0 >= 0.0 and y1 <= float(vp["height"])
     try:
@@ -2688,6 +3144,101 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
     return f'<g id="front-line">{"".join(parts)}</g>'
 
 
+#: What a marker's ``precision`` says about where the thing it marks happened.
+#:
+#: Taken from ACLED's ``geo_precision``, a 1-3 code recorded next to every
+#: event "to reflect the fact that the precise location of the incident may
+#: not be known": 1 is a named town with coordinates, 2 is a town standing in
+#: for a general area ("part of region"), 3 is a *provincial capital standing
+#: in for a whole province*. ACLED is explicit that the coordinates "do not
+#: reflect a more precise location, like a block or street corner, within the
+#: named location".
+#:
+#: A map that draws all three as the same hard dot throws that away and
+#: asserts a street corner its source never gave. The point of this table is
+#: that the mark itself carries the code, so a reader does not have to take
+#: the analyst's word for which dots are solid reporting.
+_GEO_PRECISION: dict[int, str] = {
+    1: "named location",
+    2: "approximate — a place standing in for a general area",
+    3: "approximate — a place standing in for a whole region",
+}
+
+#: How a date's precision is spoken, after ACLED's ``time_precision``: 1 is
+#: the exact day, 2 is known only to the week, 3 only to the month.
+_TIME_PRECISION: dict[int, str] = {1: "{}", 2: "week of {}", 3: "month of {}"}
+
+
+#: Every key a marker in ``forces`` or ``events`` may carry.
+#:
+#: Same reasoning as :data:`CONFIG_KEYS` one level down. A marker is a dict
+#: hand-written in a YAML file, and ``percision: 3`` would be read as no
+#: precision at all -- which draws the confident, solid dot, the exact
+#: opposite of what the author asked for, on a plate that still looks
+#: finished. The failure is silent and it runs in the dangerous direction.
+_MARKER_KEYS: frozenset[str] = frozenset({
+    "lon", "lat", "color", "r", "label",
+    "precision", "radius_km", "date", "time_precision", "source",
+})
+
+
+def _check_marker(item: dict[str, Any], layer_id: str) -> None:
+    """Refuse a marker carrying a key this generator never reads.
+
+    Raises
+    ------
+    ValueError
+        Naming the closest known key, because the realistic cause is a typo
+        and the realistic fix is one character.
+    """
+    unknown = sorted(set(item) - _MARKER_KEYS)
+    if not unknown:
+        return
+    hints = []
+    for key in unknown:
+        near = get_close_matches(key, sorted(_MARKER_KEYS), n=1, cutoff=0.7)
+        hints.append(f"{key!r}" + (f" (did you mean {near[0]!r}?)" if near else ""))
+    raise ValueError(
+        f"a {layer_id} marker has key(s) this generator never reads, so whatever "
+        f"they configure would be silently dropped: {', '.join(hints)}. "
+        f"Known marker keys: {', '.join(sorted(_MARKER_KEYS))}"
+    )
+
+
+def _precision_of(raw: Any, table: dict[int, Any], field: str) -> int:
+    """Return the 1-3 precision code in ``raw``, defaulting to 1 (exact).
+
+    Raises
+    ------
+    ValueError
+        If ``raw`` is not one of the codes in ``table``. Silently treating an
+        unreadable code as "exact" would upgrade an approximate mark into a
+        confident one, which is the failure this whole feature exists to stop.
+
+    Examples
+    --------
+    >>> _precision_of(None, _GEO_PRECISION, "precision")
+    1
+    >>> _precision_of("3", _GEO_PRECISION, "precision")
+    3
+    >>> _precision_of(4, _GEO_PRECISION, "precision")
+    Traceback (most recent call last):
+      ...
+    ValueError: marker 'precision' must be one of 1, 2, 3; got 4
+    """
+    if raw is None or raw == "":
+        return 1
+    try:
+        code = int(raw)
+    except (TypeError, ValueError):
+        code = -1
+    if code not in table:
+        raise ValueError(
+            f"marker {field!r} must be one of {', '.join(str(k) for k in table)}; got {raw!r}"
+        )
+    return code
+
+
 def _markers_layer(
     items: list[dict[str, Any]],
     proj: Transformer,
@@ -2711,19 +3262,82 @@ def _markers_layer(
     W, H = vp["width"], vp["height"]
     out: list[str] = []
     for it in items:
+        _check_marker(it, layer_id)
         x, y = vp["to_svg"](*proj.transform(it["lon"], it["lat"]))
         color = it.get("color", "#b03a3a")
         r = float(it.get("r", 5))
+        precision = _precision_of(it.get("precision"), _GEO_PRECISION, "precision")
+        # A stated uncertainty radius, in kilometres on the ground, drawn to
+        # the plate's own scale. Deliberately *not* defaulted from the event
+        # type: ACLED publishes per-type buffers (5 km for battles and
+        # explosions, 2 km for riots), but those measure how far an event's
+        # effect reached, not how badly its position is known. Borrowing one
+        # for the other would dress a guess as a measurement.
+        radius_km = it.get("radius_km")
+        halo = ""
+        if radius_km is not None:
+            rr = float(radius_km) * 1000.0 / vp["m_per_unit"]
+            halo = (
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{rr:.1f}" fill="{color}" '
+                f'fill-opacity="0.12" stroke="{color}" stroke-width="1" '
+                f'stroke-opacity="0.55" stroke-dasharray="4 3" pointer-events="none"/>'
+            )
+        # svgis turns a feature's own fields into ``data-*`` attributes
+        # (``--data-fields``) so the drawing stays queryable after it is
+        # drawn. Worth copying: a finished plate is an argument, and an
+        # argument a reader can only squint at is weaker than one they can
+        # read back out of the file. Named for their meaning rather than for
+        # whatever the config happened to call the column.
+        data = (
+            f' data-precision="{precision}"'
+            f' data-lon="{it["lon"]:.4f}" data-lat="{it["lat"]:.4f}"'
+        )
+        if radius_km is not None:
+            data += f' data-radius-km="{float(radius_km):g}"'
+        # No radius and no precision: the solid dot stays, and it means what it
+        # has always meant -- we know the place. An approximate position loses
+        # its solid centre instead of gaining a made-up area: a hollow ring is
+        # the old cartographic signal for "about here", and unlike a disc of
+        # invented radius it claims nothing it cannot support.
+        if precision == 1:
+            paint = f'fill="{color}" stroke="#fff" stroke-width="1.4"'
+        else:
+            # Precision 3 is a whole region pinned to its capital, so its ring
+            # is broken as well as hollow: one step further from "a place".
+            broken = ' stroke-dasharray="3 2.2"' if precision == 3 else ""
+            paint = (
+                f'fill="#ffffff" fill-opacity="0.65" stroke="{color}" '
+                f'stroke-width="{max(1.6, r * 0.45):.1f}"{broken}'
+            )
         out.append(
-            f'<circle class="hit" tabindex="0" cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" '
-            f'fill="{color}" stroke="#fff" stroke-width="1.4" filter="url(#marker-shadow)"/>'
+            f'{halo}<circle class="hit" tabindex="0" cx="{x:.1f}" cy="{y:.1f}" '
+            f'r="{r:.1f}" {paint}{data} filter="url(#marker-shadow)"/>'
         )
         headline = it.get("label") or legend_by_color.get(color) or layer_id.capitalize()
+        lines = [headline, f"{it['lat']:.2f}°, {it['lon']:.2f}° · {layer_id}"]
+        if precision != 1:
+            note = _GEO_PRECISION[precision]
+            if radius_km is not None:
+                note += f", within {float(radius_km):g} km"
+            lines.append(note)
+        date = it.get("date")
+        if date:
+            lines.append(
+                _TIME_PRECISION[
+                    _precision_of(it.get("time_precision"), _TIME_PRECISION, "time_precision")
+                ].format(date)
+            )
+        # Where this one mark came from. LiveUAMap's discipline: provenance
+        # per event, not per plate. A caption saying "open sources" covers
+        # the map; it tells a reader nothing about the dot they are looking
+        # at, which is the thing they actually want to check.
+        if it.get("source"):
+            lines.append(f"Source: {it['source']}")
         out.append(
             tooltip_bubble(
                 x,
                 y - r - 6,
-                [headline, f"{it['lat']:.2f}°, {it['lon']:.2f}° · {layer_id}"],
+                lines,
                 anchor="middle",
                 canvas_w=W,
                 canvas_h=H,
@@ -3184,6 +3798,266 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
     return f'<g id="annotation-labels">{"".join(out)}</g>'
 
 
+#: How far an annotation's note sits from the point it annotates, in SVG
+#: units at ts=1. Close enough to read as attached, far enough that the
+#: leader line is visibly a leader line rather than a tick.
+_ANNOTATION_OFFSET = 26.0
+
+#: Characters per line before an annotation wraps. Narrow on purpose: a note
+#: on a map is a caption, not a paragraph, and a wide measure invites one.
+_ANNOTATION_WRAP = 30
+
+
+def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
+    """Return the editorial notes: a circled point, a leader, and a sentence.
+
+    This is the layer that makes a map an argument rather than a diagram.
+    Every piece of newsroom guidance on the subject says the same thing --
+    that the annotation *is* the news map, and that the other layers exist
+    to support it -- and the specific conventions here are Datawrapper's:
+
+    * **A circle, not an arrow.** An arrowhead points at a pixel and so
+      claims a precision a note about a region does not have; a ring says
+      "around here", which is what an annotation almost always means. The
+      radius is in kilometres on the ground and drawn to the plate's scale,
+      the same honesty the ACLED-style marker halos use.
+    * **The data's own colours, not a contrasting one.** A note in the
+      colour of the thing it describes sits back onto the map; a note in a
+      fresh hue jumps off it and reads as chrome.
+    * **Few, and spread out.** Nothing enforces that here -- it is an
+      editorial matter -- but the wrap width is deliberately narrow so a
+      long note looks wrong while it is being written rather than after it
+      is rendered.
+
+    Each note carries a halo (``paint-order="stroke"``), because the one
+    place an annotation has to stay legible is over the relief and the
+    control fills it is pointing at.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``annotations``: a list of ``{at: [lon, lat], text: str}``,
+        each optionally with ``place`` (``"right"``, ``"left"``, ``"above"``
+        or ``"below"``), ``color``, ``circle_km`` and ``wrap``.
+    proj : pyproj.Transformer
+        The plate's lon/lat -> planar-metres transformer.
+    vp : dict
+        The viewport record.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when no annotation is configured.
+    """
+    notes = cfg.get("annotations", []) or []
+    if not notes:
+        return '<g id="annotations"></g>'
+    ts = vp["ts"]
+    ink = _pal(cfg)["chrome_ink"]
+    paper = _pal(cfg)["plate"]
+    out: list[str] = []
+    for note in notes:
+        unknown = sorted(set(note) - {"at", "text", "place", "color", "circle_km", "wrap"})
+        if unknown:
+            raise ValueError(
+                f"an annotation has key(s) this generator never reads: {', '.join(unknown)}. "
+                "Known keys: at, text, place, color, circle_km, wrap"
+            )
+        lon, lat = (float(v) for v in note["at"])
+        x, y = vp["to_svg"](*proj.transform(lon, lat))
+        color = str(note.get("color", ink))
+        ring = 0.0
+        if note.get("circle_km"):
+            ring = float(note["circle_km"]) * 1000.0 / vp["m_per_unit"]
+            out.append(
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{ring:.1f}" fill="none" '
+                f'stroke="{color}" stroke-width="{1.4 * ts:.1f}" stroke-opacity="0.9"/>'
+            )
+        else:
+            out.append(
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{3.0 * ts:.1f}" fill="{color}"/>'
+            )
+        place = str(note.get("place", "right"))
+        gap = ring + _ANNOTATION_OFFSET * ts
+        dx, dy = {"right": (gap, 0.0), "left": (-gap, 0.0),
+                  "above": (0.0, -gap), "below": (0.0, gap)}.get(place, (gap, 0.0))
+        tx, ty = x + dx, y + dy
+        out.append(
+            f'<line x1="{x + (ring * (1 if dx > 0 else -1 if dx < 0 else 0)):.1f}" '
+            f'y1="{y + (ring * (1 if dy > 0 else -1 if dy < 0 else 0)):.1f}" '
+            f'x2="{tx:.1f}" y2="{ty:.1f}" stroke="{color}" '
+            f'stroke-width="{1.2 * ts:.1f}" stroke-opacity="0.75"/>'
+        )
+        anchor = {"right": "start", "left": "end"}.get(place, "middle")
+        lines = wrap_no_orphan(str(note.get("text", "")), int(note.get("wrap", _ANNOTATION_WRAP)))
+        size = 11.5 * ts
+        # Vertically centre the block on the leader's end for a side note,
+        # and hang it off the end for one above or below.
+        first = ty - (len(lines) - 1) * size * 0.62 if place in ("right", "left") else (
+            ty - (len(lines) - 1) * size * 1.24 if place == "above" else ty + size * 0.9
+        )
+        pad = 3 * ts if place == "right" else (-3 * ts if place == "left" else 0.0)
+        for i, line in enumerate(lines):
+            out.append(
+                f'<text x="{tx + pad:.1f}" y="{first + i * size * 1.24:.1f}" '
+                f'text-anchor="{anchor}" font-family="{_DEFAULT_FONT}" '
+                f'font-size="{size:.1f}" fill="{ink}" '
+                f'stroke="{paper}" stroke-width="{3.2 * ts:.1f}" paint-order="stroke" '
+                f'stroke-linejoin="round">{_esc(line)}</text>'
+            )
+    return f'<g id="annotations">{"".join(out)}</g>'
+
+
+#: How far an inset zooms out from the plate's own region when no context
+#: bbox is given. Six is a compromise found by rendering: at three the
+#: context is barely wider than the map and answers nothing, at ten a
+#: European region lands in a view of the whole Atlantic and the rectangle
+#: becomes a dot.
+_INSET_ZOOM = 6.0
+
+#: The inset's width as a fraction of the plate's. Small enough to read as
+#: furniture, large enough that a country outline in it is still a country.
+_INSET_WIDTH = 0.2
+
+
+def _inset_context_bbox(bbox: list[float], zoom: float = _INSET_ZOOM) -> list[float]:
+    """Return the wider extent an inset shows, centred on ``bbox``.
+
+    Clamped to the usable world: past about 84 degrees the vendored basemap
+    has nothing to draw and a conic projection stops behaving.
+
+    Examples
+    --------
+    >>> _inset_context_bbox([0.0, 45.0, 10.0, 50.0], zoom=3.0)
+    [-10.0, 40.0, 20.0, 55.0]
+
+    A region near the pole keeps its width and is clipped in latitude:
+
+    >>> _inset_context_bbox([0.0, 70.0, 10.0, 80.0], zoom=4.0)
+    [-15.0, 55.0, 25.0, 84.0]
+    """
+    west, south, east, north = (float(v) for v in bbox)
+    cx, cy = (west + east) / 2.0, (south + north) / 2.0
+    half_w = max((east - west) * zoom / 2.0, 1.0)
+    half_h = max((north - south) * zoom / 2.0, 1.0)
+    return [
+        max(-180.0, cx - half_w),
+        max(-84.0, cy - half_h),
+        min(180.0, cx + half_w),
+        min(84.0, cy + half_h),
+    ]
+
+
+def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """Return the plate rectangle the locator inset occupies, or ``None``.
+
+    Shared by :func:`_inset_layer`, which draws it, :func:`_reserved_boxes`,
+    which keeps labels out of it, and the north arrow, which would otherwise
+    print straight on top of it: both default to the top-right corner.
+    """
+    inset = cfg.get("inset")
+    if not inset or inset.get("show", True) is False:
+        return None
+    ts, W, H = vp["ts"], vp["width"], vp["height"]
+    region_bbox = [float(v) for v in cfg["region"]["bbox"]]
+    context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
+        region_bbox, float(inset.get("zoom", _INSET_ZOOM))
+    )
+    box_w = float(inset.get("width", _INSET_WIDTH)) * W
+    sub = make_viewport(build_projection(context, "auto"), context, box_w, 0.0)
+    box_h = sub["height"]
+    margin = 22 * ts
+    position = str(inset.get("position", "top-right"))
+    ox = margin if position.endswith("-left") else W - box_w - margin
+    oy = margin if position.startswith("top") else H - box_h - margin - _caption_height(cfg, ts)
+    return ox, oy, ox + box_w, oy + box_h
+
+
+def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
+    """Return the locator inset: where on Earth the plate's region actually is.
+
+    "Zoom out for perspective, zoom in for detail" is the locator map's one
+    rule, and a plate that only ever zooms in answers the second half of it.
+    A reader who does not already know where North Kivu is learns nothing
+    from a map of North Kivu; the inset is the sentence that tells them.
+
+    Drawn from the coarsest vendored atlas (110m), because at a sixth of the
+    plate's width a finer coastline is noise that costs bytes. The region
+    itself is a filled rectangle in the plate's own ink rather than an
+    outline: at this size an outline reads as a stray border.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``inset``: ``show`` (default true once the key exists),
+        ``bbox`` (the context extent; derived from the region when absent),
+        ``position`` (a corner, default ``"top-right"``), ``width`` (a
+        fraction of the plate width) and ``zoom``.
+    vp : dict
+        The viewport record, for size and type scale.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when no inset is configured.
+    """
+    inset = cfg.get("inset")
+    if not inset or inset.get("show", True) is False:
+        return '<g id="inset"></g>'
+    unknown = sorted(set(inset) - {"show", "bbox", "position", "width", "zoom"})
+    if unknown:
+        raise ValueError(
+            f"inset has key(s) this generator never reads: {', '.join(unknown)}. "
+            "Known keys: show, bbox, position, width, zoom"
+        )
+    palette = _pal(cfg)
+    ts, W = vp["ts"], vp["width"]
+    region_bbox = [float(v) for v in cfg["region"]["bbox"]]
+    context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
+        region_bbox, float(inset.get("zoom", _INSET_ZOOM))
+    )
+
+    box_w = float(inset.get("width", _INSET_WIDTH)) * W
+    proj = build_projection(context, "auto")
+    # A viewport of its own, with no padding: the inset's frame is its bound.
+    sub = make_viewport(proj, context, box_w, 0.0, vp.get("simplify", DEFAULT_TOLERANCE))
+    box_h = sub["height"]
+
+    placed = _inset_box(cfg, vp)
+    assert placed is not None  # guarded by the early return above
+    ox, oy, _x1, _y1 = placed
+
+    land = load_land(context)
+    # A malformed clip must not cost the plate its inset: the unclipped land
+    # still draws correctly, it is only wider than the frame and the frame
+    # clips it anyway.
+    with contextlib.suppress(Exception):
+        land = land.intersection(box(*context))
+    land_d = projected_geom_to_path(_project_geom(land, proj), sub)
+
+    # The region rectangle, projected through the same transform, so it sits
+    # exactly where the main map's extent really falls in the context.
+    region_d = projected_geom_to_path(_project_geom(box(*region_bbox), proj), sub)
+
+    clip_id = "inset-clip"
+    return (
+        f'<g id="inset" transform="translate({ox:.1f},{oy:.1f})">'
+        f'<clipPath id="{clip_id}"><rect x="0" y="0" width="{box_w:.1f}" '
+        f'height="{box_h:.1f}" rx="{3 * ts:.1f}"/></clipPath>'
+        f'<g clip-path="url(#{clip_id})">'
+        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" fill="{palette["sea"]}" '
+        f'fill-opacity="0.55"/>'
+        f'<path d="{land_d}" fill="{palette["land"]}" stroke="{palette["coast"]}" '
+        f'stroke-width="0.5" stroke-opacity="0.7"/>'
+        f'<path d="{region_d}" fill="{palette["chrome_ink"]}" fill-opacity="0.22" '
+        f'stroke="{palette["chrome_ink"]}" stroke-width="{1.4 * ts:.1f}"/>'
+        f"</g>"
+        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" rx="{3 * ts:.1f}" '
+        f'fill="none" stroke="{palette["panel_edge"]}" stroke-width="1"/>'
+        f"</g>"
+    )
+
+
 def _caption_height(cfg: dict[str, Any], ts: float) -> float:
     """
     Vertical space the caption occupies, or 0 when it is off.
@@ -3246,10 +4120,19 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     size = 8.2 * ts
     leading = 11.5 * ts
     top = H - (len(lines) * leading) - 10 * ts
+    # The caption is furniture, and furniture owns its space. Without a
+    # ground it is grey monospace printed straight onto whatever the map
+    # happens to end at: on the eastern-DRC plate, which is tall and
+    # portrait, two of the three lines came out over a pale green control
+    # fill. The hairline rule above it already says "a footer starts here";
+    # the band is that promise kept.
+    band_top = top - 7 * ts
     out = [
         '<g id="caption">',
-        f'<line x1="{26 * ts:.1f}" y1="{top - 7 * ts:.1f}" x2="{W - 26 * ts:.1f}" '
-        f'y2="{top - 7 * ts:.1f}" stroke="{palette["panel_edge"]}" stroke-width="1"/>',
+        f'<rect x="0" y="{band_top:.1f}" width="{W:.1f}" height="{H - band_top:.1f}" '
+        f'fill="{palette["plate"]}"/>',
+        f'<line x1="{26 * ts:.1f}" y1="{band_top:.1f}" x2="{W - 26 * ts:.1f}" '
+        f'y2="{band_top:.1f}" stroke="{palette["panel_edge"]}" stroke-width="1"/>',
     ]
     for i, line in enumerate(lines):
         out.append(
@@ -3263,17 +4146,22 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 
 def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     """Return the title block, north arrow and dual-unit scale bar."""
-    W, H = vp["width"], vp["height"]
+    W = vp["width"]
     ts = vp["ts"]
     # North arrow top-right, clear of the title block top-left. When the
     # legend card floats top-right too (``legend_position``), step left of
     # its fixed footprint (262 panel + 22 margin, in ts units) so the
     # arrow never sits on the card.
     arrow_x = W - 30 * ts
-    legend_pos = str(cfg.get("legend_position", "bottom-right"))
+    legend_pos = _resolve_legend_position(cfg, ts, W)
     has_legend = bool(cfg.get("areas_of_control", {}).get("palette"))
     if legend_pos == "top-right" and has_legend:
         arrow_x = W - (262 + 22 + 30) * ts
+    # The locator inset defaults to the same corner, and an arrow printed on
+    # top of a small map reads as part of it.
+    inset_box = _inset_box(cfg, vp)
+    if inset_box is not None and inset_box[0] > W / 2:
+        arrow_x = min(arrow_x, inset_box[0] - 22 * ts)
     out: list[str] = [north_arrow(arrow_x, 34 * ts, ts)]
     title = cfg.get("title")
     subtitle = cfg.get("subtitle")
@@ -3292,12 +4180,8 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     # straight on it (found on the eastern-DRC plate, where the card was moved
     # there to clear the caption and buried the bar instead). The bar is about
     # 150ts wide, so stepping to the opposite corner is enough.
-    scale_x = 26 * ts
-    if legend_pos == "bottom-left" and has_legend:
-        scale_x = W - 176 * ts
-    out.append(
-        scale_bar(scale_x, H - 44 * ts - _caption_height(cfg, ts), vp, _pal(cfg)["chrome_ink"])
-    )
+    scale_x, scale_y = _scale_bar_origin(cfg, vp)
+    out.append(scale_bar(scale_x, scale_y, vp, _pal(cfg)["chrome_ink"]))
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
 
 
@@ -3341,6 +4225,139 @@ def _pal(cfg: dict[str, Any]) -> dict[str, str]:
     return cfg.get("_plate", _PLATES["day"])
 
 
+#: Past this fraction of the map's width, a floating legend card stops being
+#: furniture and becomes an occlusion. Measured on the bundled plates: the
+#: 262-unit card is 26% of a 1000-unit map, 44% of a 600 and **70% of a 375**,
+#: at which point it covers the thing it exists to explain. The newsroom
+#: answer to a narrow column is not a smaller card but a different layout, so
+#: ``legend_position: "auto"`` moves the key into a band below the map here.
+_LEGEND_MAX_WIDTH_FRACTION = 0.38
+
+
+def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
+    """Return the legend's rows as records, independent of where it is drawn.
+
+    The floating card and the below-the-map band key the same plate, so the
+    rows are defined once here and drawn by :func:`_legend_mark`. Before this
+    split the card assembled its rows inline and nothing else could reuse
+    them, which is why the only way to make a legend fit a narrow column was
+    to shrink the card.
+
+    Parameters
+    ----------
+    cfg : dict
+        The map config.
+    ts : float
+        Type scale; only needed to resolve marker precision consistently.
+
+    Returns
+    -------
+    list of dict
+        One record per row, each with a ``kind`` of ``"class"``, ``"tier"``,
+        ``"front"`` or ``"marker"``, and a ``label``.
+    """
+    aoc = cfg.get("areas_of_control", {})
+    palette = aoc.get("palette", {})
+    if not palette:
+        return []
+    contested = set(aoc.get("contested", []))
+    fill_op = float(aoc.get("fill_opacity", 0.78))
+    rows: list[dict[str, Any]] = [
+        {"kind": "class", "label": str(name), "color": color,
+         "contested": name in contested, "fill": fill_op}
+        for name, color in palette.items()
+    ]
+    for tier_name in _tiers_present(cfg):
+        tier = _CONFIDENCE_TIERS[tier_name]
+        label = str(tier["label"])
+        rows.append({"kind": "tier", "label": label[0].upper() + label[1:], "tier": tier})
+    front = cfg.get("front", {})
+    if front.get("line") and front.get("legend", True):
+        rows.append({"kind": "front",
+                     "label": str(front.get("legend_label", "Approx. front line")),
+                     "color": front.get("color", "#3a4149")})
+    for mk in cfg.get("marker_legend", []):
+        rows.append({"kind": "marker", "label": str(mk.get("label", "")),
+                     "color": mk.get("color", "#c0392b"),
+                     "precision": _precision_of(
+                         mk.get("precision"), _GEO_PRECISION, "precision")})
+    return rows
+
+
+def _legend_mark(row: dict[str, Any], x: float, y: float, sw: float, ts: float) -> str:
+    """Draw one row's swatch, left edge at ``x`` and centred on ``y``.
+
+    A swatch has to be the same mark the map uses, or the key keys nothing:
+    a contested class carries its hatch, a confidence tier carries its
+    texture, and an approximate marker is the same hollow ring it is on the
+    page.
+    """
+    kind = row["kind"]
+    sy = y - sw / 2 - 1 * ts
+    if kind == "class":
+        out = (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+               f'rx="{2.5 * ts:.1f}" fill="{row["color"]}" fill-opacity="{row["fill"]:.2f}" '
+               f'stroke="{row["color"]}" stroke-width="1"/>')
+        if row["contested"]:
+            out += (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+                    f'rx="{2.5 * ts:.1f}" fill="url(#hatch-contested)"/>')
+        return out
+    if kind == "tier":
+        tier = row["tier"]
+        edge = f' stroke-dasharray="{3.0 * ts:.1f} {2.2 * ts:.1f}"' if tier["dashed"] else ""
+        # A pale ground under the texture. The swatch's job is to teach the
+        # *texture*, so it is drawn light enough for the stripes or dots to
+        # read: at the zone's own 0.47 grey the hatch disappeared into its
+        # own background and the row looked like a plain dark square.
+        out = (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+               f'rx="{2.5 * ts:.1f}" fill="{_LEGEND_TEXTURE_INK}" '
+               f'fill-opacity="{0.18 * float(tier["fill"]):.2f}" '
+               f'stroke="{_LEGEND_TEXTURE_INK}" stroke-width="1"{edge}/>')
+        if tier["pattern"]:
+            out += (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+                    f'rx="{2.5 * ts:.1f}" '
+                    f'fill="url(#{_pattern_id(str(tier["pattern"]), _LEGEND_TEXTURE_INK)})"/>')
+        return out
+    if kind == "front":
+        return (f'<line x1="{x:.1f}" y1="{y:.1f}" x2="{x + sw:.1f}" y2="{y:.1f}" '
+                f'stroke="{row["color"]}" stroke-width="{2.4 * ts:.1f}" '
+                f'stroke-dasharray="{7 * ts:.1f} {3.5 * ts:.1f}" stroke-linecap="round"/>')
+    # marker: the swatch mirrors the mark's precision, including its ring.
+    if row["precision"] == 1:
+        paint = f'fill="{row["color"]}" stroke="#fff" stroke-width="{1.4 * ts:.1f}"'
+    else:
+        broken = f' stroke-dasharray="{3 * ts:.1f} {2.2 * ts:.1f}"' if row["precision"] == 3 else ""
+        paint = (f'fill="#ffffff" fill-opacity="0.65" stroke="{row["color"]}" '
+                 f'stroke-width="{2.5 * ts:.1f}"{broken}')
+    return f'<circle cx="{x + sw / 2:.1f}" cy="{y:.1f}" r="{5.5 * ts:.1f}" {paint}/>'
+
+
+def _resolve_legend_position(cfg: dict[str, Any], ts: float, map_w: float) -> str:
+    """Return the legend position, expanding ``"auto"`` for this plate's width.
+
+    ``"auto"`` is the only value that depends on how wide the plate is: it
+    keeps the floating card while the card is a minority of the width, and
+    drops the key into a band below the map once it stops being one.
+
+    Examples
+    --------
+    >>> cfg = {"areas_of_control": {"palette": {"A": "#111", "B": "#222"}}}
+    >>> _resolve_legend_position(cfg, 1.0, 1000.0)
+    'bottom-right'
+    >>> _resolve_legend_position(dict(cfg, legend_position="auto"), 1.0, 1000.0)
+    'bottom-right'
+    >>> _resolve_legend_position(dict(cfg, legend_position="auto"), 1.0, 375.0)
+    'below'
+    """
+    position = str(cfg.get("legend_position", "bottom-right"))
+    if position != "auto":
+        return position
+    panel_w, _panel_h, _margin = _legend_panel_dims(cfg, ts)
+    if not panel_w:
+        return "bottom-right"
+    return "below" if panel_w > _LEGEND_MAX_WIDTH_FRACTION * map_w else "bottom-right"
+
+
 def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, float]:
     """Return ``(panel_w, panel_h, corner_margin)`` for the legend card.
 
@@ -3348,31 +4365,49 @@ def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, fl
     the extra canvas column an ``"outside"`` legend needs, without
     duplicating the row-counting logic (and risking the two drifting apart).
     """
-    aoc = cfg.get("areas_of_control", {})
-    palette = aoc.get("palette", {})
-    if not palette:
+    rows = _legend_rows(cfg, ts)
+    if not rows:
         return 0.0, 0.0, 22 * ts
-    rows = palette.items()
-    markers = cfg.get("marker_legend", [])
-    front = cfg.get("front", {})
-    show_front = bool(front.get("line") and front.get("legend", True))
-    footer = cfg.get("legend_footer")
     pad = 15 * ts
     row_h = 25 * ts
     panel_w = 262 * ts
+    foot_h = 30 * ts if cfg.get("legend_footer") else 0
     # Count only rows actually drawn below: the marker section's hairline
     # divider tucks between rows and needs no row of its own (a former +1
     # here left a blank row's worth of dead space above the footer).
-    extra = len(markers) + (1 if show_front else 0)
-    n_rows = len(list(rows)) + extra
-    foot_h = 30 * ts if footer else 0
-    panel_h = pad * 2 + 24 * ts + row_h * n_rows + foot_h
-    corner_margin = 22 * ts
-    return panel_w, panel_h, corner_margin
+    panel_h = pad * 2 + 24 * ts + row_h * len(rows) + foot_h
+    return panel_w, panel_h, 22 * ts
+
+
+def _legend_band_dims(
+    cfg: dict[str, Any], ts: float, map_w: float
+) -> tuple[float, int, float, float]:
+    """Return ``(band_h, columns, column_w, row_h)`` for a legend below the map.
+
+    The band is laid out to the width it is given rather than to a fixed card
+    size: the rows pack into as many columns as fit, so a wide plate gets one
+    shallow strip and a phone-width plate gets a single column.
+    """
+    rows = _legend_rows(cfg, ts)
+    if not rows:
+        return 0.0, 0, 0.0, 0.0
+    pad = 15 * ts
+    row_h = 23 * ts
+    sw = 15 * ts
+    gutter = 18 * ts
+    # No text measurement is available to an SVG writer, so estimate from the
+    # same glyph-advance ratio the label layer uses.
+    widest = max(len(r["label"]) for r in rows)
+    col_w = sw + 10 * ts + widest * 12.0 * ts * _GLYPH_WIDTH_RATIO + gutter
+    columns = max(1, min(len(rows), int((map_w - 2 * pad) // col_w) if col_w else 1))
+    band_rows = -(-len(rows) // columns)
+    foot_h = 20 * ts if cfg.get("legend_footer") else 0.0
+    band_h = pad + 20 * ts + band_rows * row_h + foot_h + pad
+    return band_h, columns, col_w, row_h
 
 
 def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
-    """Return the legend card: a swatch per class, marker key, source line.
+    """Return the legend: a swatch per class, confidence key, marker key, source line.
 
     Swatches are rounded squares (a filled-territory cue, unlike a point dot), a
     contested class also carries the diagonal hatch so the legend mirrors the map
@@ -3380,7 +4415,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     A footer sets the as-of / provenance line so the plate is self-describing.
 
     ``cfg["legend_position"]`` (``"bottom-right"`` by default, matching every
-    plate built before this option existed) picks where the card goes --
+    plate built before this option existed) picks where the key goes --
     ``"bottom-left"``, ``"top-left"`` and ``"top-right"`` float it over a
     corner of the map itself, same as before. The default corner is not
     always the right one: on a real analysis map a labelled city or a
@@ -3394,26 +4429,30 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     to the right of the plate (see its ``legend_col_w`` handling), so the
     legend can never cover map content no matter what the underlying data
     looks like.
+
+    ``"below"`` puts the key in a full-width band underneath the map, and
+    ``"auto"`` picks between that and the floating card from the plate's own
+    width. That exists because a card is a fixed 262 units wide: fine as 26%
+    of a 1000-unit plate, an occlusion at 70% of a 375-unit one. A narrow
+    column does not want a smaller card, it wants the key somewhere else.
     """
-    aoc = cfg.get("areas_of_control", {})
-    palette = aoc.get("palette", {})
-    if not palette:
+    rows = _legend_rows(cfg, vp["ts"])
+    if not rows:
         return '<g id="legend"></g>'
     W, H = vp["width"], vp["height"]
     ts = vp["ts"]
-    contested = set(aoc.get("contested", []))
-    rows = list(palette.items())
-    markers = cfg.get("marker_legend", [])
-    front = cfg.get("front", {})
-    show_front = bool(front.get("line") and front.get("legend", True))
     footer = cfg.get("legend_footer")
     pad = 15 * ts
-    row_h = 25 * ts
-    header_fs = 12.5 * ts
     row_fs = 12.5 * ts
     sw = 15 * ts  # swatch side
+    position = _resolve_legend_position(cfg, ts, W)
+
+    if position == "below":
+        return _legend_band(cfg, vp, rows)
+
     panel_w, panel_h, corner_margin = _legend_panel_dims(cfg, ts)
-    position = str(cfg.get("legend_position", "bottom-right"))
+    row_h = 25 * ts
+    header_fs = 12.5 * ts
     if position == "right":
         px = W + corner_margin
         py = corner_margin
@@ -3442,55 +4481,21 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" letter-spacing="1.2">'
         f"AREAS OF CONTROL</text>",
     ]
-    fill_op = float(aoc.get("fill_opacity", 0.78))
-    for i, (name, color) in enumerate(rows):
+    seen_marker = False
+    for i, row in enumerate(rows):
         ry = py + pad + 26 * ts + i * row_h
-        sy = ry - sw / 2 - 1 * ts
-        parts.append(
-            f'<rect x="{px + pad:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
-            f'rx="{2.5 * ts:.1f}" fill="{color}" fill-opacity="{fill_op:.2f}" '
-            f'stroke="{color}" stroke-width="1"/>'
-        )
-        if name in contested:
-            parts.append(
-                f'<rect x="{px + pad:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
-                f'rx="{2.5 * ts:.1f}" fill="url(#hatch-contested)"/>'
-            )
-        parts.append(
-            f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
-            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="{_pal(cfg)["legend_ink"]}">{_esc(name)}</text>'
-        )
-    idx = len(rows)
-    # Front-line key row.
-    if show_front:
-        ry = py + pad + 26 * ts + idx * row_h
-        parts.append(
-            f'<line x1="{px + pad:.1f}" y1="{ry:.1f}" x2="{px + pad + sw:.1f}" y2="{ry:.1f}" '
-            f'stroke="{front.get("color", "#3a4149")}" stroke-width="{2.4 * ts:.1f}" '
-            f'stroke-dasharray="{7 * ts:.1f} {3.5 * ts:.1f}" stroke-linecap="round"/>'
-        )
-        parts.append(
-            f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{row_fs:.1f}" fill="{_pal(cfg)["legend_ink"]}">{_esc(front.get("legend_label", "Approx. front line"))}</text>'
-        )
-        idx += 1
-    # Marker key, separated by a hairline divider.
-    for j, mk in enumerate(markers):
-        ry = py + pad + 26 * ts + (idx + j) * row_h
-        if j == 0:
+        if row["kind"] == "marker" and not seen_marker:
+            seen_marker = True
             dv = ry - row_h + 6 * ts
             parts.append(
                 f'<line x1="{px + pad:.1f}" y1="{dv:.1f}" x2="{px + panel_w - pad:.1f}" '
                 f'y2="{dv:.1f}" stroke="#e2e6ea" stroke-width="1"/>'
             )
-        parts.append(
-            f'<circle cx="{px + pad + sw / 2:.1f}" cy="{ry:.1f}" r="{5.5 * ts:.1f}" '
-            f'fill="{mk.get("color", "#c0392b")}" stroke="#fff" stroke-width="{1.4 * ts:.1f}"/>'
-        )
+        parts.append(_legend_mark(row, px + pad, ry, sw, ts))
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
-            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" fill="{_pal(cfg)["legend_ink"]}">'
-            f"{_esc(mk.get('label', ''))}</text>"
+            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" '
+            f'fill="{_pal(cfg)["legend_ink"]}">{_esc(row["label"])}</text>'
         )
     if footer:
         fy = py + panel_h - 11 * ts
@@ -3501,6 +4506,45 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         parts.append(
             f'<text x="{px + pad:.1f}" y="{fy:.1f}" font-family="{_DEFAULT_FONT}" '
             f'font-size="{9 * ts:.1f}" fill="{_pal(cfg)["chrome_faint"]}">{_esc(footer)}</text>'
+        )
+    return f'<g id="legend">{"".join(parts)}</g>'
+
+
+def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, Any]]) -> str:
+    """Draw the key as a full-width band under the map rather than over it.
+
+    No card, no shadow: the band is part of the page furniture, not an object
+    floating on the map, so it is separated by a hairline and left flat.
+    """
+    W, H = vp["width"], vp["height"]
+    ts = vp["ts"]
+    band_h, columns, col_w, row_h = _legend_band_dims(cfg, ts, W)
+    pad = 15 * ts
+    sw = 15 * ts
+    row_fs = 12.0 * ts
+    parts: list[str] = [
+        f'<line x1="0" y1="{H:.1f}" x2="{W:.1f}" y2="{H:.1f}" '
+        f'stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
+        f'<text x="{pad:.1f}" y="{H + pad + 8 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+        f'font-size="{11.5 * ts:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" '
+        f'letter-spacing="1.2">AREAS OF CONTROL</text>',
+    ]
+    top = H + pad + 20 * ts
+    for i, row in enumerate(rows):
+        cx = pad + (i % columns) * col_w
+        ry = top + (i // columns) * row_h + row_h / 2
+        parts.append(_legend_mark(row, cx, ry, sw, ts))
+        parts.append(
+            f'<text x="{cx + sw + 10 * ts:.1f}" y="{ry + 4 * ts:.1f}" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" '
+            f'fill="{_pal(cfg)["legend_ink"]}">{_esc(row["label"])}</text>'
+        )
+    footer = cfg.get("legend_footer")
+    if footer:
+        parts.append(
+            f'<text x="{pad:.1f}" y="{H + band_h - pad + 2 * ts:.1f}" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{9 * ts:.1f}" '
+            f'fill="{_pal(cfg)["chrome_faint"]}">{_esc(footer)}</text>'
         )
     return f'<g id="legend">{"".join(parts)}</g>'
 
@@ -3516,12 +4560,13 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 #: the plate still looks like a finished intelligence product. That is the
 #: worst possible response to a typo, and it is why this list exists.
 CONFIG_KEYS: frozenset[str] = frozenset({
+    "annotations", "inset",
     "areas_of_control", "arrows", "as_of", "attribution", "basemap", "canvas_width",
     "lakes",
     "caption", "events", "forces", "frame", "front", "frontiers",
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
-    "cities", "region", "rivers", "source", "subtitle", "title",
+    "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.

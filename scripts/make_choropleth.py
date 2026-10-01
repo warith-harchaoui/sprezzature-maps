@@ -71,6 +71,7 @@ from _relief import (  # noqa: E402
     terrain_shade_for_bbox,
 )
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
+from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
 
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py, not in this
@@ -587,6 +588,7 @@ def build_svg(
     breaks: Sequence[float] | None = None,
     cities: bool = True,
     rivers: bool = True,
+    simplify: float = DEFAULT_TOLERANCE,
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -916,8 +918,18 @@ def build_svg(
             for seg in segments:
                 if len(seg) < 3:
                     continue
-                path_d_parts.append("M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in seg) + " Z")
+                # Drop the vertices this canvas cannot show before writing
+                # them. At the default size 97% of the segments in this
+                # atlas are shorter than one unit; they are ~1.5 MB of path
+                # data per map that no reader can ever see. See _simplify.
+                drawn = simplify_ring(seg, simplify)
+                path_d_parts.append(
+                    "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in drawn) + " Z"
+                )
                 if len(seg) > len(anchor_seg):
+                    # The hover anchor is a centroid, so it uses the full
+                    # ring: a simplified ring would move the bubble for no
+                    # benefit.
                     anchor_seg = seg
         if not path_d_parts:
             continue
@@ -985,7 +997,9 @@ def build_svg(
                 # page, which is the same as not drawing it.
                 width = 1.6 if rank <= 1 else (1.1 if rank == 2 else 0.8)
                 for line in _line_segments(feature["geometry"]):
-                    points = [project(lon, lat) for lon, lat in line]
+                    points = simplify_screen(
+                        [project(lon, lat) for lon, lat in line], simplify
+                    )
                     if len(points) < 2:
                         continue
                     d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in points)
@@ -1112,6 +1126,7 @@ def make_choropleth(
     breaks: Sequence[float] | None = None,
     cities: bool = True,
     rivers: bool = True,
+    simplify: float = DEFAULT_TOLERANCE,
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -1130,7 +1145,7 @@ def make_choropleth(
         picks demo-appropriate vs. neutral wording depending on *data*.
     width, height : int
         Canvas size in pixels.
-    mode, accessibility, diverging, relief
+    mode, accessibility, diverging, relief, simplify
         Forwarded to :func:`build_svg`.
 
     Returns
@@ -1160,6 +1175,7 @@ def make_choropleth(
         breaks=breaks,
         cities=cities,
         rivers=rivers,
+        simplify=simplify,
     )
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)
