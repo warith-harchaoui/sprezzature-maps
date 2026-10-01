@@ -80,7 +80,7 @@ sprezzature-maps = "sprezzature_maps.cli_click:main"
 sprezzature-maps-mcp = "sprezzature_maps.mcp:main"
 
 [project.urls]
-Homepage = "https://harchaoui.org/warith/sprezzature/"
+Homepage = "https://sprezzature.ai/"
 Repository = "https://github.com/warith-harchaoui/sprezzature-maps"
 
 [tool.setuptools]

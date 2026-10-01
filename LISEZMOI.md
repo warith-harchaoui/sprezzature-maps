@@ -13,7 +13,7 @@ aucune bibliothèque de graphiques ne se cache dessous.
 il en a été extrait pour devenir un produit à part entière, avec son
 propre calendrier de sortie et, à terme, son propre éditeur visuel.
 
-Fait partie de la suite [sprezzature](https://harchaoui.org/warith/sprezzature/).
+Fait partie de la suite [sprezzature](https://sprezzature.ai/).
 
 ---
 
