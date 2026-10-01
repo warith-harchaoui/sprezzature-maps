@@ -92,7 +92,7 @@ def test_situation_map_config_dir_default_is_cwd_not_install_path(
     # this config only got away without one because build_map is faked here.
     # Config validation (0.6.0) now says so before the fake is reached.
     m.make_situation_map(
-        config={"title": "test", "region": "western-europe"},
+        config={"title": "test", "region": {"bbox": [-11.0, 35.0, 30.0, 60.0]}},
         out=tmp_path / "out.svg",
     )
     assert captured["_config_dir"] == "."

@@ -10,6 +10,33 @@ graticule. The land appears because events fell on it, and the sea is dark
 because none did. A reader recognises the shape without being shown it,
 which is a different and stronger kind of recognition than reading a label.
 
+What a cell is, and what it is not
+----------------------------------
+The grid is cut in **degrees**: the bbox is divided linearly in longitude
+and latitude, which is a plate-carrée binning. Every cell therefore spans
+the same angle and a *different* amount of ground, shrinking with the
+cosine of latitude. Measured across real frames:
+
+===============================  =========================================
+Frame                            Ground area of the poleward cell
+===============================  =========================================
+contiguous US (the demo)         28% smaller than the equatorward one
+Europe (35..60 degrees N)        39% smaller
+Scandinavia (50..71 degrees N)   49% smaller
+a whole hemisphere (0..84)       90% smaller
+===============================  =========================================
+
+So the field shows **counts per cell**, not events per unit area, and the
+legend says "per cell" for that reason. At Scandinavian latitudes the two
+readings differ by half, which is enough to invert a conclusion: the north
+of such a map looks sparser than it is.
+
+That is the honest default for this kind -- the form is an *accumulation*
+map, "where did things fall", and a count is what fell. It is not a density
+in the per-square-kilometre sense unless you ask for one: pass
+``per_area=True`` to divide each cell by its own ground area, which makes
+the field comparable across latitudes and relabels the legend accordingly.
+
 Why cells and not a raster
 --------------------------
 A million points cannot be a million SVG elements, so the field is binned.
@@ -286,6 +313,7 @@ def build_svg(
     subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
     caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
     region: str | None = None,
+    per_area: bool = False,
 ) -> str:
     """
     Render the accumulation plate.
@@ -324,6 +352,27 @@ def build_svg(
         region = _DEMO_REGION
 
     grid, nx, ny, peak = bin_points(pts, bbox, bins)
+    # Counts are what an accumulation map is for, and they are the default.
+    # ``per_area`` turns the field into a real density by dividing each cell
+    # by its own ground area, which is the only way the colours mean the
+    # same thing at the top of a tall frame as at the bottom -- see this
+    # module's docstring for the measured spread.
+    unit = "cell"
+    peak_value = float(peak)
+    if per_area:
+        areas = cell_ground_areas(bbox, ny)
+        scaled = [
+            [column[row] / areas[row] * 1000.0 for row in range(ny)] for column in grid
+        ]
+        flat = [v for column in scaled for v in column]
+        peak_value = max(flat) if flat else 0.0
+        # The ramp indexes integers, so rescale to the same 0..peak span the
+        # count path uses and keep the real maximum for the legend.
+        grid = [
+            [int(round(v / peak_value * peak)) if peak_value else 0 for v in column]
+            for column in scaled
+        ]
+        unit = "1 000 km\u00b2"
     if peak == 0:
         raise ValueError("no point fell inside the bbox; nothing to draw")
 
@@ -383,8 +432,9 @@ def build_svg(
         f'font-size="14" font-style="italic" fill="{SUBTLE}">{_esc(strap)}</text>'
     )
     out.append("</g>")
+    peak_label = f"{peak_value:,.1f}" if per_area else f"{peak:,}"
     out.append('<g id="legend">')
-    out.extend(_ramp_legend(width - 300, plate_h - 26, peak))
+    out.extend(_ramp_legend(width - 300, plate_h - 26, peak_label, unit))
     out.append("</g>")
     out.append('<g id="caption">')
     out.append(
@@ -394,6 +444,54 @@ def build_svg(
     out.append("</g>")
     out.append("</svg>")
     return "\n".join(out)
+
+
+def cell_ground_areas(bbox: tuple[float, float, float, float], ny: int) -> list[float]:
+    """Return each grid row's cell area in square kilometres, south to north.
+
+    The grid is cut in degrees, so a cell's ground area shrinks with the
+    cosine of its latitude. On a Scandinavian frame the northernmost row
+    covers about half the ground of the southernmost, which is enough to
+    make the north of a count map look sparse when it is not.
+
+    Uses the spherical-band area, not ``cos`` of the row centre: over a tall
+    row the two differ, and the exact form costs one more sine.
+
+    Parameters
+    ----------
+    bbox : tuple
+        ``(west, south, east, north)`` in degrees.
+    ny : int
+        Number of rows in the grid.
+
+    Returns
+    -------
+    list of float
+        ``ny`` areas in km^2, index 0 being the southernmost row.
+
+    Examples
+    --------
+    A band straddling the equator is symmetric, and the equatorial rows are
+    the largest:
+
+    >>> areas = cell_ground_areas((0.0, -2.0, 1.0, 2.0), 4)
+    >>> round(areas[0] / areas[1], 4) == round(areas[3] / areas[2], 4)
+    True
+    >>> areas[1] > areas[0]
+    True
+    """
+    west, south, north = float(bbox[0]), float(bbox[1]), float(bbox[3])
+    east = float(bbox[2])
+    radius_km = 6371.0088
+    lon_span = math.radians(east - west) / 1.0
+    step = (north - south) / ny
+    out: list[float] = []
+    for row in range(ny):
+        lo = math.radians(south + row * step)
+        hi = math.radians(south + (row + 1) * step)
+        # Area of a lon/lat quadrangle on a sphere: R^2 * dlon * (sin hi - sin lo).
+        out.append(radius_km * radius_km * lon_span * (math.sin(hi) - math.sin(lo)))
+    return out
 
 
 def _fmt_lon(v: float) -> str:
@@ -433,7 +531,7 @@ def extent_sentence(bbox: tuple[float, float, float, float]) -> str:
     )
 
 
-def _ramp_legend(x: float, y: float, peak: int) -> list[str]:
+def _ramp_legend(x: float, y: float, peak: str, unit: str) -> list[str]:
     """
     A bare gradient bar with two words under it.
 
@@ -450,7 +548,7 @@ def _ramp_legend(x: float, y: float, peak: int) -> list[str]:
         )
     parts.append(
         f'<text x="{x:.0f}" y="{y + 2:.0f}" font-family="ui-monospace, monospace" '
-        f'font-size="9" fill="{SUBTLE}">fewer → more (peak {peak:,} per cell)</text>'
+        f'font-size="9" fill="{SUBTLE}">fewer → more (peak {peak} per {unit})</text>'
     )
     return parts
 
@@ -475,6 +573,7 @@ def make_density(
     subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
     caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
     region: str | None = None,
+    per_area: bool = False,
 ) -> Path:
     """Render an accumulation map and write the SVG to *out*.
 
@@ -520,6 +619,7 @@ def make_density(
         subtitle=subtitle,
         caption=caption,
         region=region,
+        per_area=per_area,
     )
     dest = Path(out) if out else svg_example_path(__file__, "density")
     return write_svg(dest, svg)

@@ -67,10 +67,20 @@ available alternatives. It exists so a reader, including a future
 maintainer of this repository, can reconstruct every rendering decision
 from first principles rather than take on faith that a decision was made.
 
-Two generators are covered: \texttt{choropleth} (\texttt{scripts/make\_choropleth.py}),
+The package carries three generators and two of them are covered in
+depth here: \texttt{choropleth} (\texttt{scripts/make\_choropleth.py}),
 which fills each country on a world map by a per-country value, and
 \texttt{situation\_map} (\texttt{scripts/make\_situation\_map.py}), which draws an
-auto-centered regional plate. Both draw hand-authored images in a
+auto-centered regional plate. They share the pipeline this document
+records --- project, color, shade relief, compose --- and almost every
+decision below is a decision inside it.
+
+The third, \texttt{density} (\texttt{scripts/make\_density.py}), draws no
+coastline, no border and no relief: point events are binned and the
+geography emerges from where they fell. It has no basemap pipeline to
+document, but it does make one cartographic choice, and
+\S\ref{sec:equal-angle} records it rather than leaving it implicit in the
+source. Both draw hand-authored images in a
 resolution-independent vector format (Scalable Vector Graphics, SVG):
 no charting library, no raster renderer, no \texttt{matplotlib}. Formulas
 appear here in full so a reader does not have to open the source files'
@@ -1204,6 +1214,52 @@ no per-polygon attribute data. Here the clipped outlines are collected
 and passed through a single \texttt{unary\_union} before projection, so
 coincident runs merge and each line is stroked once, with one dash phase
 and one weight.
+
+\subsection{Equal-angle binning, and what it costs}
+\label{sec:equal-angle}
+
+\texttt{make\_density} divides its bounding box linearly in longitude and
+latitude. That is a plate-carr\'ee binning: every cell spans the same
+angle, and therefore a different amount of ground. The ground area of a
+lon/lat quadrangle is
+\[
+A = R^{2}\,\Delta\lambda\,\bigl(\sin\varphi_{2} - \sin\varphi_{1}\bigr),
+\]
+so a cell's area falls away roughly with the cosine of its latitude.
+Across frames this generator is actually asked for:
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+Frame & Poleward cell, against the equatorward one \\
+\midrule
+Contiguous United States (the bundled demo) & 28\,\% smaller \\
+Europe, $35^\circ$--$60^\circ$N & 39\,\% smaller \\
+Scandinavia, $50^\circ$--$71^\circ$N & 49\,\% smaller \\
+A whole hemisphere, $0^\circ$--$84^\circ$ & 90\,\% smaller \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The field therefore shows counts \emph{per cell}, which is what the legend
+says, and not events per unit area. The distinction is not academic at the
+third row: a cell at $71^\circ$N covers half the ground of one at
+$50^\circ$N, so the north of such a map reads sparser than it is by about
+a factor of two, with nothing on the plate to warn of it.
+
+Counts are nonetheless the right default for this kind. The form is an
+\emph{accumulation} map --- where did things fall --- and a count is what
+fell; normalising by default would answer a question the reader did not
+ask. What was wrong was leaving the convention unstated, which this
+section and the module's own docstring now fix, and offering no way to ask
+the other question. \texttt{per\_area=True} divides each cell by its own
+spherical area (\texttt{cell\_ground\_areas}) and relabels the legend in
+events per 1\,000\,km\textsuperscript{2}, which is comparable across
+latitudes.
+
+This is the same commitment that put Equal Earth under the choropleth
+rather than Web Mercator, applied one level down: a map that encodes
+quantity by area owes the reader a statement of what its areas mean.
 
 \clearpage
 \section{Data provenance and licensing}

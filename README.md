@@ -69,6 +69,14 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+A word on how long that takes, because nothing on screen will tell you: a
+choropleth is about a second, while a situation map is closer to ten.
+Profiled, that time is real work and not waste — roughly 4 s computing
+terrain shading from the elevation grid, 3 s of geometry clipping, and 1.5 s
+loading the vendored atlases, each of which is read exactly once. Setting
+`basemap: {relief: false}` in the config halves it if you do not need the
+terrain.
+
 See [`EXAMPLES.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/EXAMPLES.md) for more recipes, including the HTTP API.
 See [`doc/CARTOGRAPHY.tex`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/doc/CARTOGRAPHY.tex) for the full method
 behind every projection, colour scale, and relief (shaded-terrain)
@@ -134,7 +142,11 @@ Lake Kivu, Lake Chad and the Dnieper reservoirs were all painted as dry
 ground) — with `lakes.former` for water that has since gone, because a
 vendored basemap has a capture date a dated map can contradict: the
 Ukraine example draws the Kakhovka Reservoir as a dashed, unfilled
-outline, it having drained after the dam breach of 6 June 2023; and
+outline, it having drained after the dam breach of 6 June 2023, and
+`lakes.historic` for the other half of that problem, a lake that still
+exists at a fraction of the polygon on file (Lake Urmia is drawn that way
+by default: faded fill, dashed edge, name suffixed "historic extent" —
+`lakes.historic: []` restores the basemap's own extents); and
 **axes of advance** — tapered, cased arrows along a smooth
 curve, solid for an assessed movement and drawn as an outline for a
 reported one, the element that separates a map of where the line *is*

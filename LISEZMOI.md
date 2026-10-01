@@ -72,6 +72,14 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira :
+un choroplèthe demande environ une seconde, une carte de situation plutôt
+dix. Profilé, ce temps est du travail réel et non du gaspillage — environ
+4 s de calcul d'ombrage du relief à partir de la grille d'élévation, 3 s de
+découpe géométrique et 1,5 s de chargement des atlas embarqués, chacun lu
+exactement une fois. `basemap: {relief: false}` dans la configuration divise
+ce temps par deux si le relief ne vous sert pas.
+
 Voir [`EXAMPLES.md`](EXAMPLES.md) pour davantage de recettes, y compris
 l'API HTTP. Voir [`doc/CARTOGRAPHY.tex`](doc/CARTOGRAPHY.tex) pour la
 méthode complète derrière chaque projection, chaque échelle de couleur
@@ -148,7 +156,12 @@ en terrain sec) — avec `lakes.former` pour l'eau qui a disparu depuis,
 car un fond de carte embarqué porte une date de levé qu'une carte datée
 peut contredire : l'exemple Ukraine dessine le réservoir de Kakhovka en
 contour tireté sans remplissage, celui-ci s'étant vidé après la rupture
-du barrage du 6 juin 2023 ; et des **axes de progression** : des flèches fuselées,
+du barrage du 6 juin 2023, et `lakes.historic` pour l'autre moitié du
+problème, un lac qui existe encore mais ne remplit plus qu'une fraction du
+polygone en fichier (le lac Urmia est dessiné ainsi par défaut :
+remplissage atténué, bord tireté, nom suffixé « historic extent » —
+`lakes.historic: []` restitue les étendues du fond de carte) ; et des
+**axes de progression** : des flèches fuselées,
 cerclées de blanc, le long d'une courbe lisse, pleines pour un mouvement
 évalué et en contour pour un mouvement seulement rapporté — l'élément
 qui sépare une carte de l'endroit où la ligne *est* d'une carte de
@@ -360,6 +373,32 @@ sources en demandent un :
   sources, il ajoute automatiquement le crédit requis directement sur
   la carte ; voir `_attribution_layer` dans
   `scripts/make_situation_map.py`.
+
+### Crédités par courtoisie, non par obligation
+
+Rien de ce qui suit n'est embarqué ici et rien n'exige de crédit. Si ces
+sources sont nommées, c'est parce que le travail leur a emprunté, et que le
+dire ne coûte rien.
+
+La planche de nuit, les rivières fuselées, le champ d'accumulation et le
+récit défilant sont des formes reprises de
+[mapped.earth](https://mapped.earth) (Aaron J. BECKER), qui les réussit
+mieux que ceci. Les jeux de données sur lesquels ces cartes sont bâties, si
+vous voulez la chose réelle plutôt que nos démonstrations synthétiques :
+
+- **Foudre** : le Geostationary Lightning Mapper de la NOAA sur les
+  Amériques, le Lightning Imager d'EUMETSAT sur l'Europe et l'Afrique, et
+  les réseaux nationaux au sol. `make_density.py` livre des points
+  synthétiques et le dit sur la planche ; il n'a jamais vu un seul éclair.
+- **Débit des fleuves** : [GloFAS v4](https://global-flood.emergency.copernicus.eu/)
+  (service Copernicus de gestion des urgences) sur le réseau
+  [HydroRIVERS](https://www.hydrosheds.org/products/hydrorivers). Notre
+  `rivers.width: ranked` dimensionne selon le `scalerank` de Natural Earth,
+  un rang de proéminence cartographique, et **non** selon le débit — raison
+  pour laquelle cela ne s'appelle pas une largeur hydraulique.
+- **Bassins versants** : [HydroSHEDS / BasinATLAS](https://www.hydrosheds.org/hydroatlas),
+  CC-BY 4.0.
+- **Température de l'eau** : climatologie DynQual 1980-2019.
 
 ## Licence
 

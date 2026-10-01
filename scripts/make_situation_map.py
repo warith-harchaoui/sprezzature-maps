@@ -74,6 +74,101 @@ zone's bubble shows which actor or category holds it and what share of
 the mapped area it covers; a force or event marker's bubble shows its
 legend description and coordinates.
 
+Every configuration key
+-----------------------
+``validate_config`` refuses any key not on this list, suggesting the one
+you probably meant -- which only helps if the list is written down
+somewhere. It was not: ``EXAMPLES.md`` sends a reader here "for the full
+list of fields it accepts" and this docstring named ten of thirty-one.
+``tests/test_config_schema_is_documented.py`` now fails if a key is added
+without a line here.
+
+Required
+~~~~~~~~
+``region``
+    ``{bbox: [west, south, east, north]}`` in degrees. The plate's extent,
+    and what the projection auto-centres on. Validated: see
+    :func:`validate_region`.
+
+The plate itself
+~~~~~~~~~~~~~~~~
+``title``, ``subtitle``
+    Headline and strap, drawn top-left.
+``canvas_width``
+    Plate width in SVG units; everything else scales from it. Default 1000.
+``padding``
+    Inset between the projected region and the plate edge. Default 26.
+``projection``
+    ``"auto"`` (a Lambert conformal conic centred on the region) or an
+    EPSG code.
+``frame``
+    ``{page_color, radius}`` for the card the plate sits on.
+``simplify``
+    Vertex-thinning tolerance in output units, applied after projection.
+    ``0`` keeps every vertex. See ``_simplify``.
+
+Basemap layers
+~~~~~~~~~~~~~~
+``basemap``
+    ``{relief, sea_color, land_color, coast_color, bathymetry}`` -- the
+    physical ground. ``relief: false`` halves render time.
+``frontiers``
+    International borders: ``{show, color, label_neighbours, focus,
+    label_min_area_frac}``.
+``internal_borders``
+    First-level administrative boundaries where a vendored source covers
+    the region: ``{show, color}``.
+``rivers``
+    ``{show, width, skip, label_min_length_frac, label_color}``.
+``lakes``
+    ``{show, color, skip, former, historic, always_label,
+    label_min_area_frac}``. ``former`` draws water that has gone;
+    ``historic`` draws a lake whose vendored polygon is its historic
+    maximum.
+``cities``
+    Automatic populated places: ``{show, size, limit, max_rank,
+    hand_placed_clearance}``.
+``infrastructure``
+    Roads and airports from a caller-supplied source.
+``inset``
+    Locator inset: ``{show, position, bbox, width, zoom}``.
+
+The assessment
+~~~~~~~~~~~~~~
+``areas_of_control``
+    The thematic layer: ``{source, category_field, confidence_field,
+    palette, contested, fill_opacity, casing_width, blend}``.
+``front``
+    The contact line: ``{line, color, label, legend, legend_label}``.
+``arrows``
+    Axes of advance: a list of ``{line, color, label, style}``.
+``forces``, ``events``
+    Point markers; each takes ``lon``, ``lat``, ``color``, ``r``,
+    ``label``, ``precision``, ``radius_km``, ``date``, ``time_precision``
+    and ``source``.
+``annotations``
+    Editorial notes: a list of ``{at, text, place, color, circle_km,
+    wrap}``.
+``labels``
+    Hand-placed names: ``{places, waters, territories}``.
+
+Chrome and provenance
+~~~~~~~~~~~~~~~~~~~~~
+``legend_position``
+    ``"bottom-right"`` (default), the other three corners, ``"right"``
+    (its own column) , ``"below"`` (a band under the map) or ``"auto"``.
+``legend_footer``
+    A line under the legend's rows.
+``marker_legend``
+    A list of ``{color, label, precision}`` keying the point markers.
+``caption``
+    ``"none"`` (default) or ``"full"``, a provenance block on the plate.
+``method``, ``source``, ``as_of``
+    The three lines a ``caption: full`` prints.
+``attribution``
+    Extra credit lines, appended to any the generator adds itself.
+
+
 Usage
 -----
     python make_situation_map.py --config demo.yaml --out demo.svg --render
@@ -1939,7 +2034,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     str
         A complete standalone SVG document.
     """
-    bbox = cfg["region"]["bbox"]
+    bbox = validate_region(cfg.get("region"))
     proj = build_projection(bbox, cfg.get("projection", "auto"))
     width = float(cfg.get("canvas_width", 1000))
     pad = float(cfg.get("padding", 26))
@@ -2002,6 +2097,16 @@ def build_map(cfg: dict[str, Any]) -> str:
     plate_region = Polygon(
         [vp["to_svg"](px, py) for px, py in region_proj.exterior.coords]
     )
+    # Projecting a coastline into a conic can leave the result
+    # self-touching, and GEOS answers a boolean op on an invalid operand with
+    # a raw "TopologyException: side location conflict" rather than a result.
+    # It bites near the poles: a plate of Svalbard and northern Greenland
+    # ([-60, 78, 30, 84]) could not be drawn at all. Checked rather than
+    # repaired unconditionally, because ``is_valid`` is cheap and
+    # ``make_valid`` on a whole coastline is not -- the bundled plates are
+    # all valid here and pay nothing.
+    if not land_proj.is_valid:
+        land_proj = make_valid(land_proj)
     sea_proj = region_proj.difference(land_proj)
 
     layers: list[str] = []
@@ -4615,6 +4720,117 @@ CONFIG_KEYS: frozenset[str] = frozenset({
 _INTERNAL_KEYS: frozenset[str] = frozenset({"_config_dir", "_plate"})
 
 
+#: The widest longitude span a Lambert conformal conic will take before
+#: pyproj refuses the projection outright. A conic is a regional projection
+#: by construction; past roughly a hemisphere it stops being one.
+_MAX_LCC_SPAN_DEGREES = 150.0
+
+
+def validate_region(region: Any) -> list[float]:
+    """Return the validated ``[west, south, east, north]`` of ``region``.
+
+    ``validate_config`` goes to real trouble over a mistyped *key*, down to
+    suggesting the one you meant. It never looked at the one key it
+    requires, and the bbox is where the damaging mistakes actually live,
+    because most of them do not crash:
+
+    * **west east of east.** ``box(177, -19, -178, -16)`` does not raise.
+      Shapely normalises it to ``-178 .. 177``, so asking for a five-degree
+      window over Fiji drew **355 degrees of longitude** -- the whole planet
+      except the region requested, rendered confidently and looking
+      finished. A plain transposition (``30 .. 10``) silently drew a
+      different, valid region instead.
+    * **south above north**, same silent normalisation.
+    * **a degenerate or absurd box**, which reached a bare
+      ``ZeroDivisionError`` or a raw ``pyproj`` ``CRSError`` from inside the
+      projection machinery rather than a sentence naming the problem.
+
+    The antimeridian case is refused rather than supported: handling a
+    wrapped region properly means splitting every layer's geometry at the
+    seam, which is a real feature and not an argument check. Refusing says
+    so; normalising silently says the opposite.
+
+    Parameters
+    ----------
+    region : Any
+        The config's ``region`` value; must carry a four-number ``bbox``.
+
+    Returns
+    -------
+    list of float
+        ``[west, south, east, north]``, validated.
+
+    Raises
+    ------
+    ValueError
+        With a sentence naming what is wrong and, where the cause is
+        ambiguous, both of the things it could be.
+
+    Examples
+    --------
+    >>> validate_region({"bbox": [-11.0, 35.0, 30.0, 60.0]})
+    [-11.0, 35.0, 30.0, 60.0]
+
+    >>> validate_region({"bbox": [30.0, 40.0, 10.0, 50.0]})
+    Traceback (most recent call last):
+      ...
+    ValueError: region bbox has west (30.0) east of east (10.0): either the pair is swapped, or the region crosses the antimeridian, which this generator does not draw -- split it into two plates instead.
+
+    >>> validate_region({"bbox": [10.0, 50.0, 30.0, 40.0]})
+    Traceback (most recent call last):
+      ...
+    ValueError: region bbox has south (50.0) above north (40.0); the pair is swapped.
+    """
+    if not isinstance(region, dict) or "bbox" not in region:
+        raise ValueError(
+            "region needs a 'bbox': [west, south, east, north] in degrees. "
+            f"Got {region!r}"
+        )
+    raw = list(region["bbox"])
+    if len(raw) != 4:
+        raise ValueError(
+            f"region bbox needs exactly four numbers [west, south, east, north]; got {len(raw)}"
+        )
+    try:
+        west, south, east, north = (float(v) for v in raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"region bbox must be four numbers; got {raw!r}") from exc
+    if not all(math.isfinite(v) for v in (west, south, east, north)):
+        raise ValueError(f"region bbox must be four finite numbers; got {raw!r}")
+    if not (-180.0 <= west <= 180.0 and -180.0 <= east <= 180.0):
+        raise ValueError(
+            f"region bbox longitudes must lie in -180..180; got west={west}, east={east}. "
+            "A common cause is a [lat, lon] pair where [lon, lat] was expected."
+        )
+    if not (-90.0 <= south <= 90.0 and -90.0 <= north <= 90.0):
+        raise ValueError(
+            f"region bbox latitudes must lie in -90..90; got south={south}, north={north}. "
+            "A common cause is a [lat, lon] pair where [lon, lat] was expected."
+        )
+    if south > north:
+        raise ValueError(
+            f"region bbox has south ({south}) above north ({north}); the pair is swapped."
+        )
+    if west > east:
+        raise ValueError(
+            f"region bbox has west ({west}) east of east ({east}): either the pair is "
+            "swapped, or the region crosses the antimeridian, which this generator does "
+            "not draw -- split it into two plates instead."
+        )
+    if east - west <= 0 or north - south <= 0:
+        raise ValueError(
+            f"region bbox has no area: west={west}, south={south}, east={east}, north={north}"
+        )
+    if east - west > _MAX_LCC_SPAN_DEGREES:
+        raise ValueError(
+            f"region spans {east - west:.0f} degrees of longitude, past the "
+            f"{_MAX_LCC_SPAN_DEGREES:.0f} a Lambert conformal conic will take. "
+            "This generator draws a region, not a world -- use the choropleth kind "
+            "for a whole-world view."
+        )
+    return [west, south, east, north]
+
+
 def validate_config(cfg: dict[str, Any]) -> None:
     """
     Refuse a config with keys this generator does not read.
@@ -4626,6 +4842,8 @@ def validate_config(cfg: dict[str, Any]) -> None:
         reads. Unknown keys name their closest known neighbour, because the
         realistic cause is a typo and the realistic fix is one character.
     """
+    if "region" in cfg:
+        validate_region(cfg["region"])
     if "region" not in cfg:
         raise ValueError(
             "situation map config needs a 'region': the area the plate covers, "

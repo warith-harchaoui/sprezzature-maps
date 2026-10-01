@@ -1188,3 +1188,106 @@ def test_the_shared_decoder_reads_the_real_vendored_atlas() -> None:
     assert -91.0 <= south < north <= 91.0
     # Not a handful of stray rings: the world has continents in it.
     assert land.area > 10_000
+
+
+# ── the bbox, which nothing used to check ─────────────────────────────────
+#
+# ``validate_config`` goes to real trouble over a mistyped key, down to
+# suggesting the one you meant, and never looked at the only key it
+# requires. The damaging bbox mistakes do not crash.
+
+
+def test_a_region_crossing_the_antimeridian_is_refused_not_inverted() -> None:
+    """
+    The worst thing this generator could do, and it did it.
+
+    ``box(177, -19, -178, -16)`` does not raise: shapely normalises it to
+    ``-178 .. 177``, so asking for a five-degree window over Fiji drew **355
+    degrees of longitude** — the whole planet except the region requested,
+    rendered confidently and looking entirely finished.
+    """
+    with pytest.raises(ValueError, match="antimeridian"):
+        msm.validate_region({"bbox": [177.0, -19.0, -178.0, -16.0]})
+    with pytest.raises(ValueError, match="antimeridian"):
+        msm.build_map({"region": {"bbox": [168.0, 64.0, -168.0, 67.0]}})
+
+
+def test_a_swapped_pair_is_named_rather_than_quietly_normalised() -> None:
+    """A transposed bbox used to draw a different, valid region without comment."""
+    with pytest.raises(ValueError, match="south .* above north"):
+        msm.validate_region({"bbox": [10.0, 50.0, 30.0, 40.0]})
+
+
+def test_a_degenerate_or_impossible_bbox_gets_a_sentence_not_a_stack_trace() -> None:
+    """
+    These reached a bare ``ZeroDivisionError`` and a raw pyproj ``CRSError``
+    from inside the projection machinery.
+    """
+    with pytest.raises(ValueError, match="no area"):
+        msm.validate_region({"bbox": [10.0, 40.0, 10.0, 50.0]})
+    with pytest.raises(ValueError, match="degrees of longitude"):
+        msm.validate_region({"bbox": [-180.0, -85.0, 180.0, 85.0]})
+    with pytest.raises(ValueError, match="-180..180|longitudes"):
+        msm.validate_region({"bbox": [-400.0, 10.0, -300.0, 20.0]})
+    with pytest.raises(ValueError, match="four"):
+        msm.validate_region({"bbox": [1.0, 2.0, 3.0]})
+    with pytest.raises(ValueError, match="bbox"):
+        msm.validate_region({})
+
+
+def test_build_map_validates_too_so_the_inner_entry_point_agrees() -> None:
+    """``build_map({})`` used to raise a bare ``KeyError: 'region'``."""
+    with pytest.raises(ValueError, match="region"):
+        msm.build_map({})
+
+
+def test_a_polar_plate_can_be_drawn_at_all() -> None:
+    """
+    Projecting a coastline into a conic can leave it self-touching, and GEOS
+    answers a boolean operation on an invalid operand with a raw
+    ``TopologyException`` instead of a result. A plate of Svalbard and
+    northern Greenland could not be rendered at all.
+    """
+    svg = _plate(region={"bbox": [-60.0, 78.0, 30.0, 84.0]}, basemap={"relief": False})
+    assert '<g id="basemap-land">' in svg
+    land = svg[svg.index('<g id="basemap-land">') :].split("</g>")[0]
+    assert land.count("<path") >= 1, "the Arctic coastline must actually draw"
+
+
+def test_the_bundled_demo_is_still_a_valid_region() -> None:
+    """The guard must not have made the package's own first impression illegal."""
+    assert msm.validate_region(msm._DEMO_CONFIG["region"]) == [-11.0, 35.0, 30.0, 60.0]
+
+
+def test_the_sidecar_reads_any_kind_not_just_the_situation_map() -> None:
+    """
+    It keyed on ``<title id="sm-title">``, which only the situation map
+    writes. On a choropleth it returned an empty title, an empty alt string
+    and no error — the quietest possible way to be useless, from a function
+    the package exports under a kind-agnostic name.
+    """
+    from sprezzature_maps import article_sidecar
+
+    choropleth = _load_script("make_choropleth")
+    card = article_sidecar(
+        choropleth.build_svg([{"id": "840", "value": 5}], title="Q3", subtitle="EUR m")
+    )
+    assert card["title"] == "Q3"
+    assert card["description"], "the accessible description must come through"
+    assert card["alt"] == card["description"], "no zones means no computable takeaway"
+
+
+def test_a_choropleth_country_carries_its_own_value() -> None:
+    """
+    svgis's ``--data-fields`` idea applied to the kind that did not have it:
+    the plate's argument should be extractable, not only viewable. A country
+    with no number carries an empty ``data-value`` rather than nothing,
+    because "no data here" is a state this map draws on purpose, in grey.
+    """
+    import re
+
+    choropleth = _load_script("make_choropleth")
+    svg = choropleth.build_svg([{"id": "840", "value": 5}])
+    found = dict(re.findall(r'data-id="(\d+)" data-value="([^"]*)"', svg))
+    assert found.get("840") == "5"
+    assert any(value == "" for value in found.values()), "no-data countries must say so"
