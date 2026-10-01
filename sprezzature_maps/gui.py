@@ -4,17 +4,17 @@ sprezzature-maps: the GUI gallery page.
 Module summary
 --------------
 Renders the single HTML page served at the FastAPI app's root address
-(see :mod:`sprezzature_maps.api`): a two-tile gallery, one tile per map
+(see :mod:`sprezzature_maps.api`): a gallery, one tile per map
 kind, modeled on the sprezzature-figures gallery
 (https://harchaoui.org/warith/sprezzature/figures.html) but scaled down to
 match this smaller repository. That larger page groups around 95 chart
 kinds into thematic sections; this repo has exactly two kinds, so it
-needs only one section, two tiles, and no navigation between sections.
+needs only one section, one tile per kind, and no navigation between them.
 
 The design follows the ``sprezzature-ui`` house rules, applied here by
 hand rather than through an actual build toolchain: bringing in an
 npm/Tailwind build pipeline (Tailwind is a CSS framework normally
-compiled by a JavaScript build step) just for a two-tile static page
+compiled by a JavaScript build step) just for a small static page
 would cost more in tooling than it would ever pay back. The rules it
 still follows: semantic HTML (markup chosen for its meaning, like
 ``<nav>`` or ``<article>``, not just generic ``<div>``s); a light or dark
@@ -49,7 +49,7 @@ Author
 
 from __future__ import annotations
 
-#: The two tiles this gallery shows, in display order. Kept as a plain
+#: The tiles this gallery shows, in display order. Kept as a plain
 #: tuple-of-dicts (not a dataclass) since this is the only place the shape
 #: is used -- a dataclass here would be ceremony without a second consumer.
 _TILES: tuple[dict[str, str], ...] = (
@@ -72,6 +72,16 @@ _TILES: tuple[dict[str, str], ...] = (
             "scale bar -- the geopolitics-desk look, parameterized."
         ),
         "endpoint": "/v1/situation-map",
+    },
+    {
+        "kind": "density",
+        "title": "Density",
+        "description": (
+            "An accumulation map: where events fell, rather than a value per "
+            "territory. Points are binned into a luminous field and the "
+            "geography emerges from the data rather than being drawn under it."
+        ),
+        "endpoint": "/v1/density",
     },
 )
 

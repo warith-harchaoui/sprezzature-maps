@@ -237,6 +237,15 @@ else:
         show_default=True,
         help="Composite the vendored hillshade texture.",
     )
+    @click.option(
+        "--simplify",
+        type=float,
+        default=None,
+        help=(
+            "Vertex-thinning tolerance in output pixels. The default drops "
+            "detail the canvas cannot resolve; pass 0 to keep every vertex."
+        ),
+    )
     def choropleth_cmd(
         data_path: str | None,
         mappings: tuple[str, ...],
@@ -244,9 +253,12 @@ else:
         title: str | None,
         diverging: bool | None,
         relief: bool,
+        simplify: float | None,
     ) -> None:
         """Render a world choropleth map."""
         kwargs: dict[str, Any] = {"diverging": diverging, "relief": relief}
+        if simplify is not None:
+            kwargs["simplify"] = simplify
         if data_path:
             kwargs["data"] = _load_choropleth_rows(data_path, _parse_mapping(mappings))
         elif mappings:
@@ -264,7 +276,7 @@ else:
         "config_path",
         default=None,
         type=click.Path(exists=True, dir_okay=False),
-        help="YAML region config. Omit for the bundled Western-Europe demo.",
+        help="YAML region config. Omit for the bundled Europe demo.",
     )
     @click.option("--out", default=None, help="Output path (.svg/.png/.pdf/.jpg).")
     @click.option("--title", default=None, help="Overrides the config's own title if set.")

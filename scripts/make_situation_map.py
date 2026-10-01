@@ -4648,13 +4648,13 @@ def validate_config(cfg: dict[str, Any]) -> None:
 
 
 # A neutral, self-contained demo config so the figure registry can render this
-# generator like every other one. It shows Western Europe as a clean reference
+# generator like every other one. It shows Europe as a clean reference
 # situation map -- coastline, international frontiers, country labels, sea
 # bathymetry, dual-unit scale bar, north arrow -- straight from the vendored
 # Natural Earth basemap, with no thematic overlay invented. Pass a real
 # ``config`` dict (or use the ``--config`` CLI) for an actual analysis map.
 _DEMO_CONFIG: dict[str, Any] = {
-    "title": "Situation map: Western Europe (demo)",
+    "title": "Situation map: Europe (demo)",
     "region": {"bbox": [-11.0, 35.0, 30.0, 60.0]},
     "canvas_width": 1000,
     "projection": "auto",
@@ -4667,7 +4667,7 @@ _DEMO_CONFIG: dict[str, Any] = {
 #: ``DEMO_DATA`` contract and documents the demo region as a row.
 DEMO_DATA: list[dict[str, Any]] = [
     {
-        "region": "Western Europe",
+        "region": "Europe",
         "west": -11.0,
         "south": 35.0,
         "east": 30.0,

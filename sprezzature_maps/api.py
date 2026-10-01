@@ -19,14 +19,18 @@ What ships here
 ----------------
 - ``GET /health``: a liveness probe, a route whose only job is to answer
   quickly so a monitoring system can tell the server is still running.
-- ``GET /v1/kinds``: the two map kinds this repo carries (``choropleth``,
-  ``situation_map``), for a caller, or the GUI, that wants to discover
-  them programmatically rather than hardcode the names.
+- ``GET /v1/kinds``: the three map kinds this repo carries
+  (``choropleth``, ``density``, ``situation_map``), for a caller, or the
+  GUI, that wants to discover them programmatically rather than hardcode
+  the names.
 - ``POST /v1/choropleth``: render a choropleth from JSON rows (or the
   built-in demo data, if ``data`` is left out of the request).
 - ``POST /v1/situation-map``: render a situation map from a configuration
   object shaped the same way the ``--config`` YAML file is, or the
-  bundled Western Europe demo if ``config`` is left out.
+  bundled demo region if ``config`` is left out.
+- ``POST /v1/density``: render an accumulation map from a list of
+  ``[lon, lat]`` points, or the built-in synthetic demo if ``points`` is
+  left out.
 - ``GET /``: the GUI gallery page (see :mod:`sprezzature_maps.gui`).
 
 Install the extra to get the runtime dependencies::
@@ -129,6 +133,17 @@ class ChoroplethRequest(BaseModel):
         description="Force the diverging ramp on/off. Omit to auto-detect from the data's sign.",
     )
     relief: bool = Field(default=True, description="Composite the vendored hillshade texture.")
+    simplify: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=10.0,
+        description=(
+            "Vertex-thinning tolerance in output pixels, applied after "
+            "projection. The default drops detail this canvas cannot resolve "
+            "(at 1000x564 some 97% of the source segments are sub-pixel); "
+            "0 keeps every vertex."
+        ),
+    )
     classes: int | None = Field(
         default=None,
         ge=2,
@@ -228,7 +243,7 @@ class SituationMapRequest(BaseModel):
     config: dict[str, Any] | None = Field(
         default=None,
         description="Region/layer config, the same shape the --config YAML uses. "
-        "Omit to render the bundled Western-Europe demo.",
+        "Omit to render the bundled Europe demo.",
     )
     title: str | None = Field(default=None, description="Overrides config['title'] if set.")
     format: Literal["svg", "png", "pdf", "jpg"] = Field(
@@ -387,6 +402,7 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
         "breaks": body.breaks,
         "cities": body.cities,
         "rivers": body.rivers,
+        "simplify": body.simplify,
     }
     if body.data is not None:
         kwargs["data"] = [row.model_dump() for row in body.data]
