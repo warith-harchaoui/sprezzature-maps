@@ -2,6 +2,61 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.9.4] - 2026-10-02: terrain you can see through the thematic fill
+
+A Ralph Eyeball Loop on the physical layers — relief, lakes, rivers — and how
+they stack. Rendered, looked at, adjusted, looked at again.
+
+### Changed — how terrain is composited
+
+Shading was drawn **underneath** everything, with the land polygon left
+translucent (`fill-opacity` 0.45) so it showed through. That works, and it
+costs two things it need not:
+
+- the land colour is diluted towards whatever lies beneath it, so a warm
+  cream basemap drifts cold and green;
+- the shading is composited by alpha, so a dark valley lightens the paper as
+  much as it darkens it — the opposite of what a shadow does.
+
+Shading is now blended **over an opaque land fill**, which behaves the way
+terrain reads: a lit ridge is near-white in the shading and leaves the land
+colour alone, a valley multiplies it down into its own darker, warmer self.
+Hue is preserved by construction rather than by picking the opacity that
+damages it least.
+
+The blend mode comes from the plate, which already knew the answer:
+`multiply` darkens a cream day plate, `screen` lifts a near-black night one.
+Hardcoding either would have turned the night plate black — checked by
+rendering it.
+
+It is clipped to the land, which the old arrangement did not need: a blend
+across the whole plate would work ground shading into the sea and the
+bathymetry halo.
+
+`relief_opacity` is 0.72, not 0.45, and the number means a different thing
+now — blend strength rather than the fill opacity of a translucent land
+polygon. Swept 0.45 / 0.65 / 0.85 / 1.0 against the Albertine Rift, the most
+dissected terrain the bundled examples cover, and then again **with the
+control fills in place**, which matters because the zones blend too and the
+multiplies stack. Terrain contrast still climbs at 0.85, but the class
+colours start going muddy in the valleys. A plate about who holds the ground
+does not get to lose the ground's colour to the ground's shape.
+
+The effect is most visible on the eastern-DRC and Sudan plates, where the
+half of the map the plate is *about* previously rendered as a flat wash: the
+Albertine Rift's drainage network, the Jebel Marra massif and the Red Sea
+hills now read through the thematic fills.
+
+### Fixed — blending leaked into the host page
+
+The plate now carries `isolation: isolate`, so every blended layer inside it
+composites against the plate and stops there. These maps are inlined into
+HTML — that is how the gallery and any CMS embed them, rather than as an
+`<img>` — and without a stacking context of its own a blended layer
+composites against whatever the page has behind it, so the same map came out
+different on a white article and a dark one. The relief change made this
+urgent by giving the blend most of the plate's area.
+
 ## [0.9.3] - 2026-10-02: refuse what cannot be drawn honestly
 
 Two more Ralph Loop passes, aimed at the inputs a real caller supplies rather

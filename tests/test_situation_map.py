@@ -103,7 +103,13 @@ def test_day_is_the_default_and_nothing_moves() -> None:
     assert day["sea"] == "#a9bccb"
     assert day["land"] == "#faf6e4"
     assert day["coast"] == "#7f97a8"
-    assert day["relief_opacity"] == 0.45
+    # 0.72, not the 0.45 this pinned for a long time, and the number means a
+    # different thing now. It used to be the *fill opacity* of a translucent
+    # land polygon, with the shading drawn underneath and showing through;
+    # the shading is composited over opaque land now and this is its blend
+    # strength. Swept against the Albertine Rift with the control fills in
+    # place, since the zones blend too and the multiplies stack.
+    assert day["relief_opacity"] == 0.72
     assert day["legend_ink"] == "#333"
     assert day["blend"] == "multiply"
 
