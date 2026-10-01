@@ -266,15 +266,26 @@ def bin_points(
     return grid, nx, ny, peak
 
 
+#: The demo's own extent: the contiguous United States. Named so that
+#: :func:`build_svg` can tell a caller who kept the demo bbox from one who
+#: brought their own -- labelling someone else's bbox "Contiguous United
+#: States" would be worse than labelling nothing.
+_DEMO_BBOX: tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0)
+
+#: What the demo bbox is, in words.
+_DEMO_REGION = "Contiguous United States"
+
+
 def build_svg(
     points: Sequence[tuple[float, float]] | None = None,
     *,
-    bbox: tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0),
+    bbox: tuple[float, float, float, float] = _DEMO_BBOX,
     bins: int = DEFAULT_BINS,
     width: int = 1000,
     title: str = "Where the lightning fell",
     subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
     caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
+    region: str | None = None,
 ) -> str:
     """
     Render the accumulation plate.
@@ -306,6 +317,12 @@ def build_svg(
     if bins < 1:
         raise ValueError(f"bins must be positive, got {bins}")
     pts = list(points) if points is not None else demo_points()
+    # Name the area only when it is the one we can name. A caller who
+    # brought their own bbox and no name still gets the coordinate extent,
+    # which is always true; what they do not get is someone else's label.
+    if region is None and tuple(bbox) == _DEMO_BBOX:
+        region = _DEMO_REGION
+
     grid, nx, ny, peak = bin_points(pts, bbox, bins)
     if peak == 0:
         raise ValueError("no point fell inside the bbox; nothing to draw")
@@ -342,27 +359,78 @@ def build_svg(
         f'shape-rendering="crispEdges">',
         f'<title id="dens-title">{_esc(title)}</title>',
         f'<desc id="dens-desc">{_esc(subtitle)} — {len(pts):,} points binned to '
-        f'{nx} by {ny} cells.</desc>',
+        f'{nx} by {ny} cells. {_esc(extent_sentence(bbox))}'
+        f'{" " + _esc(str(region)) + " is the mapped area." if region else ""}</desc>',
         f'<rect width="{width}" height="{plate_h}" fill="{PLATE}"/>',
     ]
+    # Named groups, as the other two generators emit: a plate nobody can
+    # take apart cannot be inspected, restyled or decomposed into layers,
+    # and ``build_situation_examples.py --layers`` exists to do exactly that
+    # for the kinds that have them.
+    out.append('<g id="field">')
     for level in sorted(buckets):
         out.append(f'<path fill="{RAMP[level]}" d="{"".join(buckets[level])}"/>')
+    out.append("</g>")
 
+    out.append('<g id="title-block">')
     out.append(
         f'<text x="26" y="44" font-family="Georgia, \'Times New Roman\', serif" '
         f'font-size="30" fill="{INK}">{_esc(title)}</text>'
     )
+    strap = f"{subtitle} · {region}" if region else subtitle
     out.append(
         f'<text x="26" y="70" font-family="Georgia, \'Times New Roman\', serif" '
-        f'font-size="14" font-style="italic" fill="{SUBTLE}">{_esc(subtitle)}</text>'
+        f'font-size="14" font-style="italic" fill="{SUBTLE}">{_esc(strap)}</text>'
     )
+    out.append("</g>")
+    out.append('<g id="legend">')
     out.extend(_ramp_legend(width - 300, plate_h - 26, peak))
+    out.append("</g>")
+    out.append('<g id="caption">')
     out.append(
         f'<text x="26" y="{plate_h - 22:.0f}" font-family="ui-monospace, monospace" '
         f'font-size="9" fill="{SUBTLE}" letter-spacing="0.6">{_esc(caption)}</text>'
     )
+    out.append("</g>")
     out.append("</svg>")
     return "\n".join(out)
+
+
+def _fmt_lon(v: float) -> str:
+    """Longitude with its hemisphere, the way a map caption writes it."""
+    return f"{abs(v):.1f}\u00b0{'W' if v < 0 else 'E'}"
+
+
+def _fmt_lat(v: float) -> str:
+    """Latitude with its hemisphere."""
+    return f"{abs(v):.1f}\u00b0{'S' if v < 0 else 'N'}"
+
+
+def extent_sentence(bbox: tuple[float, float, float, float]) -> str:
+    """Return the one sentence this plate was missing: where on Earth it is.
+
+    A density field draws no coastline, no border and no graticule by
+    design -- the geography is supposed to emerge from where the events
+    fell. That works for a reader who can identify the resulting outline,
+    and for nobody else: for every screen-reader user without exception,
+    and for any sighted reader who does not happen to know that shape, the
+    plate is an abstract blob with no scale bar, no place name and no
+    fallback of any kind.
+
+    The bbox is always known here, so the extent can always be stated. It
+    is cheap, it cannot be wrong, and it is the difference between a map
+    and a texture.
+
+    Examples
+    --------
+    >>> extent_sentence((-125.0, 25.0, -67.0, 49.0))
+    'Covering 125.0\u00b0W to 67.0\u00b0W, 25.0\u00b0N to 49.0\u00b0N.'
+    """
+    west, south, east, north = bbox
+    return (
+        f"Covering {_fmt_lon(west)} to {_fmt_lon(east)}, "
+        f"{_fmt_lat(south)} to {_fmt_lat(north)}."
+    )
 
 
 def _ramp_legend(x: float, y: float, peak: int) -> list[str]:
@@ -400,12 +468,13 @@ def make_density(
     points: Sequence[tuple[float, float]] | None = None,
     *,
     out: Path | str | None = None,
-    bbox: tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0),
+    bbox: tuple[float, float, float, float] = _DEMO_BBOX,
     bins: int = DEFAULT_BINS,
     width: int = 1000,
     title: str = "Where the lightning fell",
     subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
     caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
+    region: str | None = None,
 ) -> Path:
     """Render an accumulation map and write the SVG to *out*.
 
@@ -450,6 +519,7 @@ def make_density(
         title=title,
         subtitle=subtitle,
         caption=caption,
+        region=region,
     )
     dest = Path(out) if out else svg_example_path(__file__, "density")
     return write_svg(dest, svg)

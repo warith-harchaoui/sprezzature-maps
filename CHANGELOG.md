@@ -2,6 +2,111 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.9.2] - 2026-10-01: a Ralph Loop over the whole project
+
+Two iterations of render-it-and-look-at-it across every surface, not just the
+plates. The findings were mostly not in the drawing code, which is tested and
+looked at constantly; they were in everything that *describes* the drawing
+code, which nothing checks.
+
+### Fixed
+
+- **`density` was invisible on every surface that is written by hand.** The
+  third generator has been real for a while — in the library, at
+  `/v1/density`, in both CLIs, and in MCP as `render_density` — and it was
+  absent from the GUI gallery (0 mentions in 5 522 bytes of HTML), from
+  `EXAMPLES.md` (0 mentions in 162 lines), from both routing tables in
+  `TRIGGERS.md`, and from `api.py`'s own module docstring, which still read
+  "the two map kinds this repo carries".
+
+  A user opening the server root was shown two of three products. An agent
+  reading `TRIGGERS.md` — the file whose entire job is routing a request to
+  the right call — had no path to `render_density` at all.
+
+  Every surface that is *generated* from code (`/v1/kinds`, the route table,
+  the MCP tool registry) was correct throughout. The staleness was entirely
+  in prose, which is exactly where nothing was watching.
+
+- **Two documented facts were false.** `EXAMPLES.md` showed
+  `curl /v1/kinds` returning `["choropleth", "situation_map"]`; the server
+  returns three names. And it promised the embedded demo images "can never
+  silently drift from what the code in this repo actually produces" — while
+  `situation_map.svg` was a month and three releases stale, from before
+  lakes, axes of advance, the accessible root and the confidence tiers.
+  `choropleth.svg` was current only because `make_choropleth`'s doctest
+  rewrites it as a side effect: one file fresh by coincidence, the other by
+  nothing, under prose asserting a process that did not exist.
+
+  A promise in prose is not a mechanism. There is now a mechanism:
+  `scripts/build_demo_examples.py` regenerates all three, and
+  `tests/test_demo_examples_are_current.py` fails if a shipped file no
+  longer matches what its generator produces.
+
+- **`simplify` was in the API schema and did nothing.** The field validated
+  and appeared in the published OpenAPI document, but the route never
+  forwarded it: `simplify=0` and the default both returned the same bytes.
+  Found by testing the behaviour rather than the schema key. It now does
+  what it says (2 140 KB unthinned against 921 KB), and the Click CLI gained
+  `--simplify` too.
+
+- **The density plate never said where it was.** Not in its title, subtitle,
+  caption, or accessible description — which described the method ("253,313
+  points binned to 120 by 50 cells") and omitted the place. The README sold
+  this as a virtue: "a reader recognises the shape without being shown it."
+  That holds for a reader who can identify the contiguous United States from
+  its outline and for nobody else, with no scale bar, graticule or place
+  name to fall back on, and for no screen-reader user at all.
+
+  It now always states its mapped extent, and names the region only when the
+  region is the one we can name — a caller who brings their own bbox gets
+  coordinates rather than somebody else's label.
+
+- **The Dockerfile asserted something false and carried a workaround for it.**
+  Its comment read "Neither sprezzature-maps nor sprezzature-figures is on
+  PyPI yet". Both are, `pyproject.toml`'s own comment says so, and the
+  README's install line is `pip install sprezzature-maps`. The workaround
+  cost an `apt-get install git` layer and a shallow clone that **pinned
+  nothing**, so every build baked in whatever the dependency's HEAD happened
+  to be — which is the opposite of a reproducible image. Its `CMD` printed a
+  `--help` message and exited, from an image carrying the HTTP API, the MCP
+  surface and the GUI.
+
+  Now installs from PyPI and serves uvicorn. Verified by building and
+  running it: all three generators render inside the image, `/v1/kinds`
+  answers over HTTP, the gallery returns 200.
+
+- **`addopts = "-m 'not slow'"` was a trap.** It excluded nothing, because no
+  test carries the marker — but the next contributor to add one would have
+  silently removed it from every local run and from CI, which runs a bare
+  `pytest -q`. A test nobody runs reads as coverage and is not.
+
+- The Europe demo was titled "Western Europe" while framing Athens,
+  Bucharest, Belarus and western Ukraine.
+
+### Added
+
+- `density` plates emit named layer groups (`field`, `title-block`,
+  `legend`, `caption`), as the other two kinds do. A plate nobody can take
+  apart cannot be inspected or restyled.
+- `make_density(region=…)` names the mapped area on the plate and in the
+  accessible description.
+
+### A note on the freshness test
+
+It first compared bytes, which is the obvious comparison and the wrong one.
+Rendering the same demo inside this project's own Docker image and against a
+macOS checkout gives different raw bytes and, with decimal numbers
+normalised, an identical document: the projection's arithmetic differs by
+ulps across platforms and moves coordinates in the last printed digit. That
+test would have failed on CI on its first run and every run after, for a
+reason unrelated to the thing it exists to catch, and a gate that cries wolf
+is worse than no gate.
+
+It compares a fingerprint instead — embedded rasters and decimal numbers
+dropped, the whole document structure and every piece of text kept — so a
+renamed layer, a changed label, a new legend row or an edited title still
+trips it. Checked across both platforms for all three kinds.
+
 ## [0.9.1] - 2026-10-01: the two debts the roadmap kept naming
 
 Both of these were known, written down, and carried anyway — one in a

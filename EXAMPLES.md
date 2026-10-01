@@ -7,11 +7,14 @@ This file grows alongside the project's surfaces (the Python library, the
 command-line tools, the HTTP API, the Model Context Protocol or MCP
 integration that lets an AI assistant call these tools directly, the
 browser GUI). It is not written once and left as-is: expect new sections
-as those surfaces land. The two example images below are not hand-picked
-screenshots; they are the actual output of `make_choropleth()` and
-`make_situation_map()` called with no arguments, regenerated regularly
-and stored under `assets/svg-examples/`, so they can never silently drift
-from what the code in this repo actually produces.
+as those surfaces land. The three example images below are not hand-picked
+screenshots; they are the actual output of `make_choropleth()`,
+`make_situation_map()` and `make_density()` called with no arguments, and
+they cannot silently drift from what the code produces — not because
+anyone promises to keep them fresh, but because
+`tests/test_demo_examples_are_current.py` re-renders each one and fails if
+the file on disk differs. Regenerate with
+`python scripts/build_demo_examples.py`.
 
 ### `choropleth`
 
@@ -19,7 +22,11 @@ from what the code in this repo actually produces.
 
 ### `situation_map`
 
-<img src="assets/svg-examples/situation_map.svg" alt="Situation map demo: Western Europe, real coastlines and borders, bathymetry halo, country labels, dual-unit scale bar." width="700">
+<img src="assets/svg-examples/situation_map.svg" alt="Situation map demo: Europe, real coastlines and borders, bathymetry halo, country labels, dual-unit scale bar." width="700">
+
+### `density`
+
+<img src="assets/svg-examples/density.svg" alt="Density demo: a quarter of a million synthetic lightning strikes over the contiguous United States, binned into a luminous blue field on a near-black plate, with no coastline drawn." width="700">
 
 ## Python library
 
@@ -46,7 +53,7 @@ make_choropleth(
 # Force it explicitly with diverging=True/False to override that.
 make_choropleth(data=[...], diverging=True, out="growth.svg")
 
-# The bundled Western-Europe demo config.
+# The bundled Europe demo config.
 make_situation_map(out="region.svg")
 
 # Your own region: a YAML config file (YAML is a human-readable text
@@ -56,6 +63,22 @@ make_situation_map(out="region.svg")
 import yaml
 config = yaml.safe_load(open("my-region.yaml"))
 make_situation_map(config=config, out="region.svg")
+```
+
+```python
+from sprezzature_maps import make_density
+
+# Synthetic demo points over the contiguous United States.
+make_density(out="where.svg")
+
+# Your own events: a list of (lon, lat) pairs, and the window they fall in.
+make_density(
+    points=[(2.35, 48.86), (2.29, 48.85), ...],
+    bbox=(-5.0, 42.0, 9.0, 51.5),
+    region="France",          # named, so the plate says what it maps
+    title="Where the strikes fell",
+    out="france.svg",
+)
 ```
 
 ## Command line (`make-map`)
@@ -97,9 +120,12 @@ curl -X POST http://localhost:8000/v1/choropleth \
 # Demo situation map.
 curl -X POST http://localhost:8000/v1/situation-map -o situation_map.svg
 
-# Discover the two kinds programmatically instead of hardcoding them.
+# Demo density map.
+curl -X POST http://localhost:8000/v1/density -o density.svg
+
+# Discover the kinds programmatically instead of hardcoding them.
 curl http://localhost:8000/v1/kinds
-# ["choropleth", "situation_map"]
+# ["choropleth", "density", "situation_map"]
 
 # Interactive docs: a page generated automatically from the API's
 # OpenAPI schema, letting you try each endpoint from the browser

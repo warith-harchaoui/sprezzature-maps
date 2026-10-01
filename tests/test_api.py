@@ -71,7 +71,7 @@ def test_render_choropleth_rejects_bad_row() -> None:
 
 
 def test_render_situation_map_demo() -> None:
-    """An empty body renders the bundled Western-Europe demo config."""
+    """An empty body renders the bundled Europe demo config."""
     response = client.post("/v1/situation-map", json={})
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/svg+xml"
@@ -83,7 +83,27 @@ def test_gallery_page_serves_html() -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert response.text.count("<article") == 2
+    assert response.text.count("<article") >= 1
+
+
+def test_the_gallery_shows_every_kind_the_server_advertises() -> None:
+    """
+    The root page is what a user sees first, and it must not be a subset of
+    the product.
+
+    This previously asserted a hardcoded count of two tiles, which is how
+    `density` shipped as a first-class generator — library, `/v1/density`,
+    both CLIs, MCP as `render_density` — while the gallery kept advertising
+    two of three kinds and the test kept the stale number green. Tying the
+    page to `/v1/kinds` is the invariant that actually matters: whatever the
+    server says it draws, the front page shows.
+    """
+    kinds = client.get("/v1/kinds").json()
+    page = client.get("/").text
+    assert kinds, "the server must advertise at least one kind"
+    assert page.count("<article") == len(kinds)
+    for kind in kinds:
+        assert kind in page, f"{kind} is advertised by /v1/kinds but absent from the gallery"
 
 
 def test_a_classed_map_always_names_its_method() -> None:

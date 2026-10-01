@@ -72,7 +72,7 @@ def test_choropleth_missing_column_is_a_clean_error(tmp_path: Path) -> None:
 
 
 def test_situation_map_demo(tmp_path: Path) -> None:
-    """No --config renders the bundled Western-Europe demo."""
+    """No --config renders the bundled Europe demo."""
     out = tmp_path / "region.svg"
     result = runner.invoke(main, ["situation-map", "--out", str(out)])
     assert result.exit_code == 0, result.output

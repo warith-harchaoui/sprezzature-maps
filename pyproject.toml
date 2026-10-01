@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sprezzature-maps"
-version = "0.9.1"
+version = "0.9.2"
 description = "Hand-authored SVG world maps for the sprezzature stack: choropleth and layered areas-of-control situation maps, every line authored as SVG directly. Depends on sprezzature-figures for shared rendering primitives."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -108,9 +108,15 @@ packages = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-m 'not slow'"
+# No default deselection. `addopts = "-m 'not slow'"` stood here and
+# excluded nothing, because no test is marked `slow` — but it was a trap
+# set for the next contributor: marking a test `slow` would have quietly
+# removed it from every local run and from CI, which runs a bare
+# `pytest -q`. A test nobody runs is worse than no test, because it reads
+# as coverage. The marker stays registered so the name is still available
+# for selecting *into* a run (`pytest -m slow`).
 markers = [
-    "slow: marks tests as slow (network/rasterization-heavy)",
+    "slow: network- or rasterization-heavy; still runs by default",
 ]
 
 [tool.ruff]
