@@ -1291,3 +1291,61 @@ def test_a_choropleth_country_carries_its_own_value() -> None:
     found = dict(re.findall(r'data-id="(\d+)" data-value="([^"]*)"', svg))
     assert found.get("840") == "5"
     assert any(value == "" for value in found.values()), "no-data countries must say so"
+
+
+# ── the natural layers ────────────────────────────────────────────────────
+
+
+def test_relief_is_blended_over_the_land_not_hidden_under_it() -> None:
+    """
+    Terrain shading used to be drawn beneath everything, with the land fill
+    left translucent so it showed through. Two costs came with that: the
+    land colour was diluted towards whatever lay under it, so a warm cream
+    basemap drifted cold, and because the shading was composited by alpha a
+    dark valley lightened the paper as much as it darkened it — the opposite
+    of what a shadow does.
+    """
+    svg = _plate(basemap={"relief": True})
+    assert '<g id="basemap-land">' in svg
+    land_at = svg.index('<g id="basemap-land">')
+    relief_at = svg.index('<g id="relief"')
+    assert relief_at > land_at, "the shading must sit over the land, not under it"
+    # Opaque land: the hue is preserved by the blend, not by an opacity
+    # chosen to damage it least.
+    land = svg[land_at:].split("</g>")[0]
+    assert "fill-opacity" not in land
+
+
+def test_the_shading_is_clipped_to_the_land() -> None:
+    """A blend across the whole plate would work ground shading into the sea."""
+    svg = _plate(basemap={"relief": True})
+    assert 'clipPath id="relief-land-clip"' in svg
+    assert 'clip-path="url(#relief-land-clip)"' in svg
+
+
+def test_each_plate_blends_the_way_its_own_palette_says() -> None:
+    """
+    ``multiply`` darkens a cream day plate the way a shadow does; ``screen``
+    lifts a near-black night one the way a lit ridge does. Hardcoding either
+    would have turned the night plate black.
+    """
+    day = _plate(basemap={"relief": True})
+    night = _plate(basemap={"relief": True, "plate": "night"})
+    assert "mix-blend-mode:multiply" in day
+    assert "mix-blend-mode:screen" in night
+
+
+def test_the_plate_isolates_its_own_blending() -> None:
+    """
+    These plates are inlined into HTML — that is how the gallery and any CMS
+    embed them. Without a stacking context of its own, a blended layer
+    composites against the host page, so the same map comes out different on
+    a white article and a dark one.
+    """
+    assert "isolation:isolate" in _plate(basemap={"relief": True})
+
+
+def test_relief_off_still_means_off() -> None:
+    svg = _plate(basemap={"relief": False})
+    assert '<g id="relief"' not in svg
+    assert "relief-land-clip" not in svg

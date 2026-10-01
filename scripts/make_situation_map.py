@@ -304,7 +304,19 @@ _PLATES: dict[str, dict[str, str]] = {
         "sea": "#a9bccb",
         "land": "#faf6e4",
         "coast": "#7f97a8",
-        "relief_opacity": 0.45,
+        # Blend strength, not fill opacity. 0.45 was the right number for the
+        # old arrangement, where it set how much of a *translucent land fill*
+        # the shading showed through; as a multiply strength the same value
+        # left the drainage network barely legible. Swept 0.45/0.65/0.85/1.0
+        # against the Albertine Rift, the most dissected terrain the bundled
+        # examples cover, and then again with the control fills in place --
+        # which matters, because the zones blend too and three multiplies
+        # stack. Terrain contrast still climbs at 0.85, but the pink starts
+        # going muddy in the valleys; 0.72 is where the drainage network is
+        # plainly legible *and* the class colour is still unmistakably
+        # itself. A plate about who holds the ground does not get to lose
+        # the ground's colour to the ground's shape.
+        "relief_opacity": 0.72,
         "ink": "#1d1d1f",
         "subtle": "#6e6e73",
     },
@@ -2111,14 +2123,6 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     layers: list[str] = []
 
-    # 0. relief --------------------------------------------------------------
-    # Drawn first (bottom of the stack) so the sea and land fills paint over
-    # it -- basemap-land's fill-opacity below is what lets it peek through.
-    if basemap.get("relief", True):
-        layers.append(
-            _relief_layer(vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox)
-        )
-
     # Every geographic layer below is clipped to the projected region bbox
     # (the same trapezoid the relief already clips to): LCC's meridians fan
     # out from the cone apex, so neighbour geometry drawn for context
@@ -2151,12 +2155,43 @@ def build_map(cfg: dict[str, Any]) -> str:
     # more headroom to let it dominate. 0.45 was the empirical sweet spot
     # (0.55 was still muted; the Himalaya ridge line only became clearly
     # legible at 0.45).
-    land_fill_opacity = palette["relief_opacity"] if basemap.get("relief", True) else 1.0
-    layers.append(
-        f'<g id="basemap-land">'
-        f'<path d="{projected_geom_to_path(land_proj, vp)}" fill="{land_color}" '
-        f'fill-opacity="{land_fill_opacity}"/></g>'
-    )
+    land_d = projected_geom_to_path(land_proj, vp)
+    layers.append(f'<g id="basemap-land"><path d="{land_d}" fill="{land_color}"/></g>')
+
+    # 3a. relief, multiplied onto the land ------------------------------------
+    # Terrain shading used to be drawn *under* everything, with the land fill
+    # left translucent so it showed through. That works, and it costs two
+    # things it need not. The land colour is diluted towards whatever is
+    # beneath it, so a warm cream basemap drifts cold; and because the
+    # shading is composited by alpha, a dark valley lightens the paper as
+    # much as it darkens it, which is the opposite of what a shadow does.
+    #
+    # Multiply over an opaque land fill is the standard answer and behaves
+    # the way terrain actually reads: a lit ridge is near-white in the
+    # shading and multiplies to *leave the land colour alone*, while a
+    # valley multiplies it down into its own darker, warmer self. Hue is
+    # preserved by construction rather than by choosing an opacity that
+    # damages it least.
+    #
+    # Clipped to the land, which the old arrangement did not need: a blend
+    # across the whole plate would work shading computed for ground into the
+    # sea and the bathymetry halo.
+    #
+    # The mode comes from the plate, which already knows: ``multiply``
+    # darkens a cream day plate the way a shadow does, and ``screen`` lifts a
+    # near-black night one the way a lit ridge does. Hardcoding either would
+    # have made the night plate black.
+    if basemap.get("relief", True):
+        relief = _relief_layer(
+            vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox
+        )
+        layers.append(
+            f'<defs><clipPath id="relief-land-clip"><path d="{land_d}"/></clipPath></defs>'
+            f'<g clip-path="url(#relief-land-clip)" '
+            f'style="mix-blend-mode:{palette["blend"]}" '
+            f'opacity="{palette["relief_opacity"]:.2f}">'
+            f"{relief}</g>"
+        )
 
     # 3b. lakes --------------------------------------------------------------
     # Over the land fill, because the coastline data is land-versus-ocean only
@@ -2314,7 +2349,15 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
         f'<rect x="0" y="0" width="{plate_w:.1f}" height="{plate_h:.1f}" rx="{radius}" ry="{radius}" '
         f'fill="{_pal(cfg)["plate"]}" filter="url(#panel-shadow)"/>'
-        f'<g clip-path="url(#plate-clip)">'
+        # ``isolation:isolate`` makes this group its own stacking context, so
+        # every blended layer inside it -- the relief, the control fills --
+        # composites against the plate and stops there. Without it a plate
+        # inlined into an HTML page (which is exactly how the gallery and any
+        # CMS embed it, rather than as an <img>) blends against whatever the
+        # host page happens to have behind it: the same map comes out
+        # different on a white article and a dark one. The relief change made
+        # this urgent by giving the blend most of the plate's area.
+        f'<g clip-path="url(#plate-clip)" style="isolation:isolate">'
         f'<rect width="{plate_w:.1f}" height="{plate_h:.1f}" fill="{_pal(cfg)["plate"]}"/>'
         f"{''.join(layers)}"
         f"</g></g>"
