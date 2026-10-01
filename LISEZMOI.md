@@ -328,10 +328,11 @@ Earth, adaptée à l'inverse propre à cette autre projection. Quelques
 points de moindre priorité du plan cartographique complet restent
 consignés mais non planifiés : un relief construit à partir du jeu de
 données d'élévation mondial ETOPO, des projections alternatives mieux
-adaptées à une carte éditoriale (Robinson, Mollweide), et un lecteur
+adaptées à une carte éditoriale (Robinson, Mollweide). Le lecteur
 TopoJSON partagé unique (TopoJSON est un format compact qui enregistre
 chaque frontière commune une seule fois, au lieu d'une fois par pays
-voisin).
+voisin) était le troisième point de cette liste ; c'est désormais
+`scripts/_topojson.py`.
 
 ## Crédits des données
 

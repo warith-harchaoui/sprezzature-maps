@@ -1119,3 +1119,72 @@ def test_the_north_arrow_steps_clear_of_the_inset() -> None:
 def test_a_mistyped_inset_key_is_refused() -> None:
     with pytest.raises(ValueError, match="positon"):
         _plate(inset={"positon": "top-right"})
+
+
+# ── a basemap has a capture date, and some of it has moved ────────────────
+
+
+def test_a_lake_that_shrank_is_not_drawn_as_the_lake_it_was() -> None:
+    """
+    Natural Earth carries Lake Urmia at roughly its historic 4 200 km²; it
+    has repeatedly fallen below a fifth of that since the 2010s. Neither
+    ``former`` nor ``skip`` fits a lake that still exists at a fraction of
+    its outline — one asserts a disappearance that has not happened, the
+    other hides the question.
+    """
+    nw_iran = {"bbox": [43.5, 35.5, 48.5, 39.5]}
+    drawn = _plate(region=nw_iran, basemap={"relief": False})
+    assert "Lake Urmia (historic extent)" in drawn
+    lakes = drawn[drawn.index('<g id="lakes">') :].split("</g>")[0]
+    historic = [p for p in lakes.split("<path ") if "stroke-dasharray" in p]
+    assert historic, "the historic outline must be drawn dashed"
+    # Water, but not a full basin of it: a faded fill, not a solid one and
+    # not none, because the lake does still exist.
+    assert 'fill-opacity="0.4"' in historic[0]
+
+
+def test_the_vendored_extent_can_still_be_drawn_on_request() -> None:
+    """The correction is a default, not a decision taken away from the caller."""
+    nw_iran = {"bbox": [43.5, 35.5, 48.5, 39.5]}
+    as_vendored = _plate(
+        region=nw_iran, basemap={"relief": False}, lakes={"historic": []}
+    )
+    assert "(historic extent)" not in as_vendored
+    assert "Lake Urmia" in as_vendored
+
+
+def test_former_still_wins_over_historic() -> None:
+    """A body that is gone is gone; the two treatments must not compound."""
+    nw_iran = {"bbox": [43.5, 35.5, 48.5, 39.5]}
+    svg = _plate(
+        region=nw_iran, basemap={"relief": False}, lakes={"former": ["Lake Urmia"]}
+    )
+    assert "Lake Urmia (former)" in svg
+    assert "(historic extent)" not in svg
+
+
+# ── one TopoJSON reader, not one per generator ────────────────────────────
+
+
+def test_both_generators_read_topojson_through_the_same_decoder() -> None:
+    """
+    Two spellings of delta decoding and two of ring stitching is two places
+    for the same off-by-one to hide. The repo's own roadmap named this.
+    """
+    choropleth = (REPO / "scripts" / "make_choropleth.py").read_text()
+    situation = (REPO / "scripts" / "make_situation_map.py").read_text()
+    for source, name in ((choropleth, "make_choropleth"), (situation, "make_situation_map")):
+        assert "from _topojson import" in source, f"{name} must use the shared reader"
+        assert "def _decode_arc" not in source, f"{name} kept a private arc decoder"
+        assert "def _ring_coords" not in source, f"{name} kept a private ring stitcher"
+
+
+def test_the_shared_decoder_reads_the_real_vendored_atlas() -> None:
+    """Doctests prove the convention; this proves it against the shipped data."""
+    land = msm.load_land()
+    assert not land.is_empty
+    west, south, east, north = land.bounds
+    assert -180.5 <= west < east <= 180.5
+    assert -91.0 <= south < north <= 91.0
+    # Not a handful of stray rings: the world has continents in it.
+    assert land.area > 10_000
