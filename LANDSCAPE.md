@@ -89,9 +89,36 @@ conformal conic auto-centred on a region so local shapes and angles do.
 The `situation_map` kind is the sharpest case. Areas of control, a contact
 line, tapered axes of advance, relief, rivers and lakes, a scale bar in two
 units and a provenance caption, from a YAML file — that is a genre with
-plenty of *publishers* (ISW, LiveUAMap, ACLED) and, as far as we can find,
+plenty of *publishers* (ISW, Liveuamap, ACLED) and, as far as we can find,
 no open-source *generator*. Those organisations publish maps and data; none
 of them ships a library that turns your own assessment into a plate.
+
+Not shipping a generator does not mean having nothing to teach, and what
+they have to teach is not geometry. It is **how to be less confident on
+purpose**:
+
+- **ISW** keeps assessed control, reported movement and a belligerent's
+  unverified claim visually apart, which is what lets a reader hold the map
+  up against a ministry's communiqué. `areas_of_control` takes a
+  `confidence` of `assessed` / `reported` / `claimed`, and a claimed zone
+  gets no solid fill at all.
+- **ACLED** records a 1–3 `geo_precision` beside every event because the
+  precise location often is not known — precision 3 being a provincial
+  capital standing in for a whole province. Markers take the same code, and
+  an approximate one is drawn as a hollow ring rather than a confident dot.
+- **Liveuamap** attaches a source to each event rather than to the page. A
+  marker takes its own `source:`.
+
+The drawing side has its own two lessons. **mapshaper**'s `-innerlines`
+exists because walking polygons and stroking each one's outline draws every
+shared border twice; this repo was doing exactly that, at 1.63× on the
+Ukraine plate, and the doubled dash phases had quietly turned the
+international-border convention into a solid line. Its `fill-pattern=`
+vocabulary — hatches, dots, squares, dashes — is the texture set the
+confidence tiers are drawn with. **svgis**'s `--data-fields` writes a
+feature's own fields into `data-*` attributes so the drawing stays queryable
+after it is drawn; control zones and markers now carry theirs, so a plate's
+argument can be extracted rather than only looked at.
 
 **Use svgis** when you want the geometry and none of the opinions: real
 geodata in, clean CSS-classed SVG out, styling and layout yours to finish.

@@ -254,16 +254,22 @@ def build_ukraine() -> dict[str, Any]:
             "hatch_color": "#b34a3a",
             "source": {"type": "FeatureCollection", "features": features},
         },
-        # Reported 2023-24 flashpoints (lon, lat).
+        # Reported 2023-24 flashpoints (lon, lat). Each is a town name standing
+        # in for a sector of front around it, which is ACLED's geo-precision 2
+        # exactly: a named place chosen to represent a general area. The mark
+        # says so itself -- a hollow ring, not a dot -- so the "(approx.)" that
+        # used to sit in the legend's wording is now carried by the ink.
         "events": [
-            {"lon": 38.0008, "lat": 48.5947, "color": "#c0392b", "r": 5},  # Bakhmut
-            {"lon": 37.7450, "lat": 48.1453, "color": "#c0392b", "r": 5},  # Avdiivka
-            {"lon": 37.1828, "lat": 48.2828, "color": "#c0392b", "r": 5},  # Pokrovsk
-            {"lon": 37.2483, "lat": 47.7792, "color": "#c0392b", "r": 5},  # Vuhledar
-            {"lon": 35.8261, "lat": 47.4431, "color": "#c0392b", "r": 5},  # Robotyne
-            {"lon": 36.9428, "lat": 50.2878, "color": "#c0392b", "r": 5},
+            {"lon": 38.0008, "lat": 48.5947, "color": "#c0392b", "r": 5, "precision": 2},  # Bakhmut
+            {"lon": 37.7450, "lat": 48.1453, "color": "#c0392b", "r": 5, "precision": 2},  # Avdiivka
+            {"lon": 37.1828, "lat": 48.2828, "color": "#c0392b", "r": 5, "precision": 2},  # Pokrovsk
+            {"lon": 37.2483, "lat": 47.7792, "color": "#c0392b", "r": 5, "precision": 2},  # Vuhledar
+            {"lon": 35.8261, "lat": 47.4431, "color": "#c0392b", "r": 5, "precision": 2},  # Robotyne
+            {"lon": 36.9428, "lat": 50.2878, "color": "#c0392b", "r": 5, "precision": 2},
         ],  # Vovchansk
-        "marker_legend": [{"color": "#c0392b", "label": "Contested flashpoint (approx.)"}],
+        "marker_legend": [
+            {"color": "#c0392b", "label": "Contested flashpoint", "precision": 2}
+        ],
         "labels": {
             "waters": [
                 {"lon": 31.3, "lat": 43.15, "text": "Black Sea", "size": 19, "tracking": 7},

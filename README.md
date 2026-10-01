@@ -150,10 +150,137 @@ arrows:
     label: "SPLM-N (reported)"
 ```
 
+### Saying how sure you are
+
+A map that cannot say "probably" says "certainly" by default. Two of the
+options above exist only to let a plate be less confident than its ink
+would otherwise make it look.
+
+**How sure the assessment is**, on a control zone. The vocabulary is
+[ISW](https://www.understandingwar.org)'s: their control-of-terrain maps
+keep three things apart that one fill runs together — ground a force is
+assessed to hold, ground where movement has been *reported* but not
+assessed as held, and ground a belligerent *claims* and nobody has
+verified. That separation is what lets a reader hold the map up against a
+ministry's communiqué. Any zone may carry a `confidence` property:
+
+```yaml
+areas_of_control:
+  confidence_field: confidence     # the default
+  palette: { "Government": "#9cc3d5", "Opposition": "#d98880" }
+  source: zones.geojson            # features carry: confidence: claimed
+```
+
+`assessed` is the default and draws as a solid fill. `reported` keeps the
+class colour, lowered, under a diagonal hatch — still plainly the same
+actor, plainly less certain. `claimed` gets no solid fill at all, only a
+dotted texture inside a dashed outline, because painting a claim the
+colour of held ground asserts the one thing nobody has verified. An
+unreadable value is refused rather than quietly rounded down to
+`assessed`.
+
+**How well the location is known**, on a marker. The codes are
+[ACLED](https://acleddata.com)'s `geo_precision`, which that project
+records next to every event "to reflect the fact that the precise location
+of the incident may not be known" — precision 3 meaning a provincial
+capital standing in for a whole province. Drawing all three as the same
+hard dot asserts a street corner the source never gave:
+
+```yaml
+events:
+  - lon: 38.0008
+    lat: 48.5947
+    precision: 2             # a named place standing in for a general area
+    radius_km: 25            # optional: drawn to the map's own scale
+    date: "March 2026"
+    time_precision: 3        # the tooltip reads "month of March 2026"
+    source: "https://example.org/report"   # provenance for this one mark
+```
+
+Precision 1 is the solid dot and means what it always meant. An
+approximate position gives up its solid centre rather than inventing an
+area for itself — a hollow ring, the old cartographic signal for "about
+here" — and precision 3 breaks the ring as well. A radius is drawn only if
+you state one: the generator will not guess an uncertainty from the event
+type, because the buffers published for that measure how far an effect
+reached, not how badly a position is known.
+
+### When the map illustrates an article
+
+The article is the deliverable; the map is subordinate to it. That changes
+a few defaults.
+
+**It has to fit the column.** A one-column chart at The Economist is 595
+pixels wide, Datawrapper defaults to 600, and a phone column is about 375.
+The legend card is a fixed 262 pixels, which is fine at 1000 and covers the
+map at 375, so `legend_position` takes `below` (a full-width band under the
+map) and `auto`, which chooses from the plate's own width:
+
+```yaml
+canvas_width: 375
+legend_position: auto     # keeps the floating card while the card is small
+```
+
+**The note is the point.** Newsroom practice is unanimous that the
+annotation is what makes a news map, and the other layers exist to support
+it. `annotations:` takes a point, a sentence, and optionally a radius in
+kilometres on the ground:
+
+```yaml
+annotations:
+  - at: [30.5, 51.3]
+    text: "Columns withdrew north of Kyiv in April 2022."
+    place: left
+    color: "#2f5d92"
+    circle_km: 90
+```
+
+A circle rather than an arrow, because an arrowhead points at a pixel and
+claims a precision a note about a region does not have. The note takes the
+colour of the thing it describes, so it sits back onto the map instead of
+jumping off it.
+
+**It should say where on Earth it is.** *"Zoom out for perspective, zoom in
+for detail"* is the locator map's one rule, and a plate that only ever zooms
+in answers half of it:
+
+```yaml
+inset:
+  position: top-right     # or any corner
+  zoom: 6                 # how far out, when no bbox is given
+```
+
+**The page around it needs words and numbers.** `article_sidecar(svg)` reads
+them back out of the finished file, so a caption typed into a CMS cannot
+drift from the plate above it:
+
+```python
+from sprezzature_maps import article_sidecar
+card = article_sidecar(svg)
+card["alt"]      # description + a computed takeaway
+card["zones"]    # [{"category", "confidence", "area_share"}, ...]
+card["markers"]  # [{"lon", "lat", "precision", "radius_km"}, ...]
+```
+
+The `alt` string carries a takeaway, which the accessible description did
+not — "Ukrainian government control covers the largest mapped share, 81%",
+computed from what was drawn rather than asserted, and spoken as *"is
+claimed to cover"* when the largest share is only a claim.
+
+**It has to be light enough to ship.** Geometry is thinned to the render's
+own resolution after projection (`simplify: 0` switches it off), and the
+shaded-relief raster is written as an exact indexed palette rather than
+32-bit colour. Together these roughly halve a plate — Ukraine from 2094 KB
+to 1006 KB — with no visible change.
+
 Like the other two kinds, the plate now opens with an accessible root
 (`role="img"` wired to a `<title>`/`<desc>` pair), and its description
-names the classes drawn and repeats the caveat the caption carries: the
-map draws the assessment it was given and does not verify it.
+names the classes drawn, names any confidence tier below assessed, and
+repeats the caveat the caption carries: the map draws the assessment it
+was given and does not verify it. Each control zone and each marker also
+carries its own `data-*` attributes (`data-confidence`, `data-precision`,
+`data-area-share`), so the assessment can be read back out of the finished
+file rather than only looked at.
 
 The library is reachable five ways: as a Python import; as an argparse
 (Python's standard command-line-parsing library) command line, `make-map`,

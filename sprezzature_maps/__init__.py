@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 # In the source tree the generators live in scripts/; once installed they
 # ship (collision-free) as the sibling package sprezzature_maps_scripts/,
@@ -99,4 +99,27 @@ def make_density(*args: Any, **kwargs: Any) -> Path:
     return _load_script("make_density").make_density(*args, **kwargs)
 
 
-__all__ = ["make_choropleth", "make_density", "make_situation_map"]
+def article_sidecar(svg: str) -> dict[str, Any]:
+    """Return the metadata a page needs around a finished plate.
+
+    An article that a map illustrates still needs an ``alt`` string, a
+    caption and the numbers the map asserts, and today each of those is
+    retyped into a CMS by looking at the picture -- which is how a caption
+    comes to disagree with the plate above it. This reads them back out of
+    the SVG itself, so the two cannot drift apart.
+
+    Parameters
+    ----------
+    svg : str
+        A finished plate, as returned by the generators.
+
+    Returns
+    -------
+    dict
+        ``title``, ``alt`` (the accessible description plus a computed
+        takeaway), ``description``, ``zones`` and ``markers``.
+    """
+    return _load_script("_sidecar").article_sidecar(svg)
+
+
+__all__ = ["article_sidecar", "make_choropleth", "make_density", "make_situation_map"]
