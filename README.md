@@ -11,7 +11,7 @@ of [sprezzature-figures](https://github.com/warith-harchaoui/sprezzature-figures
 it was split out as its own product, with its own release schedule and,
 eventually, its own visual editor.
 
-Part of the [sprezzature](https://harchaoui.org/warith/sprezzature/) suite.
+Part of the [sprezzature](https://sprezzature.ai/) suite.
 
 ---
 
