@@ -24,6 +24,13 @@ build/
 # them present to compile without running those scripts first).
 !doc/img/*.png
 
+# Worked situation-map examples: every file under here is one command away
+# (`python scripts/build_situation_examples.py`) from the builders in
+# scripts/build_situation_examples.py, which are the real source. The SVG and
+# PNG are already caught by the blanket rules above; the YAML is the same
+# generated artefact and is ~400 KB of churn per regeneration.
+assets/situation-maps/
+
 .private/
 # Coverage reports
 .coverage

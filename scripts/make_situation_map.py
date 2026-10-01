@@ -151,8 +151,8 @@ try:
         box,
         shape,
     )
+    from shapely.ops import polylabel, unary_union
     from shapely.ops import transform as shp_transform
-    from shapely.ops import unary_union
 except ImportError as exc:  # pragma: no cover - dependency guard
     raise ImportError(
         "shapely>=2 and pyproj>=3.6 are required: pip install shapely pyproj"
@@ -172,6 +172,7 @@ _LAND_TOPOJSON = _ASSETS / "countries-50m.json"
 # read visibly facetted/over-smoothed at zoom.
 _LAND_TOPOJSON_10M = _ASSETS / "countries-10m.json"
 _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
+_LAKES_GEOJSON = _ASSETS / "lakes-50m.geojson"
 
 #: The two plates. ``day`` reproduces the values that were hard-coded here,
 #: so an existing config renders byte-for-byte as before.
@@ -1001,6 +1002,48 @@ def load_rivers() -> list[tuple[Any, str, int]]:
     return out
 
 
+
+def load_lakes() -> list[tuple[Any, str, int]]:
+    """Return ``(geometry, name, scalerank)`` for the vendored inland lakes.
+
+    Natural Earth 50m lakes, public domain, trimmed to name + scalerank like
+    the river centerlines beside them. The coastline data this generator draws
+    from is *land versus ocean* only, so before this every inland water body
+    was simply painted as land: a plate of the Kivus put Goma and Bukavu on
+    dry ground 100 km apart with nothing between them, when in fact they face
+    each other across Lake Kivu, and the lake is why the road between them
+    goes where it goes. The same hole swallowed Tanganyika, Victoria, Chad,
+    the Caspian and the Great Lakes.
+
+    Returns
+    -------
+    list of (geometry, str, int)
+        Empty, with a warning, when the asset is missing -- the same treatment
+        :func:`load_rivers` gives, and for the same reason: a missing vendored
+        file is a packaging fault, not a region with no lakes in it.
+    """
+    if not _LAKES_GEOJSON.is_file():
+        warnings.warn(
+            f"lake polygons missing at {_LAKES_GEOJSON}: the map will be drawn "
+            "with inland water painted as land. This is a packaging fault, not "
+            "a property of the region.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return []
+    data = json.loads(_LAKES_GEOJSON.read_text())
+    out: list[tuple[Any, str, int]] = []
+    for feat in data.get("features", []):
+        try:
+            geom = shape(feat["geometry"])
+        except Exception:  # skip a malformed lake rather than fail the plate
+            continue
+        props = feat.get("properties", {})
+        out.append((geom, props.get("name") or "", int(props.get("scalerank") or 10)))
+    return out
+
+
+
 # --------------------------------------------------------------------------- #
 # Projection                                                                   #
 # --------------------------------------------------------------------------- #
@@ -1404,6 +1447,120 @@ def _relief_layer(
     )
 
 
+def _fmt_lon(v: float) -> str:
+    """Format a longitude as a signed-free degree string, e.g. ``11.0°W``."""
+    return f"{abs(v):.1f}°{'W' if v < 0 else 'E'}"
+
+
+def _fmt_lat(v: float) -> str:
+    """Format a latitude as a signed-free degree string, e.g. ``35.0°N``."""
+    return f"{abs(v):.1f}°{'S' if v < 0 else 'N'}"
+
+
+def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
+    """Return the ``(title, description)`` pair the root ``<svg>`` exposes to a screen reader.
+
+    ``make_choropleth`` and ``make_density`` have always opened their document
+    with ``role="img"`` + ``aria-labelledby`` pointing at a ``<title>``/``<desc>``
+    pair; this generator opened with a bare ``<svg>``, so a screen reader
+    announced nothing but "image". That mattered more here than on the other
+    two, because this plate's whole content *is* a claim -- who holds which
+    ground -- and a reader who cannot see it was getting neither the claim nor
+    the caveat that it is a claim.
+
+    Everything below is read off ``cfg`` alone: no geometry is loaded and no
+    layer is rebuilt, so adding the description costs nothing at render time
+    and cannot disagree with what was drawn.
+
+    The last sentence is the contract ``TRIGGERS.md`` states for every consumer
+    of this generator -- a situation map draws exactly what it was handed and
+    has no view on whether the control it shows is real. A sighted reader gets
+    that from the provenance caption and the legend footer; it belongs in the
+    accessible description for the same reason.
+
+    Parameters
+    ----------
+    cfg : dict
+        The same parsed config :func:`build_map` renders from.
+
+    Returns
+    -------
+    tuple of (str, str)
+        The ``<title>`` text and the ``<desc>`` text, both unescaped (the
+        caller runs them through :func:`_esc`).
+
+    Examples
+    --------
+    >>> title, desc = accessible_text({
+    ...     "title": "Eastern front",
+    ...     "region": {"bbox": [22.0, 44.0, 40.0, 52.5]},
+    ...     "areas_of_control": {
+    ...         "palette": {"Ukraine": "#9cc3d5", "Russia": "#d98880"},
+    ...         "contested": ["Russia"],
+    ...     },
+    ... })
+    >>> title
+    'Eastern front'
+    >>> desc
+    'Situation map covering 22.0°E to 40.0°E, 44.0°N to 52.5°N. Areas of control in 2 classes: Ukraine, Russia (contested). The map draws the assessment it was given; it does not verify who holds what.'
+
+    A plain basemap with no control layer carries no claim, so it is described
+    without the caveat:
+
+    >>> _, desc = accessible_text({"region": {"bbox": [-11.0, 35.0, 30.0, 60.0]}})
+    >>> desc
+    'Situation map covering 11.0°W to 30.0°E, 35.0°N to 60.0°N.'
+    """
+    title = str(cfg.get("title") or "Situation map")
+
+    west, south, east, north = (float(v) for v in cfg["region"]["bbox"])
+    sentences = [
+        f"Situation map covering {_fmt_lon(west)} to {_fmt_lon(east)}, "
+        f"{_fmt_lat(south)} to {_fmt_lat(north)}."
+    ]
+
+    subtitle = cfg.get("subtitle")
+    if subtitle:
+        sentences.append(f"{str(subtitle).rstrip('.')}.")
+
+    aoc = cfg.get("areas_of_control", {})
+    palette = aoc.get("palette", {})
+    if palette:
+        contested = set(aoc.get("contested", []))
+        # "(contested)" after a class name is the legend's own hatch, spelled
+        # out: the legend draws that distinction and the description must too.
+        named = ", ".join(
+            f"{name} (contested)" if name in contested else str(name) for name in palette
+        )
+        sentences.append(f"Areas of control in {len(palette)} classes: {named}.")
+
+    if cfg.get("front", {}).get("line"):
+        sentences.append("An approximate front line is drawn.")
+
+    markers = [str(mk.get("label", "")) for mk in cfg.get("marker_legend", [])]
+    markers = [m for m in markers if m]
+    if markers:
+        sentences.append(f"Marked: {', '.join(markers)}.")
+
+    # The provenance the plate already carries in its caption and legend
+    # footer, repeated here because that is text a screen reader reaches only
+    # as three disconnected <text> runs somewhere in the middle of the file.
+    provenance = [
+        str(x).rstrip(".")
+        for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of"))
+        if x
+    ]
+    if provenance:
+        sentences.append(f"{'. '.join(provenance)}.")
+
+    if palette:
+        sentences.append(
+            "The map draws the assessment it was given; it does not verify who holds what."
+        )
+
+    return title, " ".join(sentences)
+
+
 def build_map(cfg: dict[str, Any]) -> str:
     """Assemble the full layered situation-map SVG from a config dict.
 
@@ -1471,6 +1628,12 @@ def build_map(cfg: dict[str, Any]) -> str:
     land = load_land(bbox=bbox).intersection(region_box)
     land_proj = _project_geom(land, proj)
     region_proj = _project_geom(region_box, proj)
+    # The same polygon the geographic layers are clipped to, in plate
+    # coordinates: every label layer tests against this rather than the
+    # plate rectangle, which is wider than the drawn map under a conic.
+    plate_region = Polygon(
+        [vp["to_svg"](px, py) for px, py in region_proj.exterior.coords]
+    )
     sea_proj = region_proj.difference(land_proj)
 
     layers: list[str] = []
@@ -1522,14 +1685,21 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'fill-opacity="{land_fill_opacity}"/></g>'
     )
 
+    # 3b. lakes --------------------------------------------------------------
+    # Over the land fill, because the coastline data is land-versus-ocean only
+    # and paints every inland water body as dry ground; under the borders and
+    # the control zones, because a lake is basemap, not thematic.
+    water_labels: list[tuple[float, float]] = []
+    layers.append(_lakes_layer(cfg, proj, vp, region_box, water_labels))
+
     # 3c. internal-borders (admin-1: US states, FR regions, OSM countries) --- #
-    layers.append(_internal_borders_layer(cfg, proj, vp, region_box))
+    layers.append(_internal_borders_layer(cfg, proj, vp, region_box, plate_region))
 
     # 3d. admin2-borders (admin-2, currently FR departments, zoom-gated) ----- #
-    layers.append(_admin2_borders_layer(cfg, proj, vp, region_box))
+    layers.append(_admin2_borders_layer(cfg, proj, vp, region_box, plate_region))
 
     # 4. areas-of-control --------------------------------------------------- #
-    layers.append(_areas_of_control_layer(cfg, proj, vp))
+    layers.append(_areas_of_control_layer(cfg, proj, vp, region_box))
 
     # 4a. frontiers (international borders + neighbour labels), drawn over the
     #     control fills for the same reason the coastline below is: a national
@@ -1537,7 +1707,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     #     side of a frontier a zone sits on is the question being asked. Drawn
     #     under the fills it disappeared wherever a zone touched it — and where
     #     the same class held both sides, it vanished entirely.
-    layers.append(_frontiers_layer(cfg, proj, vp, region_box))
+    layers.append(_frontiers_layer(cfg, proj, vp, region_box, plate_region))
 
     # 4b. coastline: a crisp hairline where land meets the sea, drawn over the
     #     control fills so the shore reads sharply against the water. Placed here
@@ -1556,19 +1726,22 @@ def build_map(cfg: dict[str, Any]) -> str:
     layers.append(_infrastructure_layer(cfg, proj, vp))
 
     # 5b. rivers (over the fills so the water reads) ------------------------ #
-    layers.append(_rivers_layer(cfg, proj, vp, region_box))
+    layers.append(_rivers_layer(cfg, proj, vp, region_box, water_labels))
 
     # 5b-bis. cities: the map is populated by default, so a reader always has
     #         somewhere to stand.
-    layers.append(_cities_layer(cfg, proj, vp, bbox))
+    layers.append(_cities_layer(cfg, proj, vp, bbox, plate_region))
 
     # 5c. front line: the emphasised contact line between the control zones,
     #     the single most-read feature of a situation plate.
     layers.append(_front_line_layer(cfg, proj, vp))
 
+    # 5d. axes of advance: drawn last of the geographic layers, because an
+    #     arrow that the coastline or a control fill crossed would stop
+    #     reading as movement.
+    layers.append(_arrows_layer(cfg, proj, vp))
 
-
-    # Close the geographic stack: wrap layers 1..5c in the region clip.
+    # Close the geographic stack: wrap layers 1..5d in the region clip.
     # Markers, labels, furniture, legend and frame stay unclipped -- they
     # are annotations allowed to sit in the plate margin.
     region_clip_d = projected_geom_to_path(region_proj, vp)
@@ -1632,9 +1805,16 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'rx="{radius}" ry="{radius}"/></clipPath>'
     )
     hatch = cfg.get("areas_of_control", {}).get("hatch_color", "#b03a3a")
+    # role="img" + aria-labelledby is what the other two generators have always
+    # emitted (see _svg.svg_open); without it a screen reader announces this
+    # plate as an unlabelled graphic and the reader learns nothing at all.
+    a11y_title, a11y_desc = accessible_text(cfg)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {outer_w:.1f} {outer_h:.1f}" '
-        f'width="{outer_w:.1f}" height="{outer_h:.1f}">'
+        f'width="{outer_w:.1f}" height="{outer_h:.1f}" '
+        f'role="img" aria-labelledby="sm-title sm-desc">'
+        f'<title id="sm-title">{_esc(a11y_title)}</title>'
+        f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
         f"{svg_defs(hatch)[:-7]}{clip}</defs>"
         # Hover-info bubbles for areas-of-control zones and forces/events
         # markers: same .hit/.tip convention as case-studies/financial-markets
@@ -1656,6 +1836,132 @@ def build_map(cfg: dict[str, Any]) -> str:
         f"</g></g>"
         f"</svg>"
     )
+
+
+def _lakes_layer(
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any,
+    placed: list[tuple[float, float]] | None = None,
+) -> str:
+    """Return inland lakes, filled as water and labelled in italic like the rivers.
+
+    Drawn over the land fill and under the control zones: a lake is part of the
+    physical basemap, not a thematic overlay, and a control zone that extends
+    across open water is a claim the map should keep visible rather than hide.
+
+    Colour follows the sea (``basemap.sea_color``) unless ``lakes.color`` says
+    otherwise, because a reader who has learnt one blue for water should not
+    have to learn a second. Labels use the same italic the rivers use, the
+    cartographic convention for water, and are placed only on lakes big enough
+    in view to carry one -- ``lakes.label_min_area_frac`` of the plate.
+
+    Set ``lakes.show: false`` to suppress the layer.
+
+    **The vendored extents have a date, and a dated plate may disagree with
+    them.** Natural Earth is a snapshot, and some of the world's best-known
+    inland water has moved since it was taken. Two options exist for saying so
+    rather than drawing water that is not there:
+
+    ``lakes.skip``
+        A list of names not to draw at all, mirroring ``rivers.skip``.
+
+    ``lakes.former``
+        A list of names to draw as *former* water: the outline dashed, no
+        fill, the name suffixed ``(former)``. This is usually the better
+        answer, because the absence is itself information — a reader who knows
+        the geography will look for the water, and an empty space answers
+        nothing while a dashed outline answers exactly.
+
+    The cases this repo has had to handle, with dates, so the next caller does
+    not have to discover them by being wrong in public:
+
+    * **Kakhovka Reservoir** — drained within two weeks of the dam breach of
+      6 June 2023. By 2026 the bed is willow and poplar scrub over sand and
+      marsh, and is being used for infantry infiltration; it is not water and
+      has not been for years. The bundled Ukraine example draws it as former.
+    * **Lake Urmia** — the vendored polygon is near its historic extent,
+      roughly 4 200 km². It has repeatedly fallen below a fifth of that.
+    * **Lake Chad** — already the modern, shrunken lake here (~1 300 km²), so
+      no correction is needed; noted because it is the one most people expect
+      to be wrong.
+    * **Aral Sea** — already split into ``North Aral Sea`` and ``South Aral
+      Sea``, which is the post-2000s state rather than the 1960s one.
+    """
+    settings = cfg.get("lakes", {})
+    if settings.get("show", True) is False:
+        return '<g id="lakes"></g>'
+    basemap = cfg.get("basemap", {})
+    palette = cfg.get("_plate", _PLATES["day"])
+    color = settings.get("color", basemap.get("sea_color", palette["sea"]))
+    edge = settings.get("edge_color", basemap.get("coast_color", palette["coast"]))
+    ts = vp["ts"]
+    label_color = settings.get("label_color", cfg.get("rivers", {}).get("label_color", "#4f7290"))
+    min_frac = float(settings.get("label_min_area_frac", 0.0012))
+    always = {n.lower() for n in settings.get("always_label", [])}
+    skip = {n.lower() for n in settings.get("skip", [])}
+    former = {n.lower() for n in settings.get("former", [])}
+    plate_area = float(vp["width"]) * float(vp["height"])
+
+    shapes: list[str] = []
+    labels: list[str] = []
+    placed = placed if placed is not None else []
+    for geom, name, _rank in load_lakes():
+        key = name.lower()
+        if key and key in skip:
+            continue
+        try:
+            clipped = geom.intersection(region_box)
+        except Exception:  # skip a malformed lake rather than fail the plate
+            continue
+        if clipped.is_empty:
+            continue
+        gp = _project_geom(clipped, proj)
+        d = projected_geom_to_path(gp, vp)
+        if not d:
+            continue
+        is_former = bool(key) and key in former
+        if is_former:
+            # No fill, because there is no water: a dashed outline is the
+            # cartographic form for a body that was there and is not.
+            shapes.append(
+                f'<path d="{d}" fill="none" stroke="{edge}" '
+                f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="0.7" '
+                f'stroke-dasharray="{3.6 * ts:.1f} {2.8 * ts:.1f}"/>'
+            )
+        else:
+            shapes.append(
+                f'<path d="{d}" fill="{color}" stroke="{edge}" '
+                f'stroke-width="{0.6 * ts:.1f}" stroke-opacity="0.75"/>'
+            )
+        if not name:
+            continue
+        if is_former:
+            name = f"{name} (former)"
+        biggest = max(getattr(gp, "geoms", [gp]), key=lambda g: g.area)
+        # Area in plate units: the same "is it big enough to carry a name"
+        # question the river layer asks about length.
+        px_area = biggest.area / (vp["m_per_unit"] ** 2)
+        # ``key`` and not ``name``: the "(former)" suffix is appended above,
+        # and an always_label naming the real lake must still match.
+        if px_area < min_frac * plate_area and key not in always:
+            continue
+        pt = _label_point(biggest)
+        x, y = vp["to_svg"](pt.x, pt.y)
+        size = 10.5 * ts
+        if not _label_fits(x, y, name, size=size, vp=vp):
+            continue
+        if any((x - px) ** 2 + (y - py) ** 2 < (58 * ts) ** 2 for px, py in placed):
+            continue
+        placed.append((x, y))
+        labels.append(
+            f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="middle" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{size:.1f}" font-style="italic" '
+            f'fill="{label_color}" paint-order="stroke" stroke="#ffffff" '
+            f'stroke-width="{2.2 * ts:.1f}" stroke-linejoin="round">{_esc(name)}</text>'
+        )
+    return f'<g id="lakes">{"".join(shapes)}{"".join(labels)}</g>'
 
 
 def _bathymetry_layer(
@@ -1713,7 +2019,9 @@ def _load_features(spec: Any, base: Path) -> list[dict[str, Any]]:
     return []
 
 
-def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
+def _areas_of_control_layer(
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any | None = None
+) -> str:
     """Return the territory zones: pastel fill under a white casing; contested = hatch.
 
     Each zone's fill carries ``class="hit"`` and a :func:`tooltip_bubble`
@@ -1759,7 +2067,22 @@ def _areas_of_control_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str
     for feat in features:
         props = feat.get("properties", {})
         cat = props.get(field, "")
-        geom = _project_geom(shape(feat["geometry"]), proj)
+        src = shape(feat["geometry"])
+        # Clip to the region before projecting. A caller who hands over a whole
+        # country's outline for a plate showing one province of it was emitting
+        # a path many times the canvas: megabytes of coordinates that are
+        # clipped away at draw time, an area share computed against territory
+        # nobody can see, and -- found by rendering it -- a shape so far outside
+        # the canvas that resvg dropped its ``mix-blend-mode`` fill entirely,
+        # so the eastern-DRC plate came out with no control colours at all.
+        if region_box is not None:
+            try:
+                src = src.intersection(region_box)
+            except Exception:  # a malformed zone clips to nothing, not to a crash
+                continue
+            if src.is_empty:
+                continue
+        geom = _project_geom(src, proj)
         d = projected_geom_to_path(geom, vp)
         if not d:
             continue
@@ -1829,7 +2152,8 @@ def _infrastructure_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, 
 
 
 def _frontiers_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any,
+    region: Any | None = None,
 ) -> str:
     """Return real international frontiers (hairline dashes) + neighbour labels.
 
@@ -1878,12 +2202,186 @@ def _frontiers_layer(
                 f'stroke-dasharray="{3.4 * ts:.1f} {2.4 * ts:.1f}"/>'
             )
         if do_label and name and name.lower() not in focus and vis.area >= min_frac * region_area:
-            pt = vis.representative_point()
+            pt = _label_point(vis)
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            labels.append(
-                tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
-            )
+            if _label_fits(
+                x, y, name, size=9.5 * ts, tracking=2.2, vp=vp, region=region
+            ):
+                labels.append(
+                    tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
+                )
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
+
+
+#: Average glyph advance as a fraction of font size, for the house sans at the
+#: weights territory labels use. Same constant, same purpose, as
+#: ``_places._GLYPH_WIDTH_RATIO``: estimating a label's width without
+#: measuring text, which an SVG writer cannot do.
+_GLYPH_WIDTH_RATIO = 0.55
+
+
+def _label_fits(
+    x: float,
+    y: float,
+    text: str,
+    *,
+    size: float,
+    tracking: float = 0.0,
+    vp: dict[str, Any],
+    region: Any | None = None,
+    anchor: str = "middle",
+) -> bool:
+    """Return whether a label lands wholly inside the drawn map, not merely inside the plate.
+
+    The automatic city layer has clipped its labels to the plate rectangle
+    since ``Istanbul`` came out as ``Ista``. That is the wrong rectangle. The
+    geographic layers are clipped to the *projected region polygon*, which
+    under a conic projection is a trapezoid narrower than the plate at top and
+    bottom -- so a label can sit inside the plate, pass that check, and still
+    be sliced by the region clip. On the Sudan plate that took ``Asmara`` down
+    to ``Asm`` and ``Jeddah`` to ``J``, and it dropped ``CENTRAL AFRICAN
+    REPUBLIC`` off the left edge as ``NTRAL ... REP``, which reads as a
+    different country rather than as a cropped name.
+
+    Dropping the name is the right answer rather than nudging it inward, for
+    the reason the city layer already gives: a name moved off the thing it
+    names points at the wrong ground. A territory label is centred on the pole
+    of inaccessibility, so sliding it to fit would walk it towards, and then
+    across, a border.
+
+    Parameters
+    ----------
+    x, y : float
+        Plate coordinates of the text anchor.
+    text : str
+        The label, before :func:`tracked_text` upper-cases it.
+    size : float
+        Font size in user units, already scaled by ``vp["ts"]``.
+    tracking : float, optional
+        Extra letter-spacing in user units, as passed to :func:`tracked_text`.
+    vp : dict
+        The viewport, for its ``width``/``height``.
+    region : shapely Polygon, optional
+        The region clip in plate coordinates. When given, the label box must
+        fit inside it; when ``None``, the plate rectangle is used.
+    anchor : str, optional
+        ``"middle"`` (the territory labels) or ``"start"`` (the city layer).
+
+    Returns
+    -------
+    bool
+        True when the whole label lies inside the clip.
+
+    Examples
+    --------
+    >>> vp = {"width": 200.0, "height": 100.0}
+    >>> _label_fits(100, 50, "CHAD", size=10, tracking=2, vp=vp)
+    True
+
+    The same label centred near the edge does not fit, and is dropped rather
+    than cropped:
+
+    >>> _label_fits(6, 50, "CHAD", size=10, tracking=2, vp=vp)
+    False
+
+    And a label well inside the plate still fails when the region clip does
+    not reach it:
+
+    >>> from shapely.geometry import box as _box
+    >>> _label_fits(100, 50, "CHAD", size=10, tracking=2, vp=vp,
+    ...             region=_box(0, 0, 60, 100))
+    False
+    """
+    width = len(text) * (size * _GLYPH_WIDTH_RATIO + tracking)
+    x0 = x - width / 2.0 if anchor == "middle" else x
+    x1 = x0 + width
+    # Cap height above the baseline, a little descender room below.
+    y0, y1 = y - 0.78 * size, y + 0.24 * size
+    if region is None:
+        return x0 >= 0.0 and x1 <= float(vp["width"]) and y0 >= 0.0 and y1 <= float(vp["height"])
+    try:
+        return bool(region.contains(box(x0, y0, x1, y1)))
+    except Exception:  # a degenerate clip must not cost the plate its labels
+        return x0 >= 0.0 and x1 <= float(vp["width"])
+
+
+def _label_point(vis: Any) -> Any:
+    """Return the point to hang a territory's name on: deepest inside its **largest** part.
+
+    ``shapely``'s ``representative_point()`` promises only that the point is
+    *inside* the geometry, and on real basemap data it fails a label twice
+    over. It may pick any component of a ``MultiPolygon``, and it sits on a
+    horizontal line through the centroid, which on a ragged outline can be a
+    fraction of a degree from the border. Measured on the vendored Natural
+    Earth countries at region boxes this generator actually renders:
+
+    * a Ukraine view puts ``RUSSIA`` on the Crimean peninsula (3.1 deg^2)
+      instead of the mainland east of the Donbas (31.4 deg^2), so the name of
+      a neighbour lands inside territory the areas-of-control layer has just
+      classified -- the plate ends up asserting a sovereignty its own data
+      never claimed;
+    * a Nordic view puts ``RUSSIA`` on a 0.47 deg^2 speck off northern Norway
+      instead of the 100 deg^2 landmass filling the right of the frame, a
+      factor of 200;
+    * and on that same Ukraine view, even the right landmass leaves the label
+      0.36 deg from the frontier, close enough that it collided with the
+      ``LUHANSK`` city label and was painted over by it.
+
+    So this takes the largest component (a name belongs on the body of the
+    thing it names, not on an offshore fragment of it), then the **pole of
+    inaccessibility** within that component -- the interior point furthest
+    from any edge, which is the standard placement for an area label and
+    what puts ``RUSSIA`` 1.55 deg clear of the border instead of 0.36.
+    ``polylabel`` is an approximation refined to ``tolerance``; that is scaled
+    to the part's own size here so a large country and a small one are
+    approximated equally well, and costs well under a millisecond either way.
+
+    Parameters
+    ----------
+    vis : shapely geometry
+        The territory already clipped to the visible region box.
+
+    Returns
+    -------
+    shapely.geometry.Point
+        A point inside the largest component of ``vis``.
+
+    Examples
+    --------
+    A mainland with a small offshore island: the label goes on the mainland,
+    which is *not* the part ``representative_point()`` happens to choose here.
+
+    >>> from shapely.geometry import MultiPolygon, box
+    >>> mainland, island = box(0, 0, 10, 10), box(20, 20, 21, 21)
+    >>> pt = _label_point(MultiPolygon([island, mainland]))
+    >>> mainland.contains(pt)
+    True
+
+    And it sits deep inside rather than merely inside. A territory with a
+    notch cut into it -- the shape of a country whose neighbour reaches in --
+    strands ``representative_point()`` against the notch, which is where the
+    real ``RUSSIA`` label ended up; the pole of inaccessibility is six times
+    further from any edge:
+
+    >>> from shapely.geometry import Polygon
+    >>> notched = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 6), (8, 5), (0, 4)])
+    >>> round(notched.exterior.distance(notched.representative_point()), 3)
+    0.372
+    >>> round(notched.exterior.distance(_label_point(notched)), 3)
+    2.461
+    """
+    if getattr(vis, "geom_type", "") == "MultiPolygon":
+        vis = max(vis.geoms, key=lambda g: g.area)
+    try:
+        minx, miny, maxx, maxy = vis.bounds
+        # A hundredth of the part's own span: fine enough that the point is
+        # visually the pole, coarse enough that the search terminates fast.
+        tolerance = max(max(maxx - minx, maxy - miny) / 100.0, 1e-9)
+        return polylabel(vis, tolerance=tolerance)
+    except Exception:
+        # polylabel wants a simple, non-degenerate Polygon. Vendored data that
+        # is neither should cost the plate a slightly worse label, not a crash.
+        return vis.representative_point()
 
 
 def _polygonal_boundary_source(poly: Any) -> Any | None:
@@ -1905,7 +2403,8 @@ def _polygonal_boundary_source(poly: Any) -> Any | None:
 
 
 def _internal_borders_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any,
+    region: Any | None = None,
 ) -> str:
     """Return sub-national admin-1 borders (US states, French regions) for covered areas.
 
@@ -1961,16 +2460,20 @@ def _internal_borders_layer(
                 f'stroke-dasharray="{2.0 * ts:.1f} {1.8 * ts:.1f}"/>'
             )
         if do_label and name and vis.area >= min_frac * region_area:
-            pt = vis.representative_point()
+            pt = _label_point(vis)
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            labels.append(
-                tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500")
-            )
+            if _label_fits(
+                x, y, name, size=8.0 * ts, tracking=1.6, vp=vp, region=region
+            ):
+                labels.append(
+                    tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500")
+                )
     return f'<g id="internal-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
 def _admin2_borders_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any,
+    region: Any | None = None,
 ) -> str:
     """Return admin-2 borders (French departments) for a sufficiently zoomed-in region.
 
@@ -2013,11 +2516,14 @@ def _admin2_borders_layer(
                 f'stroke-dasharray="{1.4 * ts:.1f} {1.4 * ts:.1f}"/>'
             )
         if do_label and name and vis.area >= min_frac * region_area:
-            pt = vis.representative_point()
+            pt = _label_point(vis)
             x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            labels.append(
-                tracked_text(x, y, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500")
-            )
+            if _label_fits(
+                x, y, name, size=6.8 * ts, tracking=1.2, vp=vp, region=region
+            ):
+                labels.append(
+                    tracked_text(x, y, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500")
+                )
     return f'<g id="admin2-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
@@ -2057,7 +2563,11 @@ def _river_width(rank: int, mode: str, ts: float) -> float:
 
 
 def _rivers_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any,
+    placed: list[tuple[float, float]] | None = None,
 ) -> str:
     """Return river centerlines (water blue) with italic names for the major ones.
 
@@ -2086,7 +2596,10 @@ def _rivers_layer(
     m_per_unit = vp["m_per_unit"]
     lines: list[str] = []
     labels: list[str] = []
-    placed: list[tuple[float, float]] = []
+    # Shared with the lakes layer when build_map passes its list in: the two
+    # name the same water from two datasets, and each one dodging only its own
+    # labels printed "Dnieper" straight through "Kakhovka Reservoir".
+    placed = placed if placed is not None else []
     labeled: set[str] = set()  # one label per named river
     for geom, name, rank in sorted(load_rivers(), key=lambda r: -r[2]):
         try:
@@ -2222,11 +2735,275 @@ def _markers_layer(
     return f'<g id="{layer_id}">{"".join(out)}</g>'
 
 
+def _catmull_rom(points: list[tuple[float, float]], per_segment: int = 14) -> list[tuple[float, float]]:
+    """Return ``points`` densified into a smooth curve through every one of them.
+
+    A hand-typed axis of advance is four or five coordinates, and drawn as
+    straight segments it reads as a dogleg -- a claim about where the advance
+    turned that the author never made. A Catmull-Rom spline passes exactly
+    through the given points (unlike a Bezier, whose controls pull it off
+    them) and rounds the corners between, which is the shape every published
+    advance arrow has.
+
+    Parameters
+    ----------
+    points : list of (float, float)
+        Two or more control points, tail first.
+    per_segment : int, optional
+        Samples emitted per input segment. 14 is smooth at plate scale.
+
+    Returns
+    -------
+    list of (float, float)
+        The densified polyline, starting at ``points[0]`` and ending at
+        ``points[-1]``.
+
+    Examples
+    --------
+    >>> pts = _catmull_rom([(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)], per_segment=4)
+    >>> pts[0], pts[-1]
+    ((0.0, 0.0), (20.0, 0.0))
+
+    A straight input stays straight:
+
+    >>> all(abs(y) < 1e-9 for _, y in pts)
+    True
+    """
+    if len(points) < 3:
+        return list(points)
+    # Duplicate the endpoints so the first and last segments are defined.
+    pad = [points[0], *points, points[-1]]
+    out: list[tuple[float, float]] = []
+    for i in range(len(pad) - 3):
+        p0, p1, p2, p3 = pad[i], pad[i + 1], pad[i + 2], pad[i + 3]
+        for step in range(per_segment):
+            t = step / per_segment
+            t2, t3 = t * t, t * t * t
+            out.append(
+                (
+                    0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
+                           + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
+                           + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+                    0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
+                           + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
+                           + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+                )
+            )
+    out.append(points[-1])
+    return out
+
+
+def _tapered_arrow_path(
+    pts: list[tuple[float, float]], *, head_w: float, taper: float, head_len: float
+) -> tuple[str, str]:
+    """Return ``(shaft_path, head_path)`` for a tapered axis-of-advance arrow.
+
+    An SVG stroke is one width for its whole length, so a shaft that thickens
+    towards the point has to be a *filled outline*, not a stroked line: this
+    walks the curve, offsets each sample along its own normal by a half-width
+    that grows from ``taper * head_w`` at the tail to ``head_w`` at the base of
+    the head, and closes the two offset sides into one polygon. The head is a
+    separate triangle so it keeps a crisp point no matter how the shaft curves
+    into it.
+
+    The growing shaft is not decoration. On a control map it is the one mark
+    that carries direction without a caption -- which end is the origin and
+    which is the objective -- and it is why every published offensive map uses
+    the same form rather than a line with a chevron stuck on the end.
+
+    Parameters
+    ----------
+    pts : list of (float, float)
+        The densified curve in plate coordinates, tail first.
+    head_w : float
+        Shaft half-width where it meets the head, in user units.
+    taper : float
+        Tail half-width as a fraction of ``head_w``.
+    head_len : float
+        Length of the arrowhead triangle, in user units.
+
+    Returns
+    -------
+    tuple of (str, str)
+        SVG ``d`` attributes for the shaft polygon and the head triangle.
+        Both are empty strings when ``pts`` is too short to have a direction.
+
+    Examples
+    --------
+    >>> shaft, head = _tapered_arrow_path(
+    ...     [(0.0, 0.0), (50.0, 0.0), (100.0, 0.0)], head_w=6, taper=0.3, head_len=18
+    ... )
+    >>> shaft.startswith("M") and shaft.endswith("Z")
+    True
+    >>> head.count(",") == 3  # three vertices
+    True
+
+    A degenerate input draws nothing rather than raising:
+
+    >>> _tapered_arrow_path([(0.0, 0.0)], head_w=6, taper=0.3, head_len=18)
+    ('', '')
+    """
+    if len(pts) < 2:
+        return "", ""
+    # Walk back from the tip by head_len to find where the shaft stops and the
+    # head begins, so the two never overlap and the point stays sharp.
+    tip = pts[-1]
+    base_i = len(pts) - 1
+    acc = 0.0
+    while base_i > 0:
+        dx = pts[base_i][0] - pts[base_i - 1][0]
+        dy = pts[base_i][1] - pts[base_i - 1][1]
+        acc += math.hypot(dx, dy)
+        base_i -= 1
+        if acc >= head_len:
+            break
+    shaft_pts = pts[: base_i + 1]
+    if len(shaft_pts) < 2:
+        shaft_pts = pts[:2]
+    base = shaft_pts[-1]
+
+    total = 0.0
+    lengths = [0.0]
+    for a, b in zip(shaft_pts, shaft_pts[1:], strict=False):
+        total += math.hypot(b[0] - a[0], b[1] - a[1])
+        lengths.append(total)
+    if total <= 0:
+        return "", ""
+
+    left: list[tuple[float, float]] = []
+    right: list[tuple[float, float]] = []
+    for i, (x, y) in enumerate(shaft_pts):
+        # Tangent from the neighbouring samples, so the normal is stable at
+        # the ends as well as in the middle.
+        a = shaft_pts[max(i - 1, 0)]
+        b = shaft_pts[min(i + 1, len(shaft_pts) - 1)]
+        tx, ty = b[0] - a[0], b[1] - a[1]
+        norm = math.hypot(tx, ty) or 1.0
+        nx, ny = -ty / norm, tx / norm
+        half = head_w * (taper + (1.0 - taper) * (lengths[i] / total))
+        left.append((x + nx * half, y + ny * half))
+        right.append((x - nx * half, y - ny * half))
+
+    outline = left + right[::-1]
+    shaft = "M" + "L".join(f"{x:.1f},{y:.1f}" for x, y in outline) + "Z"
+
+    # Head: an isoceles triangle on the tail->tip direction at the base.
+    hx, hy = tip[0] - base[0], tip[1] - base[1]
+    hnorm = math.hypot(hx, hy) or 1.0
+    ux, uy = hx / hnorm, hy / hnorm
+    px, py = -uy, ux
+    half_head = head_w * 1.95
+    head = (
+        f"M{tip[0]:.1f},{tip[1]:.1f}"
+        f"L{base[0] + px * half_head:.1f},{base[1] + py * half_head:.1f}"
+        f"L{base[0] - px * half_head:.1f},{base[1] - py * half_head:.1f}Z"
+    )
+    return shaft, head
+
+
+def _arrows_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
+    """Return axes of advance: tapered, cased arrows over the control fills.
+
+    The one element every published offensive map has that this generator did
+    not. Areas of control say where the line *is*; an arrow says which way it
+    is moving, and without it a plate can only ever describe a frozen moment.
+
+    Each entry in ``cfg["arrows"]`` takes ``line`` (a list of ``[lon, lat]``,
+    tail first), and optionally ``color``, ``width`` (shaft half-width at the
+    head, in ``ts`` units), ``label``, ``legend_label``, ``opacity``, and
+    ``style``: ``"solid"`` for an assessed advance, ``"dashed"`` for a
+    reported or projected one -- a distinction worth drawing, since the two
+    are not the same claim and a reader of a plate like this will act on it.
+
+    Every arrow is drawn twice: a white casing underneath, then the colour on
+    top. That is the same paint-order halo the labels use, and it is what lets
+    a dark red arrow stay legible crossing a dark red control zone.
+    """
+    arrows = cfg.get("arrows", [])
+    if not arrows:
+        return '<g id="arrows"></g>'
+    ts = vp["ts"]
+    out: list[str] = []
+    for arrow in arrows:
+        line = arrow.get("line") or []
+        if len(line) < 2:
+            continue
+        plate = [vp["to_svg"](*proj.transform(float(lon), float(lat))) for lon, lat in line]
+        curve = _catmull_rom(plate)
+        head_w = float(arrow.get("width", 6.0)) * ts
+        shaft, head = _tapered_arrow_path(
+            curve,
+            head_w=head_w,
+            taper=float(arrow.get("taper", 0.30)),
+            head_len=head_w * 3.1,
+        )
+        if not shaft:
+            continue
+        color = arrow.get("color", "#b03a3a")
+        opacity = float(arrow.get("opacity", 0.92))
+        dashed = str(arrow.get("style", "solid")).lower() == "dashed"
+        casing = 2.6 * ts
+        # Near-opaque, not a wash: a dashed arrow is mostly its own outline, and
+        # over a control fill of a similar hue a translucent casing left the
+        # outline invisible -- the reported SPLM-N axis vanished into the green
+        # zone it crossed. The casing has to make its own ground.
+        for d in (shaft, head):
+            out.append(
+                f'<path d="{d}" fill="#ffffff" fill-opacity="{0.94 if dashed else 0.85:.2f}" '
+                f'stroke="#ffffff" stroke-width="{casing:.1f}" stroke-linejoin="round"/>'
+            )
+        if dashed:
+            # A reported axis reads as an outline: the shape is the same claim,
+            # drawn as one the map is not asserting.
+            for d in (shaft, head):
+                out.append(
+                    f'<path d="{d}" fill="{color}" fill-opacity="{opacity * 0.22:.2f}" '
+                    f'stroke="{color}" stroke-width="{2.2 * ts:.1f}" '
+                    f'stroke-dasharray="{5.5 * ts:.1f} {3.5 * ts:.1f}" stroke-linejoin="round"/>'
+                )
+        else:
+            for d in (shaft, head):
+                out.append(f'<path d="{d}" fill="{color}" fill-opacity="{opacity:.2f}"/>')
+        label = arrow.get("label")
+        if label:
+            # Offset along the arrow's own normal at its midpoint, not sat on
+            # the tail: the tail is the origin town, which already carries a
+            # name ("SAF ADVANCE" landed on top of "EL OBEID"). Side is the
+            # caller's, since which flank is clear is a question about the map.
+            mid = curve[len(curve) // 2]
+            ahead = curve[min(len(curve) // 2 + 1, len(curve) - 1)]
+            tx, ty = ahead[0] - mid[0], ahead[1] - mid[1]
+            tnorm = math.hypot(tx, ty) or 1.0
+            side = -1.0 if str(arrow.get("label_side", "left")).lower() == "left" else 1.0
+            offset = (head_w * 2.0 + 7 * ts) * side
+            lx = mid[0] + (-ty / tnorm) * offset
+            ly = mid[1] + (tx / tnorm) * offset
+            # Anchored away from the shaft rather than centred on the offset
+            # point: a centred label is only half-cleared, and a name half on
+            # top of the arrow it names is worse than no name. Which way it
+            # runs follows the offset's own direction, so it is always the far
+            # side of the arrow that the text grows into.
+            out.append(
+                tracked_text(
+                    lx,
+                    ly,
+                    str(label),
+                    size=9.0 * ts,
+                    fill=color,
+                    tracking=1.4,
+                    weight="700",
+                    anchor="end" if (-ty / tnorm) * offset < 0 else "start",
+                )
+            )
+    return f'<g id="arrows">{"".join(out)}</g>'
+
+
 def _cities_layer(
     cfg: dict[str, Any],
     proj: Transformer,
     vp: dict[str, Any],
     bbox: tuple[float, float, float, float],
+    region: Any | None = None,
 ) -> str:
     """
     Return automatic populated places for the region in view.
@@ -2247,10 +3024,44 @@ def _cities_layer(
         return '<g id="cities"></g>'
 
     west, south, east, north = bbox
-    hand_placed = {
-        str(place.get("name", "")).strip().lower()
+    ts = vp["ts"]
+    size = float(settings.get("size", 11)) * ts
+
+    def to_svg(lon: float, lat: float) -> tuple[float, float]:
+        return vp["to_svg"](*proj.transform(lon, lat))
+
+    # A place the author named by hand wins outright: this layer must not draw
+    # it twice, at two positions, in two styles. Two separate tests, because
+    # either one alone leaks:
+    #
+    #  * by name, since the hand label and the vendored list usually agree --
+    #    but the key read here was ``name`` while every config in this repo
+    #    (and every example in the module docstring) writes ``text``, so the
+    #    set was a set of empty strings and nothing was ever suppressed;
+    #  * by position, since where they disagree they disagree on the *name*,
+    #    not the place: Natural Earth calls El Obeid "Al-Ubayyid" and Khartoum's
+    #    conurbation carries a separate "Omdurman" 3 km away. A name test alone
+    #    printed both, overlapping, in two different faces.
+    hand_named = {
+        str(place.get("text", place.get("name", ""))).strip().lower()
         for place in cfg.get("labels", {}).get("places", [])
     }
+    hand_named.discard("")
+    hand_points = [
+        to_svg(float(place["lon"]), float(place["lat"]))
+        for place in cfg.get("labels", {}).get("places", [])
+        if "lon" in place and "lat" in place
+    ]
+    # Generous enough to catch a twin city the hand label already stands for,
+    # tight enough to keep two genuinely distinct towns that happen to be close.
+    near_px = float(settings.get("hand_placed_clearance", 26)) * ts
+
+    def is_duplicate(city: Any) -> bool:
+        if city.name.lower() in hand_named:
+            return True
+        cx, cy = to_svg(city.lon, city.lat)
+        return any(abs(cx - hx) < near_px and abs(cy - hy) < near_px for hx, hy in hand_points)
+
     chosen = [
         city
         for city in cities_in_view(
@@ -2261,16 +3072,8 @@ def _cities_layer(
             limit=int(settings.get("limit", 28)),
             rank_ceiling=settings.get("max_rank"),
         )
-        # A name the author placed by hand wins: this layer must not draw it
-        # twice, at two positions, in two styles.
-        if city.name.lower() not in hand_placed
+        if not is_duplicate(city)
     ]
-
-    ts = vp["ts"]
-    size = float(settings.get("size", 11)) * ts
-
-    def to_svg(lon: float, lat: float) -> tuple[float, float]:
-        return vp["to_svg"](*proj.transform(lon, lat))
 
     out: list[str] = []
     # Without the plate's own bounds a label near the edge runs off it --
@@ -2280,6 +3083,13 @@ def _cities_layer(
     for city, dot_x, dot_y, label_x, label_y in place_labels(
         chosen, to_svg, font_size=size, dot_radius=2.0 * ts, bounds_px=plate
     ):
+        # The plate rectangle is the outer bound; the region clip is the real
+        # one, and it is narrower wherever the projection bends the frame in.
+        # "Asmara" survived the rectangle and came out of the clip as "Asm".
+        if not _label_fits(
+            label_x, label_y, city.name, size=size, vp=vp, region=region, anchor="start"
+        ):
+            continue
         out.append(
             f'<circle cx="{dot_x:.1f}" cy="{dot_y:.1f}" r="{2.0 * ts:.1f}" '
             f'fill="#2B2B2E" fill-opacity="0.8"/>'
@@ -2460,11 +3270,9 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     # its fixed footprint (262 panel + 22 margin, in ts units) so the
     # arrow never sits on the card.
     arrow_x = W - 30 * ts
-    legend_shares_corner = (
-        str(cfg.get("legend_position", "bottom-right")) == "top-right"
-        and bool(cfg.get("areas_of_control", {}).get("palette"))
-    )
-    if legend_shares_corner:
+    legend_pos = str(cfg.get("legend_position", "bottom-right"))
+    has_legend = bool(cfg.get("areas_of_control", {}).get("palette"))
+    if legend_pos == "top-right" and has_legend:
         arrow_x = W - (262 + 22 + 30) * ts
     out: list[str] = [north_arrow(arrow_x, 34 * ts, ts)]
     title = cfg.get("title")
@@ -2479,7 +3287,17 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             f'<text x="{26 * ts:.0f}" y="{40 * ts + 20 * ts:.0f}" font-family="{_DEFAULT_FONT}" '
             f'font-size="{12.5 * ts:.0f}" fill="{_pal(cfg)["chrome_sub"]}">{_esc(subtitle)}</text>'
         )
-    out.append(scale_bar(26 * ts, H - 44 * ts - _caption_height(cfg, ts), vp, _pal(cfg)["chrome_ink"]))
+    # Same rule as the north arrow above, for the other corner the legend can
+    # take: the scale bar's home is bottom-left, so a bottom-left card lands
+    # straight on it (found on the eastern-DRC plate, where the card was moved
+    # there to clear the caption and buried the bar instead). The bar is about
+    # 150ts wide, so stepping to the opposite corner is enough.
+    scale_x = 26 * ts
+    if legend_pos == "bottom-left" and has_legend:
+        scale_x = W - 176 * ts
+    out.append(
+        scale_bar(scale_x, H - 44 * ts - _caption_height(cfg, ts), vp, _pal(cfg)["chrome_ink"])
+    )
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
 
 
@@ -2605,10 +3423,13 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             if position in ("bottom-left", "top-left")
             else W - panel_w - corner_margin
         )
+        # A bottom-corner card has to clear the provenance caption, which the
+        # scale bar already accounts for and the legend did not: on the eastern
+        # DRC plate the card sat straight on top of all three caption lines.
         py = (
             corner_margin
             if position in ("top-left", "top-right")
-            else H - panel_h - corner_margin
+            else H - panel_h - corner_margin - _caption_height(cfg, ts)
         )
     tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
@@ -2695,7 +3516,8 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 #: the plate still looks like a finished intelligence product. That is the
 #: worst possible response to a typo, and it is why this list exists.
 CONFIG_KEYS: frozenset[str] = frozenset({
-    "areas_of_control", "as_of", "attribution", "basemap", "canvas_width",
+    "areas_of_control", "arrows", "as_of", "attribution", "basemap", "canvas_width",
+    "lakes",
     "caption", "events", "forces", "frame", "front", "frontiers",
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",

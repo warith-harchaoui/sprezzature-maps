@@ -94,14 +94,24 @@ commande uniquement, sans interface d'édition.
 
 ## État du projet
 
-Encore jeune. Fraîchement extrait de `sprezzature-figures`, avec une CI
-au vert (lint, tests et doctests à chaque push et pull request vers
-`main` ; voir `.github/workflows/ci.yml`) : `pytest` passe, les deux
-types de carte se rendent depuis leurs données de démonstration
-intégrées, et la ligne de commande produit de vrais fichiers SVG pour
-les deux. Pas encore de page de
-catalogue façon FIGURES.md (avec seulement deux types pour l'instant,
-ce LISEZMOI en tient lieu).
+Publié sur PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
+avec une CI au vert (lint, tests et doctests à chaque push et pull
+request vers `main` ; voir `.github/workflows/ci.yml`) : `pytest` passe,
+les trois types de carte se rendent depuis leurs données de
+démonstration intégrées, et les deux lignes de commande produisent de
+vrais fichiers SVG. Encore jeune malgré tout : l'API n'est pas figée, et
+il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
+LISEZMOI en tient lieu).
+
+Cinq cartes de situation complètes vivent dans
+`scripts/build_situation_examples.py`, régénérables par
+`python scripts/build_situation_examples.py` : l'Ukraine, la Syrie et la
+Libye comme instantanés historiques, le Soudan et l'est de la RDC
+d'après des sources ouvertes jusqu'à fin septembre 2026. Chacune est
+schématique par construction, le dit sur la planche, et garde ses lignes
+de revendication en Python lisible plutôt que dans un fichier de données
+opaque : un lecteur en désaccord voit exactement quelles coordonnées
+contester.
 
 `choropleth` dessine avec : une projection Equal Earth (une projection
 qui conserve la surface relative réelle de chaque pays, si bien qu'une
@@ -128,9 +138,37 @@ une projection conique conforme de Lambert autocentrée (une projection
 qui conserve les formes et les angles locaux autour d'un centre choisi,
 le choix standard pour un seul pays ou une seule région plutôt que pour
 le globe entier) ; une bande ombrée le long de la côte montrant la
-vitesse à laquelle le plancher océanique s'enfonce ; et un choix
+vitesse à laquelle le plancher océanique s'enfonce ; un choix
 automatique entre le niveau de détail Natural Earth grossier et fin
-selon le degré de zoom de la région demandée.
+selon le degré de zoom de la région demandée ; les lacs intérieurs
+dessinés comme de l'eau et non comme de la terre (les données de trait
+de côte ne connaissent que la terre et l'océan, si bien qu'avant cela le
+lac Kivu, le lac Tchad et les réservoirs du Dniepr étaient tous peints
+en terrain sec) — avec `lakes.former` pour l'eau qui a disparu depuis,
+car un fond de carte embarqué porte une date de levé qu'une carte datée
+peut contredire : l'exemple Ukraine dessine le réservoir de Kakhovka en
+contour tireté sans remplissage, celui-ci s'étant vidé après la rupture
+du barrage du 6 juin 2023 ; et des **axes de progression** : des flèches fuselées,
+cerclées de blanc, le long d'une courbe lisse, pleines pour un mouvement
+évalué et en contour pour un mouvement seulement rapporté — l'élément
+qui sépare une carte de l'endroit où la ligne *est* d'une carte de
+l'endroit où elle *va* :
+
+```yaml
+arrows:
+  - line: [[30.45, 13.05], [29.55, 14.05], [29.05, 14.45]]
+    color: "#2f5d92"
+    label: "SAF advance"
+  - line: [[34.02, 10.00], [34.12, 10.95]]
+    style: dashed          # rapporté, non évalué
+    label: "SPLM-N (reported)"
+```
+
+Comme les deux autres types, la planche s'ouvre désormais sur une racine
+accessible (`role="img"` reliée à un couple `<title>`/`<desc>`), et sa
+description nomme les classes dessinées et reprend la réserve que porte
+la mention de provenance : la carte dessine l'évaluation qu'on lui a
+donnée, elle ne la vérifie pas.
 
 La bibliothèque se joint de cinq façons : par import Python ; par la
 ligne de commande argparse (la bibliothèque standard de Python pour

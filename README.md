@@ -89,13 +89,21 @@ command line only, with no editor UI.
 
 ## Status
 
-Early. Freshly extracted from `sprezzature-figures`, with a green CI
-workflow (lint, tests, and doctests on every push and pull request to
-`main`; see `.github/workflows/ci.yml`): `pytest` passes, both kinds
-render from their bundled demo data, and the command line renders both
-kinds to real SVG files. There is no PyPI release yet, and no
-FIGURES.md-style catalogue page yet (with only two kinds so far, this
+Published on PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
+with a green CI workflow (lint, tests, and doctests on every push and pull
+request to `main`; see `.github/workflows/ci.yml`): `pytest` passes, all
+three kinds render from their bundled demo data, and both command lines
+render them to real SVG files. Still early — the API is not frozen, and
+there is no FIGURES.md-style catalogue page yet (with three kinds, this
 README is the catalogue).
+
+Five worked situation maps live in `scripts/build_situation_examples.py`,
+regenerated with `python scripts/build_situation_examples.py`: Ukraine,
+Syria and Libya as historical snapshots, and Sudan and eastern DRC drawn
+from open-source reporting to late September 2026. Each is schematic by
+construction, says so on the plate, and keeps its claim lines in readable
+Python rather than an opaque data file, so a reader who disagrees can see
+exactly which coordinates to argue with.
 
 `choropleth` draws with: an Equal Earth projection (a projection that
 keeps every country's true relative area, so a huge but visually
@@ -118,9 +126,34 @@ Earth's terrain, reprojected to match, sitting under the country fills.
 projection (a projection that keeps local shapes and angles correct
 around a chosen centre, the standard choice for a single country or
 region rather than the whole globe); a shaded band along the coast
-showing how quickly the sea floor drops off; and, new, an automatic
-choice between the coarser and finer Natural Earth detail level
-depending on how zoomed-in the requested region is.
+showing how quickly the sea floor drops off; an automatic choice between
+the coarser and finer Natural Earth detail level depending on how
+zoomed-in the requested region is; inland lakes drawn as water rather
+than land (the coastline data knows only land and ocean, so before this
+Lake Kivu, Lake Chad and the Dnieper reservoirs were all painted as dry
+ground) — with `lakes.former` for water that has since gone, because a
+vendored basemap has a capture date a dated map can contradict: the
+Ukraine example draws the Kakhovka Reservoir as a dashed, unfilled
+outline, it having drained after the dam breach of 6 June 2023; and
+**axes of advance** — tapered, cased arrows along a smooth
+curve, solid for an assessed movement and drawn as an outline for a
+reported one, the element that separates a map of where the line *is*
+from a map of where it is *going*:
+
+```yaml
+arrows:
+  - line: [[30.45, 13.05], [29.55, 14.05], [29.05, 14.45]]
+    color: "#2f5d92"
+    label: "SAF advance"
+  - line: [[34.02, 10.00], [34.12, 10.95]]
+    style: dashed          # reported, not assessed
+    label: "SPLM-N (reported)"
+```
+
+Like the other two kinds, the plate now opens with an accessible root
+(`role="img"` wired to a `<title>`/`<desc>` pair), and its description
+names the classes drawn and repeats the caveat the caption carries: the
+map draws the assessment it was given and does not verify it.
 
 The library is reachable five ways: as a Python import; as an argparse
 (Python's standard command-line-parsing library) command line, `make-map`,
