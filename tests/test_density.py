@@ -108,3 +108,56 @@ def test_the_demo_says_it_is_synthetic() -> None:
     module = _density()
     svg = module.build_svg(bins=40)
     assert "SYNTHETIC" in svg.upper()
+
+
+# ── what a cell is, and what it is not ────────────────────────────────────
+
+
+def test_a_cell_is_equal_angle_so_its_ground_area_shrinks_poleward() -> None:
+    """
+    The grid is cut in degrees, so cells are equal in angle and unequal in
+    ground. Measured across frames this generator is actually asked for, the
+    poleward cell is 28% smaller than the equatorward one on the bundled US
+    demo and 49% smaller across Scandinavia — enough to make the north of a
+    count map read sparse when it is not.
+    """
+    areas = _density().cell_ground_areas((0.0, 50.0, 20.0, 71.0), 20)
+    assert areas[0] > areas[-1], "a northern cell must cover less ground"
+    assert areas[-1] / areas[0] == pytest.approx(0.51, abs=0.02)
+    # Symmetric about the equator, and largest there.
+    equatorial = _density().cell_ground_areas((0.0, -2.0, 1.0, 2.0), 4)
+    assert equatorial[1] == pytest.approx(equatorial[2], rel=1e-9)
+    assert equatorial[1] > equatorial[0]
+
+
+def test_counts_stay_the_default_because_this_is_an_accumulation_map() -> None:
+    """The form answers "where did things fall", and a count is what fell."""
+    svg = _density().build_svg()
+    assert "per cell" in svg, "the legend must name the convention it uses"
+
+
+def test_per_area_asks_the_other_question_and_says_so_on_the_plate() -> None:
+    """
+    A reader who needs latitudes to be comparable can have that, and the
+    legend changes with it: a plate that silently switched units would be
+    worse than one that never offered the choice.
+    """
+    svg = _density().build_svg(per_area=True)
+    assert "per 1 000 km" in svg
+    assert "per cell" not in svg
+
+
+def test_normalising_actually_changes_the_field_not_just_the_label() -> None:
+    """On a tall, high-latitude frame the two readings must differ."""
+    import random
+    import re
+
+    random.seed(0)
+    points = [(random.uniform(0, 20), random.uniform(50, 71)) for _ in range(40_000)]
+    module = _density()
+    counts = module.build_svg(points=points, bbox=(0, 50, 20, 71), bins=20)
+    density = module.build_svg(points=points, bbox=(0, 50, 20, 71), bins=20, per_area=True)
+    def levels(svg: str) -> set[str]:
+        return set(re.findall(r'<path fill="(#[0-9a-fA-F]{6})"', svg))
+
+    assert levels(counts) != levels(density)

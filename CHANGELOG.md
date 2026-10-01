@@ -2,6 +2,125 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.9.3] - 2026-10-02: refuse what cannot be drawn honestly
+
+Two more Ralph Loop passes, aimed at the inputs a real caller supplies rather
+than at the plates. The drawing code held up throughout; the **refusals** did
+not. The generators were careful about everything except the values they
+cannot work without.
+
+### Fixed — the choropleth rendered data that did not exist
+
+- **An empty result set became the demo.** `rows = data if data else
+  DEMO_DATA` cannot tell `None` ("I brought nothing, show me the demo") from
+  `[]` ("my query ran and returned no rows"). The plate's subtitle kept the
+  simple case honest — it says "synthetic demo data" — but it is applied only
+  when the caller supplied no subtitle, so
+
+  ```python
+  build_svg([], title="Q3 revenue by country", subtitle="Millions of euros")
+  ```
+
+  produced a publishable world map of 174 countries of invented numbers under
+  a real headline, with no warning anywhere on it and an accessible
+  description reporting the synthetic range as though it were the caller's.
+
+  `make_density` already answered an empty point list with "no point fell
+  inside the bbox; nothing to draw", and `make_situation_map` already refused
+  to render without a region. The choropleth was the odd one out of three.
+  It now refuses, and the HTTP API turns that into a 422 with the reason.
+
+- **One `nan` poisoned everything and still finished.** `min`/`max` both came
+  back `nan`, so the ramp spanned nan, every class boundary was meaningless,
+  the accessible description read "data ranging nan to nan" and the legend
+  printed **nan** as its own axis labels. One empty cell in a spreadsheet is
+  the ordinary way to arrive here. Non-finite values are now refused, naming
+  the rows at fault and pointing at the state that already exists for this:
+  omit the row and the country draws no-data grey.
+
+### Fixed — a region could be the opposite of what was asked for
+
+`validate_config` suggests the key you probably meant when you mistype one,
+and never looked at `region`, the only key it requires.
+
+- **A bbox crossing the antimeridian silently became its own complement.**
+  `box(177, -19, -178, -16)` does not raise; shapely normalises it to
+  `-178 .. 177`, so a five-degree window over Fiji drew **355 degrees of
+  longitude** — the whole planet except the region requested — and the result
+  rendered and looked finished. A transposed pair drew a different valid
+  region just as quietly.
+- Zero-width boxes reached a bare `ZeroDivisionError`, whole-world boxes a
+  raw pyproj `CRSError`, and regions crossing ±180 a GEOS
+  `TopologyException`.
+
+`validate_region` now refuses each with a sentence naming the cause, and
+where the cause is ambiguous it names both possibilities, because `west >
+east` is either a swap or an antimeridian crossing and only the caller knows
+which. Wrapped regions are refused rather than faked: drawing one properly
+means splitting every layer at the seam, which is a feature and not an
+argument check. `build_map` validates too, so the inner entry point no longer
+answers a missing region with a bare `KeyError`.
+
+- **A polar plate could not be drawn at all.** Projecting a coastline into a
+  conic can leave it self-touching, and GEOS answers a boolean operation on
+  an invalid operand with a raw exception rather than a result — so any plate
+  of Svalbard and northern Greenland died in `region.difference(land)`.
+  Repaired when `is_valid` says it is needed, which the bundled plates never
+  trigger and therefore never pay for.
+
+### Fixed — things that were documented nowhere, or wrongly
+
+- **`make_situation_map`'s module docstring named ten of thirty-one config
+  keys**, while `EXAMPLES.md` sends readers there "for the full list of
+  fields it accepts". The reference is now complete, and
+  `tests/test_config_schema_is_documented.py` fails if `CONFIG_KEYS` and the
+  documentation disagree in either direction.
+- **`lakes.historic` shipped in 0.9.1 and reached no user-facing document**,
+  although it changes Lake Urmia's default rendering. Its sibling
+  `lakes.former` was documented in both READMEs. Now both are.
+- **`doc/CARTOGRAPHY.tex` opened with "Two generators are covered"** and never
+  acknowledged the third.
+- **`LISEZMOI.md` carried none of the courtesy credits** the English README
+  does — mapped.earth, GloFAS, HydroSHEDS. In a repo that stamps an ODbL line
+  onto any plate touching OSM data, an attribution section present in one
+  language and absent in the other is not a translation backlog.
+- **`article_sidecar` returned an empty record for anything but a situation
+  map.** It is exported under a kind-agnostic name and keyed on
+  `<title id="sm-title">`, which only one kind writes. It matches the element
+  now.
+
+### Added
+
+- **`per_area=True` on `make_density`.** The grid is cut in degrees, so cells
+  are equal in angle and unequal in ground: the poleward cell is 28% smaller
+  than the equatorward one on the bundled US demo, 39% across Europe, **49%
+  across Scandinavia** and 90% across a hemisphere. The legend's "per cell"
+  was literally true, which kept this an undocumented choice rather than a
+  lie — but this is the repo that put Equal Earth under the choropleth
+  precisely so colour-by-area would not misrepresent size.
+
+  Counts stay the default, because the form is an *accumulation* map and a
+  count is what fell. What was missing was saying so, and offering the other
+  question: `per_area=True` divides each cell by its own spherical area and
+  relabels the legend in events per 1 000 km². The module docstring carries
+  the measured table and `CARTOGRAPHY.tex` gained a section with the
+  quadrangle-area formula.
+
+- **`data-name` / `data-id` / `data-value` on choropleth countries**, so the
+  svgis-style extraction the situation map already had works for the kind
+  that did not. A country with no number carries an empty `data-value`
+  rather than nothing, because "no data here" is a state the map draws on
+  purpose.
+
+### Verified rather than repeated
+
+The README claims the ramps read correctly to someone who cannot distinguish
+red from green. Simulated both at nine stops through Machado protan, deutan
+and tritan matrices: the sequential ramp stays strictly monotonic in
+luminance under all three (worst adjacent step 3.0% of span), and the
+diverging ramp rises to its neutral and falls away from it under all three,
+with the midpoint the lightest swatch every time. The claim holds.
+
 ## [0.9.2] - 2026-10-01: a Ralph Loop over the whole project
 
 Two iterations of render-it-and-look-at-it across every surface, not just the

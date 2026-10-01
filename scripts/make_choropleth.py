@@ -425,6 +425,25 @@ DEMO_DATA: list[dict[str, Any]] = [
 ]
 
 
+def _country_data(country: dict[str, Any], value: float | None) -> str:
+    """Return the ``data-*`` attributes a country path carries.
+
+    The same idea svgis's ``--data-fields`` is built on, and the one the
+    situation map's zones and markers already used: a finished plate is an
+    argument, and an argument a reader can extract is stronger than one they
+    can only look at. Until now only the situation map carried them, so
+    ``article_sidecar`` came back with empty hands for a choropleth.
+
+    A country with no value carries ``data-value=""`` rather than being left
+    bare: "we have no number for this one" is a state this map draws
+    deliberately, in grey, and the attribute should say so too.
+    """
+    name = xml_escape(str(country.get("name", "")))
+    code = xml_escape(str(country.get("id", "")))
+    shown = "" if value is None else f"{value:g}"
+    return f' data-name="{name}" data-id="{code}" data-value="{shown}"'
+
+
 def _load_countries() -> list[dict[str, Any]]:
     """Return ``[{id, name, rings: [[(lon, lat), ...], ...]}, ...]`` for every
     country polygon/multipolygon in the vendored TopoJSON atlas, each
@@ -603,6 +622,25 @@ def build_svg(
         A complete, standalone SVG document.
     """
     _ = accessibility
+    # ``None`` means "I did not bring data, show me the demo", and the
+    # subtitle below says so on the plate. An **empty list** means something
+    # else entirely: a query ran and returned nothing. Treating the two the
+    # same -- which this did, because ``[]`` is falsy -- renders 174
+    # countries of synthetic values and, when the caller also passed their
+    # own ``title``/``subtitle``, prints them under the caller's headline
+    # with no warning anywhere on the plate. A dashboard whose query comes
+    # back empty would publish a map of invented numbers.
+    #
+    # The sibling generators already refuse: ``make_density`` raises "no
+    # point fell inside the bbox; nothing to draw" and ``make_situation_map``
+    # will not render without a region. This one was the odd one out.
+    if data is not None and len(data) == 0:
+        raise ValueError(
+            "data is an empty list: nothing to map. An empty result set is a "
+            "real condition and only the caller can say what it means, so this "
+            "refuses rather than guessing. Pass data=None to render the "
+            "labelled demo map on purpose."
+        )
     rows = data if data else DEMO_DATA
     if subtitle is None:
         # "Higher = greater exposure" and "synthetic demo data" are both true
@@ -615,6 +653,26 @@ def build_svg(
             else "No data in grey"
         )
     values_by_id = {str(r["id"]): float(r["value"]) for r in rows}
+    # One NaN poisons everything downstream: min/max both come out nan, so
+    # the ramp is computed over a nan span, every class is garbage, and the
+    # legend prints "nan" as its own axis labels while the plate still looks
+    # finished. A single empty cell in a spreadsheet is the ordinary way to
+    # get here, which is exactly why it must not be survivable.
+    #
+    # Not dropped silently either: a country with no value is already a
+    # first-class state here -- it renders grey and the subtitle says so --
+    # and the caller is the only one who can say which of the two they meant.
+    unusable = sorted(
+        key for key, value in values_by_id.items() if not math.isfinite(value)
+    )
+    if unusable:
+        raise ValueError(
+            "these ids carry a value that is not a finite number "
+            f"({', '.join(unusable)}): a single nan or inf makes the colour "
+            "scale, the legend's own labels and every class meaningless while "
+            "the map still renders. Omit the row instead to draw that country "
+            "as no-data grey, which the plate already says it means."
+        )
     countries = _load_countries()
     all_values = list(values_by_id.values())
     v_min, v_max = (min(all_values), max(all_values)) if all_values else (0.0, 1.0)
@@ -938,7 +996,7 @@ def build_svg(
                 border=NO_DATA_EDGE,
             )
         parts.append(
-            f'<path class="country hit" tabindex="0" d="{path_d}" fill="{fill}" fill-opacity="{_COUNTRY_FILL_OPACITY}" '
+            f'<path class="country hit" tabindex="0"{_country_data(country, value)} d="{path_d}" fill="{fill}" fill-opacity="{_COUNTRY_FILL_OPACITY}" '
             f'stroke="{edge}" stroke-width="0.4"><title>{xml_escape(tip)}</title></path>'
             f"{bubble}"
         )

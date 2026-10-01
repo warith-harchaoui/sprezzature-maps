@@ -42,8 +42,13 @@ _MARKER_RE = re.compile(
     r'(?: data-radius-km="([\d.]+)")?'
 )
 
-_TITLE_RE = re.compile(r"<title id=\"sm-title\">(.*?)</title>", re.S)
-_DESC_RE = re.compile(r"<desc id=\"sm-desc\">(.*?)</desc>", re.S)
+#: The root ``<title>``/``<desc>``, whichever kind wrote them. Matched on the
+#: element rather than on an id: the situation map stamps ``sm-title`` and the
+#: choropleth ``cx-title``, and keying on one of them made this return a
+#: hollow record for the other kinds -- an empty title, an empty alt string
+#: and no error, which is the quietest way to be useless.
+_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title>", re.S)
+_DESC_RE = re.compile(r"<desc\b[^>]*>(.*?)</desc>", re.S)
 
 
 def _unescape(text: str) -> str:
