@@ -22,6 +22,15 @@ be regenerated in one command:
   territory during the First Libyan Civil War (the 2011 uprising against
   Muammar Gaddafi's government), based on open-source literature, an
   illustrative snapshot from around spring 2011.
+- ``sudan``: the war's east-west partition in five classes -- the army, the
+  RSF, SPLM-N in the Nuba mountains and southern Blue Nile, the Jebel Marra
+  holdout, and the contested Kordofan front -- with an assessed and a
+  reported axis of advance drawn differently. Open-source reporting to late
+  September 2026.
+- ``drc``: who holds North and South Kivu, on the Albertine Rift. The plate
+  that could not be drawn honestly until the generator had lake polygons:
+  Goma and Bukavu face each other across Lake Kivu, and on a land-versus-
+  ocean basemap the water between them was painted as ground.
 
 Every one of these non-neutral maps is deliberately coarse, and says so
 directly on the map itself. The schematic control lines and territory
@@ -34,8 +43,14 @@ having to trust a black box. Running this script writes the tracked
 ``assets/situation-maps/<name>.{yaml,svg,png}`` files plus the gallery's
 raster (pixel-grid) image.
 
-    python scripts/build_situation_examples.py            # all three
-    python scripts/build_situation_examples.py ukraine    # just one
+    python scripts/build_situation_examples.py             # every example
+    python scripts/build_situation_examples.py sudan drc   # just these
+    python scripts/build_situation_examples.py --layers    # + the layer views
+
+``--layers`` also writes the a-posteriori per-layer decomposition of each
+plate (basemap / areas-of-control / markers / labels, as SVG and PNG). It is
+off by default because it is about 12 MB of derived files per example and
+most runs only want the plates.
 """
 
 from __future__ import annotations
@@ -47,9 +62,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "sprezzature-figures" / "scripts"))
-from make_situation_map import load_country, load_land  # noqa: E402
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
+from make_situation_map import (  # noqa: E402
+    build_map,
+    load_country,
+    load_lakes,
+    load_land,
+)
 from shapely.geometry import (  # noqa: E402
     LineString,
     Polygon,
@@ -58,7 +78,11 @@ from shapely.geometry import (  # noqa: E402
 )
 from shapely.ops import unary_union  # noqa: E402
 
-SHIP = REPO / "sprezzature-figures" / "assets" / "situation-maps"
+# These examples used to be generated *into* sprezzature-figures, back when the
+# situation map lived there. Both paths still pointed at a sibling checkout
+# after the split, so this script could only run on a machine that happened to
+# have one -- and then wrote this repo's own examples into the other repo.
+SHIP = REPO / "assets" / "situation-maps"
 
 
 def _feat(name: str, geom: Any) -> dict[str, Any]:
@@ -98,6 +122,20 @@ def _partition_by_claims(
     features.append(_feat(base_name, base))
     features.extend(_feat(n, g) for n, g in zones)
     return features
+
+
+def _smooth(geom: Any, km: float = 18.0) -> Any:
+    """Round a hand-typed claim polygon so it reads as ground, not as typing.
+
+    A control zone entered as six coordinates comes out with six straight
+    edges and six sharp corners, and a straight edge on a control map is a
+    claim: it says someone surveyed that line. Opening then closing the shape
+    by the same radius rounds convex and concave corners alike and leaves the
+    area essentially unchanged, which is what a coarse assessment should look
+    like.
+    """
+    deg = km / 111.0
+    return geom.buffer(deg).buffer(-2 * deg).buffer(deg)
 
 
 def _contested_band(line_pts: list, country: Any, km: float) -> Any:
@@ -154,12 +192,12 @@ def build_ukraine() -> dict[str, Any]:
     palette = {
         "Ukrainian government control": "#bcd4ec",
         "Russian-occupied (approx.)": "#e0a89e",
-        "Contested (approx. sprezzature)": "#e4cf9c",
+        "Contested (approx. front line)": "#e4cf9c",
     }
     features = [
         _feat("Ukrainian government control", government),
         _feat("Russian-occupied (approx.)", occupied),
-        _feat("Contested (approx. sprezzature)", contested),
+        _feat("Contested (approx. front line)", contested),
     ]
     b = ukr.bounds
     bbox = [b[0] - 0.6, b[1] - 1.2, b[2] + 0.6, b[3] + 0.6]
@@ -182,17 +220,36 @@ def build_ukraine() -> dict[str, Any]:
         "frontiers": {"focus": "Ukraine"},
         "legend_position": "right",
         "rivers": {"always_label": ["Dnieper"], "color": "#5d86a6", "label_color": "#3f6a8c"},
-        # The approximate contact line, drawn as an emphasised sprezzature (north->south).
-        "sprezzature": {
+        # Natural Earth still carries the Kakhovka Reservoir at its full
+        # ~2 150 km2 extent. It drained within two weeks of the dam breach of
+        # 6 June 2023, and by 2026 the bed is willow and poplar scrub over sand
+        # and marsh -- ground infantry has been infiltrating through, which
+        # makes it a feature of this plate rather than a footnote to it.
+        # Drawn as former (dashed outline, no fill) rather than skipped: on a
+        # map of this front the absence of the reservoir is itself information,
+        # and a reader who knows the geography will come looking for it.
+        "lakes": {
+            "former": ["Kakhovka Reservoir"],
+            "always_label": ["Kakhovka Reservoir"],
+        },
+        # The approximate contact line, drawn as an emphasised front (north->south).
+        "front": {
             "line": [[p[0], p[1]] for p in FRONT],
             "color": "#3a4149",
             "legend_label": "Approx. contact line",
         },
         "legend_footer": "As of ~2024 · schematic, open-source geography",
+        "caption": "full",
+        "method": "Schematic polygons drawn by hand from open-source reporting, not a geocoded dataset",
+        "source": (
+            "Natural Earth basemap; the Kakhovka Reservoir is drawn as former "
+            "(drained after the dam breach of 6 June 2023)"
+        ),
+        "as_of": "Positions as of ~2024 · illustrative, not operational intelligence",
         "areas_of_control": {
             "category_field": "actor",
             "palette": palette,
-            "contested": ["Contested (approx. sprezzature)"],
+            "contested": ["Contested (approx. front line)"],
             "fill_opacity": 0.78,
             "hatch_color": "#b34a3a",
             "source": {"type": "FeatureCollection", "features": features},
@@ -366,7 +423,7 @@ def build_syria() -> dict[str, Any]:
 # Libya: schematic First Libyan Civil War, ~spring 2011                        #
 # --------------------------------------------------------------------------- #
 
-# Oil-crescent sprezzature, Ajdabiya -> Brega -> Ras Lanuf -> Bin Jawad -> toward Sirte.
+# Oil-crescent front, Ajdabiya -> Brega -> Ras Lanuf -> Bin Jawad -> toward Sirte.
 LIBYA_FRONT = [(20.20, 30.72), (19.58, 30.41), (18.54, 30.50), (17.70, 30.90), (16.90, 31.05)]
 
 
@@ -475,20 +532,412 @@ def build_libya() -> dict[str, Any]:
     }
 
 
-BUILDERS = {"ukraine": build_ukraine, "syria": build_syria, "libya": build_libya}
-GENERATOR = REPO / "sprezzature-figures" / "scripts" / "make_situation_map.py"
-GALLERY = REPO / "sprezzature-figures" / "assets" / "figures-gallery"
+
+# --------------------------------------------------------------------------- #
+# Sudan: schematic, per open-source reporting                                  #
+# --------------------------------------------------------------------------- #
+
+# The east-west divide the war settled into: SAF holds the Nile corridor, the
+# centre and the east; the RSF holds Darfur and the west; the fighting is in
+# Kordofan, in between. Drawn north -> south roughly along the Kordofan front,
+# and reused as both the RSF claim's eastern edge and the drawn contact line so
+# the hatched band straddles exactly the boundary the fills meet at.
+SUDAN_FRONT = [
+    (27.70, 16.30),
+    (28.15, 14.20),
+    (28.80, 12.60),
+    (28.85, 11.50),
+    (28.50, 10.20),
+    (28.10, 9.65),
+]
+# The claim polygon runs past both ends of the drawn line, so the difference
+# covers the whole country; the line itself stops at the border, because a
+# contact line drawn across South Sudan claims a front that is not there.
+SUDAN_RSF_CLAIM = (
+    [(21.0, 23.0), (27.70, 23.0)] + SUDAN_FRONT + [(27.95, 8.0), (21.0, 8.0)]
+)
+# Jebel Marra + Tawila: the Sudan Liberation Movement (Abdel Wahid al-Nur) has
+# held the massif throughout, a third zone belonging to neither belligerent.
+# The west edge stops short of Zalingei, which is RSF-held.
+SUDAN_JEBEL_MARRA = [
+    (23.70, 12.30),
+    (24.30, 11.95),
+    (25.10, 12.60),
+    (25.25, 13.45),
+    (24.60, 13.95),
+    (24.00, 13.60),
+    (23.70, 13.00),
+]
+# Dar Zaghawa, the far north-west: Zaghawa-aligned former Darfur rebels kept a
+# foothold around Tina and Kornoi after the rest of Darfur fell.
+# A ragged foothold, not a survey rectangle: a box drawn on a control map
+# reads as a claim of straight borders, which is never what is meant.
+SUDAN_DAR_ZAGHAWA = [
+    (21.85, 15.05),
+    (22.70, 14.85),
+    (23.25, 15.20),
+    (23.10, 15.95),
+    (22.40, 16.30),
+    (21.85, 16.05),
+]
+# SPLM-N (al-Hilu) holds the Nuba Mountains east of Kadugli and south-east of
+# Dilling -- both towns stay SAF -- and the southern Blue Nile.
+SUDAN_NUBA = [(29.95, 10.35), (31.30, 10.35), (31.50, 11.60), (30.20, 12.10), (29.85, 11.50)]
+SUDAN_BLUE_NILE = [(33.60, 9.50), (35.00, 9.50), (35.10, 11.00), (34.20, 11.30), (33.70, 10.60)]
+
+
+def build_sudan() -> dict[str, Any]:
+    """Sudan's east-west partition: SAF, RSF, SPLM-N and the Jebel Marra holdout.
+
+    The most complex plate in this gallery -- five classes rather than three --
+    because the war genuinely has five answers to "who holds this", and
+    collapsing the two non-belligerent zones into "other" would misdescribe
+    both. Schematic, from open-source reporting to late September 2026; the
+    claim lines above are coarse by construction and the map says so.
+    """
+    sdn = load_country("Sudan")
+    jebel_marra = sdn.intersection(_smooth(Polygon(SUDAN_JEBEL_MARRA), km=14))
+    zaghawa = sdn.intersection(_smooth(Polygon(SUDAN_DAR_ZAGHAWA), km=14))
+    splm_n = sdn.intersection(
+        _smooth(unary_union([Polygon(SUDAN_NUBA), Polygon(SUDAN_BLUE_NILE)]), km=16)
+    )
+    # Earlier claims win: the two holdout zones are carved out of Darfur before
+    # the RSF takes the rest of it.
+    carved = unary_union([jebel_marra, zaghawa])
+    rsf = sdn.intersection(Polygon(SUDAN_RSF_CLAIM)).difference(carved)
+    saf = sdn.difference(unary_union([rsf, carved, splm_n]))
+    # The Kordofan fighting, as a band straddling the divide rather than a line
+    # through it: that is what "the front is in Kordofan" actually looks like.
+    contested = _contested_band(SUDAN_FRONT, sdn, km=55)
+    saf = saf.difference(contested)
+    rsf = rsf.difference(contested)
+    splm_n = splm_n.difference(contested)
+    contested = unary_union([contested, zaghawa])
+
+    palette = {
+        "Sudanese Armed Forces": "#bcd4ec",
+        "Rapid Support Forces": "#e0a89e",
+        "SPLM-N (al-Hilu)": "#cdddb0",
+        "SLM-AW (Jebel Marra)": "#cfc0d8",
+        "Contested (approx.)": "#e4cf9c",
+    }
+    features = [
+        _feat("Sudanese Armed Forces", saf),
+        _feat("Rapid Support Forces", rsf),
+        _feat("SPLM-N (al-Hilu)", splm_n),
+        _feat("SLM-AW (Jebel Marra)", jebel_marra),
+        _feat("Contested (approx.)", contested),
+    ]
+    b = sdn.bounds
+    bbox = [b[0] - 0.8, b[1] - 0.8, b[2] + 0.8, b[3] + 0.8]
+    return {
+        "title": "Sudan: Areas of Control",
+        "subtitle": (
+            "Schematic · the war's east-west partition, with the fighting in Kordofan"
+        ),
+        "method": "Schematic polygons drawn by hand from the sources below, not a geocoded dataset",
+        "source": "Open-source reporting (ACLED, Sudans Post territorial-control tracking)",
+        "as_of": "As of ~25 September 2026 · illustrative, not an operational assessment",
+        "caption": "full",
+        "region": {"bbox": bbox},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "sea_color": "#a8bccb",
+            "land_color": "#f4efdd",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.4},
+        },
+        "frontiers": {"focus": "Sudan"},
+        "legend_position": "right",
+        "legend_footer": "Five classes · boundaries approximate",
+        "rivers": {"always_label": ["Nile", "White Nile", "Blue Nile"]},
+        "front": {
+            "line": [list(p) for p in SUDAN_FRONT],
+            "color": "#3a4149",
+            "legend_label": "Approx. Kordofan front",
+        },
+        # Two movements, drawn differently because they are two different
+        # claims. The SAF push through North Kordofan is assessed (Sodari
+        # taken 25 September) and drawn solid; the SPLM-N advance in Blue Nile
+        # is a single reported garrison capture, and is drawn as an outline.
+        "arrows": [
+            {
+                "line": [[30.45, 13.05], [30.05, 13.65], [29.55, 14.05], [29.05, 14.45]],
+                "color": "#2f5d92",
+                "width": 6.5,
+                "label": "SAF advance",
+                "label_side": "right",
+                "legend_label": "Assessed advance",
+            },
+            {
+                "line": [[34.02, 10.00], [34.18, 10.45], [34.12, 10.95]],
+                "color": "#3f5a2e",
+                "width": 6.5,
+                "style": "dashed",
+                "label": "SPLM-N (reported)",
+                "label_side": "right",
+                "legend_label": "Reported advance",
+            },
+        ],
+        "areas_of_control": {
+            "category_field": "actor",
+            "palette": palette,
+            "contested": ["Contested (approx.)"],
+            "fill_opacity": 0.78,
+            "hatch_color": "#b34a3a",
+            "source": {"type": "FeatureCollection", "features": features},
+        },
+        "events": [
+            {"lon": 25.350, "lat": 13.631, "color": "#c0392b", "r": 5},  # El Fasher
+            {"lon": 30.217, "lat": 13.183, "color": "#c0392b", "r": 5},  # El Obeid
+            {"lon": 29.717, "lat": 11.017, "color": "#c0392b", "r": 5},  # Kadugli
+            {"lon": 34.350, "lat": 11.767, "color": "#c0392b", "r": 5},  # Ad-Damazin
+        ],
+        "marker_legend": [{"color": "#c0392b", "label": "Contested town (approx.)"}],
+        "labels": {
+            "places": [
+                {"lon": 32.532, "lat": 15.590, "text": "Khartoum", "size": 15},
+                {"lon": 37.216, "lat": 19.616, "text": "Port Sudan", "anchor": "end"},
+                {"lon": 24.883, "lat": 12.050, "text": "Nyala"},
+                {
+                    "lon": 25.350, "lat": 13.631, "text": "El Fasher",
+                    "dot": False, "clear": 5.5, "anchor": "above",
+                },
+                {
+                    "lon": 30.217, "lat": 13.183, "text": "El Obeid",
+                    "dot": False, "clear": 5.5, "anchor": "above",
+                },
+                {
+                    "lon": 29.717, "lat": 11.017, "text": "Kadugli",
+                    "dot": False, "clear": 5.5, "anchor": "below",
+                },
+                {
+                    "lon": 34.350, "lat": 11.767, "text": "Ad-Damazin",
+                    "dot": False, "clear": 5.5, "anchor": "below",
+                },
+                {"lon": 22.435, "lat": 13.434, "text": "El Geneina", "size": 11, "anchor": "end"},
+                {"lon": 23.477, "lat": 12.900, "text": "Zalingei", "size": 11, "anchor": "end"},
+                {"lon": 24.861, "lat": 13.514, "text": "Tawila", "size": 11, "anchor": "end"},
+                {"lon": 30.483, "lat": 19.167, "text": "Dongola", "size": 11},
+                {"lon": 31.817, "lat": 18.483, "text": "Merowe", "size": 11},
+                {"lon": 33.978, "lat": 17.697, "text": "Atbara", "size": 11},
+                {"lon": 36.390, "lat": 15.450, "text": "Kassala", "size": 11},
+                {"lon": 35.383, "lat": 14.033, "text": "Gedaref", "size": 11},
+                {"lon": 33.517, "lat": 14.400, "text": "Wad Madani", "size": 11},
+                {"lon": 33.583, "lat": 13.550, "text": "Sennar", "size": 11},
+                {"lon": 28.343, "lat": 11.717, "text": "Al-Fulah", "size": 11, "anchor": "end"},
+                {"lon": 28.423, "lat": 12.693, "text": "En Nahud", "size": 11, "anchor": "end"},
+                {"lon": 29.656, "lat": 12.053, "text": "Dilling", "size": 11, "anchor": "end"},
+                {"lon": 31.208, "lat": 12.904, "text": "Umm Ruwaba", "size": 11},
+                {"lon": 26.688, "lat": 13.596, "text": "Umm Keddada", "size": 11},
+            ],
+        },
+    }
+
+
+
+# --------------------------------------------------------------------------- #
+# Eastern DRC: schematic, per open-source reporting                            #
+# --------------------------------------------------------------------------- #
+
+# M23/AFC holds a band along the Rwandan and Burundian border taking in both
+# provincial capitals -- Goma since January 2025, Bukavu weeks after it --
+# and has been widening it westward through Masisi.
+DRC_M23_CLAIM = [
+    (29.78, -0.72),
+    (29.10, -0.82),
+    (28.52, -1.18),
+    (28.02, -1.58),
+    (27.92, -2.12),
+    (28.18, -2.58),
+    (28.52, -2.98),
+    (29.02, -3.18),
+    (29.42, -2.88),
+    (29.82, -2.32),
+    (29.88, -1.38),
+]
+# Two places the fighting is, rather than two places anyone holds: the
+# south-western Masisi approaches toward Walikale, and the South Kivu
+# highlands on the line of advance to Minembwe. Drawn as irregular ground
+# rather than as a buffer around a line -- a buffered line comes out a
+# perfect stadium, and a control map with a rounded rectangle on it says
+# someone surveyed a rounded rectangle.
+DRC_WALIKALE_ZONE = [
+    (28.38, -1.30),
+    (28.05, -1.16),
+    (27.72, -1.22),
+    (27.52, -1.48),
+    (27.63, -1.78),
+    (27.98, -1.88),
+    (28.32, -1.72),
+    (28.46, -1.50),
+]
+DRC_MINEMBWE_ZONE = [
+    (29.18, -3.38),
+    (28.86, -3.42),
+    (28.58, -3.62),
+    (28.52, -3.95),
+    (28.72, -4.18),
+    (29.02, -4.12),
+    (29.20, -3.86),
+]
+
+
+def build_drc() -> dict[str, Any]:
+    """Eastern DRC: who holds the Kivus, on a basemap where the lakes exist.
+
+    The plate this generator could not draw honestly until it had lake
+    polygons: Goma and Bukavu are 100 km apart at opposite ends of Lake Kivu,
+    and on a land-versus-ocean basemap the water between them was painted as
+    ground. Schematic, from open-source reporting to late September 2026.
+    """
+    drc = load_country("Dem. Rep. Congo")
+    # No actor "holds" open water, and a control fill laid across Lake Kivu
+    # says one does. The lakes come out of every zone before anything is
+    # drawn, which is only possible now that the generator has them at all.
+    water = unary_union([g for g, _n, _r in load_lakes()])
+    land = drc.difference(water)
+    m23 = land.intersection(_smooth(Polygon(DRC_M23_CLAIM), km=12))
+    contested = land.intersection(
+        _smooth(
+            unary_union([Polygon(DRC_WALIKALE_ZONE), Polygon(DRC_MINEMBWE_ZONE)]),
+            km=15,
+        )
+    )
+    m23 = m23.difference(contested)
+    government = land.difference(unary_union([m23, contested]))
+
+    # Government is *not* blue on this plate. Every other map in this gallery
+    # is a country with a coast, so a pale blue government fill reads as
+    # government; here the DRC fills the frame and the same blue read as
+    # ocean -- two thirds of the plate looked like water. A sage green is the
+    # nearest house pastel that can never be mistaken for the sea.
+    palette = {
+        "Government (FARDC)": "#c3d6b4",
+        "M23 / AFC": "#e0a89e",
+        "Contested (approx.)": "#e4cf9c",
+    }
+    features = [
+        _feat("Government (FARDC)", government),
+        _feat("M23 / AFC", m23),
+        _feat("Contested (approx.)", contested),
+    ]
+    return {
+        "title": "Eastern DRC: Areas of Control",
+        "subtitle": "Schematic · North and South Kivu, along the Albertine Rift",
+        "method": "Schematic polygons drawn by hand from the sources below, not a geocoded dataset",
+        "source": "Open-source reporting (Critical Threats Congo Security Review, IPIS, Al Jazeera)",
+        "as_of": "As of ~25 September 2026 · illustrative, not an operational assessment",
+        "caption": "full",
+        "region": {"bbox": [27.10, -4.70, 30.30, 0.90]},
+        "projection": "auto",
+        "canvas_width": 900,
+        "padding": 26,
+        "basemap": {
+            "sea_color": "#a8bccb",
+            "land_color": "#f4efdd",
+            "coast_color": "#7993a6",
+        },
+        "frontiers": {"focus": "Dem. Rep. Congo"},
+        "legend_position": "bottom-left",
+        "legend_footer": "Boundaries approximate",
+        "lakes": {"always_label": ["Lake Kivu", "Lake Edward", "Lake Tanganyika", "Lake Albert"]},
+        "rivers": {"width": "ranked", "always_label": ["Congo"]},
+        "areas_of_control": {
+            "category_field": "actor",
+            "palette": palette,
+            "contested": ["Contested (approx.)"],
+            "fill_opacity": 0.78,
+            "hatch_color": "#b34a3a",
+            "source": {"type": "FeatureCollection", "features": features},
+        },
+        # Both movements are reported rather than assessed, and are drawn as
+        # outlines for that reason: an expansion into ground nobody contested
+        # before, and a line of advance that is being fought over, not held.
+        "arrows": [
+            {
+                "line": [[28.82, -1.44], [28.52, -1.42], [28.22, -1.45]],
+                "color": "#9c3b2e",
+                "width": 6.0,
+                "style": "dashed",
+                "label": "toward Walikale",
+                "label_side": "left",
+            },
+            {
+                "line": [[29.28, -3.10], [29.14, -3.40], [28.98, -3.68]],
+                "color": "#9c3b2e",
+                "width": 5.5,
+                "style": "dashed",
+                "label": "toward Minembwe",
+                "label_side": "right",
+            },
+        ],
+        "events": [
+            {"lon": 29.2336, "lat": -1.6794, "color": "#c0392b", "r": 5},  # Goma
+            {"lon": 28.8608, "lat": -2.5061, "color": "#c0392b", "r": 5},  # Bukavu
+            {"lon": 29.4667, "lat": 0.5000, "color": "#c0392b", "r": 5},  # Beni
+        ],
+        "marker_legend": [{"color": "#c0392b", "label": "Contested city (approx.)"}],
+        "labels": {
+            "places": [
+                {
+                    "lon": 29.2336, "lat": -1.6794, "text": "Goma",
+                    "dot": False, "clear": 5.5, "anchor": "above", "size": 14,
+                },
+                {
+                    "lon": 28.8608, "lat": -2.5061, "text": "Bukavu",
+                    "dot": False, "clear": 5.5, "anchor": "end", "size": 14,
+                },
+                {
+                    "lon": 29.4667, "lat": 0.5000, "text": "Beni",
+                    "dot": False, "clear": 5.5, "anchor": "above",
+                },
+                {"lon": 29.2800, "lat": 0.1300, "text": "Butembo", "size": 11},
+                {"lon": 29.4494, "lat": -1.1858, "text": "Rutshuru", "size": 11},
+                {"lon": 28.8000, "lat": -1.4000, "text": "Masisi", "size": 11, "anchor": "end"},
+                {"lon": 28.0700, "lat": -1.4261, "text": "Walikale", "size": 11, "anchor": "end"},
+                {"lon": 29.1500, "lat": -3.4000, "text": "Uvira", "size": 11},
+                {"lon": 28.7301, "lat": -3.9344, "text": "Minembwe", "size": 11, "anchor": "end"},
+                {"lon": 29.0940, "lat": -4.1041, "text": "Baraka", "size": 11},
+                {"lon": 29.1906, "lat": -5.9128, "text": "Kalemie", "size": 11},
+            ],
+        },
+    }
+
+BUILDERS = {
+    "ukraine": build_ukraine,
+    "syria": build_syria,
+    "libya": build_libya,
+    "sudan": build_sudan,
+    "drc": build_drc,
+}
+
 PNG_WIDTH = 1300  # export raster width, px
 
 
 def _render_png(svg: Path, png: Path) -> bool:
-    """Rasterise ``svg`` to ``png`` with rsvg-convert if available; return success."""
-    rsvg = shutil.which("rsvg-convert")
-    if not rsvg:
-        print(f"  (skipped PNG for {png.name}: rsvg-convert not found)")
-        return False
-    subprocess.run([rsvg, "-w", str(PNG_WIDTH), str(svg), "-o", str(png)], check=True)
-    return True
+    """Rasterise ``svg`` to ``png``; return whether a raster was written.
+
+    ``resvg-py`` is a declared dependency of this package, so it is here on any
+    machine that can run the generator at all. ``rsvg-convert`` -- which this
+    used to require, and silently skipped every PNG without -- stays as a
+    fallback for the one thing resvg occasionally trips on, a system font the
+    SVG names but does not embed.
+    """
+    try:
+        import resvg_py
+
+        png.write_bytes(bytes(resvg_py.svg_to_bytes(svg_string=svg.read_text(), width=PNG_WIDTH)))
+        return True
+    except Exception as exc:  # pragma: no cover - fallback path
+        rsvg = shutil.which("rsvg-convert")
+        if not rsvg:
+            print(f"  (skipped PNG for {png.name}: resvg failed [{exc}], no rsvg-convert)")
+            return False
+        subprocess.run([rsvg, "-w", str(PNG_WIDTH), str(svg), "-o", str(png)], check=True)
+        return True
 
 
 # Every named layer the generator emits, bottom -> top.
@@ -496,12 +945,15 @@ ALL_LAYERS = (
     "basemap-sea",
     "basemap-bathymetry",
     "basemap-land",
+    "lakes",
     "frontiers",
     "areas-of-control",
     "coastline",
     "infrastructure",
     "rivers",
+    "cities",
     "front-line",
+    "arrows",
     "forces",
     "events",
     "annotation-labels",
@@ -516,6 +968,7 @@ _BACKDROP = {
     "basemap-sea",
     "basemap-bathymetry",
     "basemap-land",
+    "lakes",
     "frontiers",
     "coastline",
     "rivers",
@@ -525,7 +978,7 @@ _BACKDROP = {
 # The a-posteriori decompositions a geopolitics analyst actually reads a plate in.
 LAYER_VIEWS = {
     "basemap": _BACKDROP,
-    "areas-of-control": _BACKDROP | {"areas-of-control", "front-line", "legend"},
+    "areas-of-control": _BACKDROP | {"areas-of-control", "front-line", "arrows", "legend"},
     "markers": _BACKDROP | {"forces", "events", "legend"},
     "labels": _BACKDROP | {"annotation-labels"},
 }
@@ -553,25 +1006,28 @@ def _export_layers(name: str, svg_text: str) -> None:
 
 
 def main(argv: list[str]) -> None:
-    names = argv or list(BUILDERS)
+    want_layers = "--layers" in argv
+    names = [a for a in argv if not a.startswith("-")] or list(BUILDERS)
+    unknown = [n for n in names if n not in BUILDERS]
+    if unknown:
+        raise SystemExit(f"unknown example(s) {unknown}; known: {', '.join(BUILDERS)}")
     SHIP.mkdir(parents=True, exist_ok=True)
-    GALLERY.mkdir(parents=True, exist_ok=True)
     for name in names:
         cfg = BUILDERS[name]()
         yaml_path = SHIP / f"{name}.yaml"
         yaml_path.write_text(json.dumps(cfg, indent=2))
-        # SVG next to the config, then a PNG export beside it and in the gallery.
+        # The generator is imported, not shelled out to: the subprocess call
+        # named a path in a sibling checkout, and this way a config that the
+        # generator refuses fails here with its own error message.
         svg_path = SHIP / f"{name}.svg"
-        subprocess.run(
-            [sys.executable, str(GENERATOR), "--config", str(yaml_path), "--out", str(svg_path)],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
+        svg_path.write_text(build_map(cfg))
         _render_png(svg_path, SHIP / f"{name}.png")
-        _render_png(svg_path, GALLERY / f"situation-{name}.png")
         print(f"wrote {name}.yaml / .svg / .png  ({yaml_path.stat().st_size // 1024} KB config)")
-        # A-posteriori layer decomposition: the final stage, once the plate is set.
-        _export_layers(name, svg_path.read_text())
+        # A-posteriori layer decomposition: the final stage, once the plate is
+        # set, and only when asked -- it is an order of magnitude more output
+        # than the plate itself.
+        if want_layers:
+            _export_layers(name, svg_path.read_text())
 
 
 if __name__ == "__main__":

@@ -1,89 +1,142 @@
 # Paysage
 
-Les outils qui dessinent une vraie carte géographique se distinguent
-par la part du pipeline de rendu qu'ils possèdent vraiment. Un outil
-**piloté par une grammaire** (Vega-Lite, D3 avec une bibliothèque de
-projections) reçoit une spécification de données et un nom de
-projection, et laisse un moteur d'exécution transformer cela en pixels :
-c'est ce moteur qui prend chaque décision de dessin. Un outil de **SIG
-de bureau** (QGIS) est un logiciel interactif pensé pour qu'un analyste
-explore ses données, pas pour qu'un script l'appelle sans supervision.
-Un outil **hébergé sans code** (Datawrapper, Flourish) échange le
-contrôle contre la rapidité : on choisit un modèle, on charge ses
-données, la carte vit sur le serveur de quelqu'un d'autre.
-`sprezzature-maps` appartient à une quatrième famille : une petite
-bibliothèque Python qui écrit directement le texte XML du SVG, sans
-moteur de grammaire de graphiques, sans navigateur, sans compte, si
-bien que la géométrie exacte qui finit sur la page est entièrement
-décidée par le code de ce dépôt.
+La plupart des comparatifs d'outils cartographiques alignent tout sur un
+seul axe et classent. Cela masque la seule distinction qui décide vraiment
+de quelque chose : **quelle part du dessin l'outil prend-il en charge, et
+quelle part vous reste-t-il ?**
 
-## Comparaison des outils
+- Une **grammaire de graphiques** (Vega-Lite, Altair, Observable Plot) reçoit
+  une spécification et un nom de projection ; un moteur d'exécution décide
+  ensuite de chaque marque.
+- Une **bibliothèque de tracé** (matplotlib avec cartopy ou geopandas)
+  dessine dans un canevas de figure conçu pour les graphiques statistiques,
+  la cartographie venant par-dessus.
+- Une **carte web** (Folium/Leaflet, deck.gl, MapLibre) livre des tuiles et
+  une fenêtre, et c'est le lecteur qui déplace et zoome.
+- Un **SIG de bureau** (QGIS) est un logiciel qu'un analyste pilote pour
+  *analyser* la géographie, et qui sait aussi exporter une carte.
+- Un **éditeur hébergé** (Datawrapper, Flourish) échange le contrôle contre
+  la rapidité et garde la carte sur le serveur de quelqu'un d'autre.
+- Un **écrivain de SVG** produit le XML directement. Aucun moteur, aucun
+  canevas, aucune fenêtre : la géométrie sur la page est exactement ce que
+  le code a décidé d'écrire.
 
-| Outil | Type | Moteur requis | Fond de carte réel (pas schématique) | Auto-hébergeable | Python |
+`sprezzature-maps` appartient à cette dernière famille, et cette famille
+n'est pas vide. Dire honnêtement qui d'autre s'y trouve est plus utile que
+de revendiquer la catégorie.
+
+## Les écrivains de SVG, précisément
+
+| Outil | Langage | Maintenu ? | Types thématiques | Projection | Planche finie |
 |---|---|---|---|---|---|
-| **sprezzature-maps** | SVG écrit à la main | Non | Oui (Equal Earth, LCC) | Oui | Oui |
-| Vega-Lite `geoshape` | Grammaire de graphiques | JS (ou `vl-convert` sans tête) | Oui | Oui | Via `altair` |
-| D3.js + bibliothèque de projections | Grammaire, plus bas niveau | JS | Oui (toute projection D3) | Oui | Non |
-| matplotlib + cartopy/geopandas | Bibliothèque de tracé | Non (Python pur) | Oui | Oui | Oui |
-| deck.gl / kepler.gl | Visualisation WebGL | JS, navigateur/WebGL | Oui (par tuiles) | Oui | Via `pydeck` |
-| Folium / Leaflet | Carte web interactive | JS, navigateur | Oui (par tuiles) | Oui | Oui (`folium`) |
-| Datawrapper / Flourish | Sans code, hébergé | Aucun (SaaS) | Oui | Non | Non |
-| QGIS | SIG de bureau | Application de bureau | Oui | Oui | Scriptable (PyQGIS) |
+| **sprezzature-maps** | Python | oui | choroplèthe, carte de situation, densité | Equal Earth / LCC auto-centrée | légende, échelle, relief, mention de provenance |
+| [svgis](https://github.com/fitnr/svgis) | Python | oui (0.6.0, sept. 2026) | aucun — géométrie stylée par classe CSS | tout EPSG | non |
+| [kartograph.py](https://github.com/kartograph/kartograph.py) | Python | **non** — abandonné, renvoie vers mapshaper | choroplèthe via CSS | plusieurs | non |
+| [map-generator](https://github.com/schiste/map-generator) | Rust | oui | aucun | plusieurs | non |
+| [map-gen](https://github.com/coxmi/map-gen) | JS | faible | aucun | projections D3 | non |
+| py-staticmaps | Python | oui (0.5.0) | marqueurs et lignes | Web Mercator (tuiles) | non |
 
-### Notes par dimension
+Lecture utile de ce tableau : **la niche a bel et bien des occupants, et ce
+qui les sépare n'est pas « écrire du SVG » — c'est de savoir si l'outil a un
+avis sur la page finie.** svgis est le parent vivant le plus proche, et un
+bon outil : il convertit des données géographiques en SVG proprement classé
+et vous rend un fond de carte à emporter dans Illustrator. Il ne classe pas
+vos données, ne choisit pas d'échelle de couleurs, ne place pas de légende,
+ne trace pas d'échelle graphique et n'ombre pas le relief, parce que ce
+n'est pas son objet. Kartograph, qui visait justement la carte thématique
+mise en forme, n'est plus maintenu depuis des années et son propre README
+renvoie vers mapshaper.
 
-| Dimension | sprezzature-maps | Vega-Lite | matplotlib+cartopy | Folium/deck.gl | Datawrapper |
+`sprezzature-maps` vise précisément la part que ces outils vous laissent :
+la planche publiable. Des données entrent, une carte composée sort, avec des
+décisions cartographiques prises et argumentées dans `doc/CARTOGRAPHY.tex`
+plutôt que laissées ouvertes.
+
+## Le champ plus large
+
+| Outil | Type | Moteur à l'affichage | Fond de carte réel | Auto-hébergeable | Python |
 |---|---|---|---|---|---|
-| Rendu sans moteur d'exécution | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐ | N/A |
-| Taille du fichier produit (SVG statique) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐ (HTML+JS) | N/A |
-| Panoramique/zoom interactif | ⭐ | ⭐⭐ | ⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| Contrôle de la précision de projection | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ (Web Mercator uniquement) | ⭐⭐ |
-| Contrôle du design (typographie, palette, légende) | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐ |
-| Rapidité pour une première carte | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **sprezzature-maps** | SVG écrit à la main | aucun | oui (Equal Earth, LCC) | oui | oui |
+| svgis | SVG écrit à la main | aucun | oui (tout EPSG) | oui | oui |
+| Vega-Lite `geoshape` | Grammaire | JS (ou `vl-convert`) | oui | oui | via `altair` |
+| D3 + d3-geo | Grammaire, plus bas niveau | JS | oui | oui | non |
+| matplotlib + cartopy/geopandas | Bibliothèque de tracé | aucun | oui | oui | oui |
+| PyGMT | Liaisons GMT | binaire GMT | oui | oui | oui (≥3.12) |
+| deck.gl / kepler.gl | WebGL | JS + WebGL | oui (tuiles) | oui | via `pydeck` |
+| Folium / Leaflet | Carte web interactive | JS, navigateur | oui (tuiles) | oui | oui |
+| Datawrapper / Flourish | Sans code, hébergé | aucun (SaaS) | oui | non | non |
+| QGIS | SIG de bureau | application | oui | oui | PyQGIS |
+
+### Là où cet outil est fort, et là où il ne l'est pas
+
+| Dimension | sprezzature-maps | svgis | Vega-Lite | matplotlib+cartopy | Folium/deck.gl | Datawrapper |
+|---|---|---|---|---|---|---|
+| Fichier lisible sans moteur | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐ | s.o. |
+| Publiable sans reprise graphique | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ |
+| Carte de situation / zones de contrôle | ⭐⭐⭐⭐⭐ | ⭐ | ⭐ | ⭐⭐ | ⭐⭐ | ⭐ |
+| Données quelconques, projection quelconque | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
+| Analyse spatiale | ⭐ | ⭐ | ⭐ | ⭐⭐⭐⭐ | ⭐⭐ | ⭐ |
+| Panoramique / zoom interactif | ⭐ | ⭐ | ⭐⭐ | ⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| Temps jusqu'à la première carte | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+Les lignes à deux étoiles sont les lignes honnêtes. Cette bibliothèque lit
+un petit ensemble de géographies embarquées ; ce n'est pas une chaîne de
+traitement géospatiale générale, et si vos données sont un shapefile dans
+une projection nationale, vous voulez svgis, geopandas ou QGIS. Elle ne fait
+aucune analyse spatiale : elle suppose les jointures, les tampons et les
+reprojections déjà faits, et ne dessine que le résultat.
 
 ## Quand utiliser quoi
 
-`sprezzature-maps` convient quand la carte est une figure statique (ou
-avec une interactivité légère en CSS/JS) qui doit avoir l'air
-délibérément conçue, tenir dans un seul fichier SVG autonome sans
-dépendance d'exécution à l'affichage, et rester honnête sur le plan
-géographique : Equal Earth conserve, pour la vue mondiale, la
-proportionnalité réelle des surfaces des pays (contrairement à la
-projection de Mercator sur laquelle reposent par défaut tous les outils
-à tuiles ci-dessus, qui gonfle les pays des hautes latitudes), et la
-conique conforme de Lambert conserve les formes et les angles locaux
-pour une vue régionale. C'est le même arbitrage que font ailleurs dans
-cette suite `sprezzature-accessibility` et `sprezzature-ux-laws` :
-posséder exactement la sortie plutôt que la confier à un moteur
-d'exécution, au prix d'écrire soi-même une plus grande part du code de
-dessin.
+**Utilisez `sprezzature-maps`** quand le livrable est une *figure* — quelque
+chose qu'on regarde plutôt qu'on explore — qui doit avoir l'air composée,
+tenir dans un fichier autonome sans rien à charger à l'affichage, et rester
+géographiquement honnête : Equal Earth pour le monde afin que les
+superficies restent justes (contrairement au Web Mercator par défaut de tous
+les outils à tuiles), Lambert conique conforme auto-centrée sur une région
+pour que les formes et les angles locaux le restent.
 
-La marque `geoshape` de Vega-Lite s'impose quand la carte n'est qu'un
-type de graphique parmi d'autres qu'un analyste produit déjà dans la
-même grammaire, et que l'interactivité côté navigateur (brossage, vues
-liées) compte davantage que le contrôle au pixel près du fichier
-produit.
+Le type `situation_map` est le cas le plus net. Zones de contrôle, ligne de
+contact, axes de progression fuselés, relief, rivières et lacs, échelle en
+deux unités et mention de provenance, depuis un fichier YAML : c'est un
+genre qui ne manque pas de *publications* (ISW, LiveUAMap, ACLED) et, à
+notre connaissance, pas de *générateur* libre. Ces organisations publient
+des cartes et des données ; aucune ne livre une bibliothèque qui transforme
+votre propre évaluation en planche.
 
-matplotlib avec cartopy ou geopandas convient aux tracés géographiques
-exploratoires et jetables dans un notebook, ou quand la carte doit
-cohabiter avec des graphiques statistiques de la même bibliothèque dans
-une seule figure. Ce n'est pas un outil pensé pour produire un SVG
-soigné et publiable sans un effort de mise en forme manuel conséquent.
+**Utilisez svgis** quand vous voulez la géométrie et aucun avis : des
+données réelles en entrée, un SVG propre et classé en sortie, la mise en
+forme vous revient.
 
-deck.gl, kepler.gl et Folium/Leaflet occupent le créneau de la carte web
-interactive que ce dépôt évite délibérément : un vrai panoramique, un
-vrai zoom, des fonds de carte par tuiles à toute échelle. On s'y tourne
-quand le livrable est une page que l'utilisateur explore, pas une
-figure que le lecteur regarde.
+**Utilisez Vega-Lite** quand la carte est un type de marque parmi d'autres
+dans une grammaire que vous employez déjà, et que l'interaction dans le
+navigateur compte plus que le fichier.
 
-Datawrapper et Flourish offrent le chemin le plus rapide d'un tableur à
-une carte publiée, quand l'auto-hébergement, le rendu hors ligne et le
-contrôle exact du design comptent moins que la rapidité et un flux
-d'édition accessible à un non-technicien.
+**Utilisez matplotlib avec cartopy ou geopandas** pour des tracés
+géographiques exploratoires dans un carnet, ou quand la carte doit voisiner
+des graphiques statistiques de la même bibliothèque. Ce n'est pas fait pour
+produire un SVG de publication sans un travail de mise en forme important.
 
-QGIS est un SIG de bureau complet : le bon outil pour analyser
-réellement des données géographiques (jointures spatiales, analyse de
-zones tampons, conversion de système de coordonnées), pas pour scripter
-une figure reproductible. `sprezzature-maps` part du principe que
-l'analyse géographique est déjà faite ; il ne fait qu'en dessiner le
-résultat.
+**Utilisez PyGMT** quand il vous faut la profondeur des Generic Mapping
+Tools — projections géophysiques, grilles, sorties topographiques
+professionnelles — et qu'une installation de GMT est acceptable.
+
+**Utilisez deck.gl, kepler.gl ou Folium/Leaflet** quand le livrable est une
+page que le lecteur explore : vrai panoramique, vrai zoom, tuiles à toutes
+les échelles. Ce dépôt ne concourt pas là et n'essaie pas.
+
+**Utilisez Datawrapper ou Flourish** quand la rapidité et un flux d'édition
+non technique l'emportent sur l'auto-hébergement, le rendu hors ligne et le
+contrôle exact.
+
+**Utilisez QGIS** pour *analyser* réellement la géographie — jointures
+spatiales, tampons, conversions de systèmes de coordonnées.
+`sprezzature-maps` suppose ce travail fait ; il ne dessine que la réponse.
+
+## La position de la maison
+
+Posséder la sortie exacte plutôt que la confier à un moteur, et payer cela
+en écrivant davantage de code de dessin. C'est le même arbitrage que
+`sprezzature-figures`, `sprezzature-accessibility` et `sprezzature-ux-laws`
+font ailleurs dans cette suite. Mauvais arbitrage pour l'exploration, bon
+arbitrage pour la publication.

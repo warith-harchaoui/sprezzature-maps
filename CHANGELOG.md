@@ -2,6 +2,144 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.8.0] - 2026-09-30: the plate says what it is, and where it is going
+
+The whole of this release came out of rendering real plates and looking at
+them. Two current-affairs maps were built as tests — Sudan's east-west
+partition and who holds the Kivus — and every item below is something one of
+them exposed.
+
+### Added
+
+- **Axes of advance.** Areas of control say where the line *is*; nothing said
+  which way it was moving, and without that a plate can only describe a
+  frozen moment. `arrows:` takes a list of `line` coordinates and draws a
+  tapered, white-cased arrow along a Catmull-Rom curve through them — the
+  shaft is a filled outline rather than a stroke, because a stroke is one
+  width for its whole length and a shaft that thickens towards the point is
+  the mark that carries direction without a caption.
+
+  `style: dashed` draws the same shape as an outline. An assessed advance and
+  a reported one are not the same claim, and a reader of a plate like this
+  will act on the difference.
+
+- **Inland lakes.** The vendored coastline data is land-versus-ocean only, so
+  every lake on Earth was painted as dry ground. A plate of the Kivus put
+  Goma and Bukavu 100 km apart with nothing between them, when in fact they
+  face each other across Lake Kivu and the lake is why the road between them
+  goes where it goes. The same hole swallowed Tanganyika, Chad, the Caspian,
+  the Great Lakes and the Dnieper reservoirs on the Ukraine plate.
+
+  412 Natural Earth lake polygons now ship (`assets/geo/lakes-50m.geojson`,
+  public domain, 405 KB), drawn in the sea colour under the control zones and
+  labelled in the italic the rivers already use.
+
+- **`lakes.former` and `lakes.skip`, because a basemap has a date.** Natural
+  Earth is a snapshot and some of the world's best-known inland water has
+  moved since it was taken — so a plate dated 2024 could render water that
+  stopped existing in 2023. `lakes.skip` drops a body by name; `lakes.former`
+  draws it as what it is, a dashed outline with no fill and the name suffixed
+  `(former)`.
+
+  `former` is usually the better answer: on a map of a front the absence of a
+  reservoir is itself information, and a reader who knows the ground will come
+  looking for it. The Ukraine example now draws the **Kakhovka Reservoir** that
+  way. It drained within two weeks of the dam breach of 6 June 2023; by 2026
+  the bed is willow and poplar scrub over sand and marsh, and infantry has
+  been infiltrating through it — which makes it a feature of that plate rather
+  than a footnote to it. The Dnieper runs through the outline as the river it
+  now is, and the plate's provenance caption says why.
+
+  The `_lakes_layer` docstring records the cases checked, with dates, so the
+  next caller need not find them out in public: Kakhovka (correct here now),
+  Lake Urmia (vendored near its historic ~4 200 km², since repeatedly below a
+  fifth of that), Lake Chad (already the modern shrunken lake — no correction
+  needed), and the Aral Sea (already split north/south, the post-2000s state).
+
+- **An accessible root, at last.** `make_choropleth` and `make_density` have
+  always opened with `role="img"` wired to a `<title>`/`<desc>` pair; the
+  situation map opened with a bare `<svg>`, so a screen reader announced
+  "image" and stopped. That mattered more here than on the other two, because
+  this plate's whole content *is* a claim. The description names the region,
+  the classes, the markers and the provenance, and ends with the contract
+  `TRIGGERS.md` states for every consumer: the map draws the assessment it
+  was given and does not verify who holds what.
+
+- **Two current-affairs examples**, `sudan` and `drc`, alongside the three
+  historical ones. Sudan is the first five-class plate in the gallery,
+  because the war genuinely has five answers to "who holds this".
+
+### Fixed
+
+- **A neighbour's name could land on a different country.** `RUSSIA` printed
+  on the Crimean peninsula on the Ukraine plate, and on a 0.47 deg² speck off
+  northern Norway on a Nordic one — `representative_point()` guarantees only
+  that a point is *inside* a geometry, and for a MultiPolygon it may pick any
+  component. Territory labels now take the largest visible part, then the
+  pole of inaccessibility inside it, which also moved `RUSSIA` from 0.36 deg
+  off the frontier (where the `LUHANSK` city label painted over it) to
+  1.55 deg clear of it.
+
+- **Names ran off the plate.** The city layer has clipped its labels since
+  `Istanbul` came out as `Ista`; the territory labels had no such check and
+  `CENTRAL AFRICAN REPUBLIC` came off the Sudan plate's left edge as
+  `NTRAL … REP`. Worse, the plate rectangle was the wrong bound in the first
+  place: the geographic layers are clipped to the *projected region polygon*,
+  narrower than the plate under a conic, which is how `Asmara` passed the
+  rectangle check and still came out as `Asm`. Both layers now test the real
+  clip, and drop rather than crop.
+
+- **Every hand-placed name was printed twice.** The city layer's
+  anti-duplication read `place["name"]` while every config in this repo — and
+  every example in the module docstring — writes `text`, so it compared
+  against a set of empty strings and suppressed nothing: `KHARTOUM` sat next
+  to `Omdurman`, `EL GENEINA` next to `Geneina`. Fixed, and backed by a
+  positional test as well, since where the two datasets disagree they
+  disagree on the name rather than the place (Natural Earth calls El Obeid
+  "Al-Ubayyid").
+
+- **A whole control layer could fail to render.** Handing over a country's
+  outline for a plate showing one province of it emitted a path many times
+  the canvas; beyond the wasted bytes, the shape fell so far outside that
+  resvg dropped its blended fill, and the eastern DRC plate came out with no
+  control colours at all. Zones are now clipped to the region first, which
+  also makes the area shares in the tooltips relative to what is on the page.
+
+- **The legend sat on the caption**, and then on the scale bar. The scale bar
+  has always made room for the provenance caption; the legend had not. Fixed,
+  and a bottom-left legend now pushes the scale bar to the opposite corner,
+  the same rule the north arrow already followed for a top-right legend.
+
+- **Two layers named the same water.** `Dnieper` printed straight through
+  `Kakhovka Reservoir`, because the rivers layer and the lakes layer each
+  dodged only their own labels. They now share one list.
+
+- **The Ukraine example could not render at all.** `build_ukraine` carried a
+  `"sprezzature"` key where it meant `"front"` — left by a word replacement
+  that had run through the file, which also turned "Contested (approx. front
+  line)" into "Contested (approx. sprezzature)". The generator never read the
+  key, so the contact line was silently missing from the flagship example;
+  once unknown keys became an error (0.6.0), the example was simply broken.
+  Nothing tested it. Something does now.
+
+- **`build_situation_examples.py` ran nowhere but one machine.** It imported
+  the generator from a sibling `sprezzature-figures` checkout, shelled out to
+  a script path inside it, wrote this repo's examples *into* it, and skipped
+  every PNG unless `rsvg-convert` happened to be installed. It now uses this
+  repo and the `resvg-py` already declared as a dependency. The per-layer
+  decomposition is behind `--layers`, being about 12 MB per example.
+
+### Changed
+
+- `assets/situation-maps/` is where the worked examples land, and the SVG is
+  built by importing `build_map` rather than by subprocess, so a config the
+  generator refuses fails with the generator's own message.
+
+- The tracked `assets/svg-examples/choropleth.svg` had drifted from its own
+  generator — it predates 0.7.0's rivers and computed relief — and is
+  regenerated here. Same class of staleness as the `situation_map.svg` drift
+  corrected in 0.3.0, and the same fix.
+
 ## [0.7.0] - 2026-09-16: a planet with rivers, cities and terrain that is computed
 
 ### Added

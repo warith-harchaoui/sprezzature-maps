@@ -1019,6 +1019,7 @@ Dataset & Source & License & Used by \\
 Country and coastline boundaries (110m, 50m, 10m) & Natural Earth \autocite{natural-earth} & Public domain & Both generators \\
 Global elevation grid (GMTED2010, 30 arc-sec) & USGS/NGA \autocite{danielson-gmted2010} & Public domain (U.S.\ government work) & Both generators \\
 Rivers and lake centerlines (1:50m) & Natural Earth & Public domain & Both generators \\
+Lake polygons (1:50m, 412 lakes) & Natural Earth & Public domain & \texttt{situation\_map} \\
 Populated places (1:50m, 1\,251 cities) & Natural Earth & Public domain & Both generators \\
 US state boundaries (TIGER/Line) & U.S.\ Census Bureau \autocite{census-tiger} & Public domain & \texttt{situation\_map} \\
 US county boundaries (TIGER/Line) & U.S.\ Census Bureau \autocite{census-tiger} & Public domain & \texttt{situation\_map} \\
@@ -1031,7 +1032,18 @@ Switzerland, Germany, Italy admin-2 boundaries & OpenStreetMap \autocite{openstr
 \caption{Every dataset this codebase vendors, its license, and which generator uses it.}
 \end{table}
 
-The first six rows are genuinely public domain, usable with no
+Vendored geography carries the date it was captured, which a dated map
+may contradict. The lake polygons are the sharpest case: Natural Earth
+still holds the Kakhovka Reservoir at its full extent, though it drained
+within two weeks of the dam breach of 6 June 2023, and Lake Urmia near its
+historic area, though it has repeatedly fallen below a fifth of it.
+\texttt{situation\_map} therefore accepts \texttt{lakes.skip} and
+\texttt{lakes.former}; the latter draws a dashed, unfilled outline with the
+name suffixed, which states the change rather than hiding it. Lake Chad is
+already the modern, shrunken lake in this data, and the Aral Sea is already
+split north and south, so neither needs correction.
+
+The first seven rows are genuinely public domain, usable with no
 attribution obligation at all, though Natural Earth's own suggested
 short citation, ``Made with Natural Earth,'' is honored here
 regardless, since it costs nothing and this document already cites
