@@ -117,6 +117,18 @@ had been hiding.
 - The Iberian plate labelled the Tagus twice, once under each country's name
   for it.
 
+- **Terrain drawn from a packaged elevation tier no longer tiles.** The fine
+  tiers are 64 MB and 226 MB and cannot go in a wheel, so an installed copy
+  samples a grid whose cells span sixteen output pixels on a regional plate —
+  and bilinear sampling of a grid that coarse does not blur, it tiles. The
+  Alps came out as soft-edged rectangles. Not a regression: the published
+  0.7.0 does the same, which is exactly why nobody had reason to look. Found
+  by installing the wheel into a clean environment before publishing and
+  rendering a plate from it.
+
+  Smoothing kicks in only where a cell stretches past four output pixels, so
+  a checkout with the fine tiers renders exactly as before.
+
 ## [0.10.1] - 2026-10-02: two factions that 0.10.0 silently deleted
 
 0.10.0 clipped control zones to land so a schematic rectangle would stop

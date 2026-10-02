@@ -1037,6 +1037,16 @@ def sample_terrain_shade(
     bottom = shade_f[row1, col0] * (1.0 - frac_col) + shade_f[row1, col1] * frac_col
     interpolated = (top * (1.0 - frac_row) + bottom * frac_row).astype(np.uint8)
     alpha = np.where(valid, round(opacity * 255), 0).astype(np.uint8)
+    # How many output pixels one source cell spans. Bilinear sampling of a
+    # coarse grid does not blur, it tiles: each cell becomes a rectangle with
+    # a soft edge, and on a regional plate drawn from a packaged elevation
+    # tier that is sixteen pixels across and plainly visible as stair-steps
+    # over the Alps.
+    #
+    # Below 2 this is a no-op, which is the whole design: a checkout with the
+    # fine tiers never reaches it and renders exactly as before.
+    span_px = _cell_span_px(lon_deg, bounds, w)
+    interpolated = _smooth(interpolated.astype(np.float32), span_px).astype(np.uint8)
     if elevation is None:
         rgb = _duotone_lut()[interpolated]
     else:
@@ -1045,8 +1055,68 @@ def sample_terrain_shade(
         e_top = elev_f[row0, col0] * (1.0 - frac_col) + elev_f[row0, col1] * frac_col
         e_bot = elev_f[row1, col0] * (1.0 - frac_col) + elev_f[row1, col1] * frac_col
         metres = e_top * (1.0 - frac_row) + e_bot * frac_row
-        rgb = _hypsometric_rgb(metres, interpolated)
+        rgb = _hypsometric_rgb(_smooth(metres, span_px), interpolated)
     return np.concatenate([rgb, alpha[..., np.newaxis]], axis=-1).astype(np.uint8)
+
+
+#: How far a source cell must stretch, in output pixels, before bilinear
+#: sampling stops reading as a gradient and starts reading as tiles.
+#:
+#: Not 2. Bilinear handles a doubling perfectly well, and the Swiss plate
+#: from a full checkout lands on exactly 2.00 -- smoothing there would soften
+#: the one plate whose Alpine detail is the point, to fix a problem it does
+#: not have. The stair-steps that prompted this are at 16. Four leaves every
+#: checkout render untouched and still catches every packaged-tier case.
+_TILING_THRESHOLD_PX: int = 4
+
+
+def _cell_span_px(
+    lon_deg: np.ndarray, bounds: tuple[float, float, float, float], w: int
+) -> float:
+    """Return how many output pixels one source-grid cell covers, east-west."""
+    west, _south, east, _north = bounds
+    per_px = abs(lon_deg[0, -1] - lon_deg[0, 0]) / max(lon_deg.shape[1] - 1, 1)
+    return ((east - west) / w) / per_px if per_px else 0.0
+
+
+def _smooth(values: np.ndarray, radius: float) -> np.ndarray:
+    """Low-pass ``values`` by ``radius`` output pixels, separably.
+
+    This exists because the coarse elevation tiers are the ones most users
+    get. The fine tiers are 64 MB and 226 MB and cannot go in a wheel, so a
+    plate rendered from an installed copy samples a grid whose cells span
+    sixteen-odd output pixels, and bilinear interpolation turns those into
+    visible rectangles rather than into gradients.
+
+    Caught by installing the wheel into a clean environment and looking at
+    what came out, which is the only way it could have been caught: a
+    repository checkout has the fine tiers and never shows it. It is not a
+    regression -- the published 0.7.0 does the same thing -- which is exactly
+    why nobody had reason to look.
+
+    Applied to the shade, and to the elevation when a hypsometric tint is
+    being drawn from it. Both are smoothed by the same radius because both
+    are sampled off the same grid and tile the same way; a first attempt
+    smoothed only the elevation, on the theory that the tint had introduced
+    the stair-steps, and rendering with the tint switched off showed them
+    unchanged.
+    """
+    taps = int(radius)
+    if taps < _TILING_THRESHOLD_PX:
+        return values
+    kernel = np.ones(taps, dtype=np.float32) / taps
+    out = values.astype(np.float32)
+    # Separable, and edge-padded so the frame does not darken.
+    for axis in (0, 1):
+        padded = np.apply_along_axis(
+            lambda row: np.convolve(
+                np.pad(row, taps // 2, mode="edge"), kernel, mode="same"
+            )[taps // 2: taps // 2 + len(row)],
+            axis,
+            out,
+        )
+        out = padded
+    return out
 
 
 def _hypsometric_rgb(metres: np.ndarray, shade: np.ndarray) -> np.ndarray:
