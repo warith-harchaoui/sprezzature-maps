@@ -628,11 +628,9 @@ def make_density(
 def main() -> None:
     """Command-line entry point."""
     render_cli(
-        figure_id="density",
-        build=lambda **kw: build_svg(
-            bins=int(kw.pop("bins", DEFAULT_BINS)),
-            **{k: v for k, v in kw.items() if k in ("width", "title", "subtitle", "caption")},
-        ),
+        __file__,
+        "density",
+        build_svg,
         description="Render an accumulation map: point events binned to a luminous field.",
     )
 
