@@ -6,7 +6,7 @@ Module summary
 Renders the single HTML page served at the FastAPI app's root address
 (see :mod:`sprezzature_maps.api`): a gallery, one tile per map
 kind, modeled on the sprezzature-figures gallery
-(https://harchaoui.org/warith/sprezzature/figures.html) but scaled down to
+(https://sprezzature.ai/figures.html) but scaled down to
 match this smaller repository. That larger page groups around 95 chart
 kinds into thematic sections; this repo has exactly two kinds, so it
 needs only one section, one tile per kind, and no navigation between them.
@@ -263,7 +263,7 @@ def render_gallery_html() -> str:
 {tiles_html}
 </main>
 <footer>
-  Part of the <a href="https://harchaoui.org/warith/sprezzature/">sprezzature</a> suite.
+  Part of the <a href="https://sprezzature.ai/">sprezzature</a> suite.
 </footer>
 <script>
   // Each tile fetches its own live demo render from this same app's API
