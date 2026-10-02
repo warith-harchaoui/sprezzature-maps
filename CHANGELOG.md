@@ -2,6 +2,76 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.12.0] - 2026-10-02: three defects a type gate found, one of them on every default map
+
+This package was left out of the sweep that gave its six sibling packages a
+type gate on 2026-10-02. The miss was not free. Running mypy here for the
+first time stopped immediately on a sentence: a prose comment in
+`scripts/make_situation_map.py` opened a line with `# type:`, which PEP 484
+reserves for type comments, so mypy read the sentence as an annotation,
+failed to parse it, and gave up on the file. Nothing reported this. The
+consequence is that `scripts/` had never been checked at all, and the three
+defects below had been sitting in it.
+
+0.11.0 was prepared but never published; its changes ship here.
+
+### Fixed
+
+- **The river layer overwrote the canvas width, and the legend went off the
+  page.** `build_svg` takes `width`, the plate's width, 745 by default. The
+  river layer bound that same name to its stroke width, 1.6 px for a trunk
+  down to 0.8 px for a tributary. Everything the function read out of `width`
+  afterwards got the stroke: the classed legend places its "No data" swatch at
+  `width - side_margin - 92`, which came out at x=-111.2 instead of 633, off
+  the left edge of the plate, and `fullscreen_control` was positioned against
+  0.8 as well. Rivers are drawn by default, so this was the default classed
+  output rather than a corner case. Nothing crashed and the SVG stayed valid,
+  which is how it lasted. The variable is now `stroke_w`, and
+  `tests/test_chrome_survives_the_river_layer.py` fails on the old code and
+  passes on the new, checked in both directions.
+- **`scripts/make_density.py` did not start at all.** It raised `TypeError:
+  render_cli() got an unexpected keyword argument 'build'` before writing
+  anything, `--help` included. The call passed `build=` where the signature
+  says `build_svg`, and omitted `script_file`, the first positional argument.
+  The lambda wrapping `build_svg` was moot besides: `render_cli` inspects what
+  it is handed and forwards only `mode`, `accessibility` and `language`, never
+  the `bins` the lambda went to the trouble of extracting.
+- **`mcp.py` defined `main` twice, and the two took different arguments.** The
+  fallback reached when the `[mcp]` extra is absent took nothing while the real
+  one took `argv`, so `main(["--host", "127.0.0.1"])` answered on a machine
+  with the extra and raised `TypeError` on a machine without it. The broken
+  half is the one a reader who skipped the extra meets first.
+
+### Changed
+
+- **`value` stood for two different things inside `build_svg`**, a country's
+  datum that may be absent and a class value that never is. The local loop
+  takes `datum`. The same shape as the `width` defect above, caught before it
+  cost anything.
+- Typing imprecisions that blocked nothing but prevented proof: `_PLATES`
+  declared every value a colour string while one is an opacity number;
+  `_caption_font` promised an `ImageFont` and returned a `FreeTypeFont` on its
+  main path, two Pillow classes with no relation to each other; `_render_panel`
+  relayed three settings through `**kwargs: float` into a function whose fifth
+  parameter is a boolean; two scripts chained `spec_from_file_location`
+  straight into use without looking at the `None` it returns when the file is
+  absent.
+
+### Added
+
+- **A type gate**, `mypy.ini` plus one CI step over the package and `scripts/`.
+  `cli_click.py` carries a declared exemption: it has the same two-branch
+  dependency guard as `mcp.py`, but there the asymmetry is real and harmless,
+  a plain function on one side and a click group on the other, both called
+  without arguments.
+- **`test_mcp_fallback_signature.py`**, reading the source as a syntax tree so
+  it needs neither mypy nor an install.
+- **A versioned `.githooks/pre-push`** running the same lint, type, test and
+  doctest steps as the workflow, in the same order. It relays to `git lfs`
+  explicitly: setting `core.hooksPath` replaces the global hook directory
+  rather than adding to it, and that is where git-lfs installs its own
+  pre-push, which this repository needs for the assets it keeps in LFS.
+
 ## [0.11.0] - 2026-10-02: six maps nobody could rebuild, and a plateau that looked like a plain
 
 The website's gallery carried twelve maps. Five had builders. The other
