@@ -2,6 +2,107 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.10.0] - 2026-10-02: the water is water, and the plate can be questioned
+
+Two threads, both driven by rendering plates and looking at them. The natural
+layers had no shared logic, and the plate had no life on a page.
+
+### New config keys and flags, in one place
+
+| Key | Where | Meaning |
+|---|---|---|
+| `interactivity` | top level | `"self-contained"` (default), `"external"`, `"static"` |
+| `areas_of_control.over_water` | bool, default `false` | keep a zone's own shape instead of clipping it to land |
+| `lakes.depth_rings` | int, default `4` | shelf rings stepped inward from a lake's shore; `0` is off |
+
+No CLI flag changes. `make_situation_map`'s module docstring now carries the
+complete key reference, enforced by
+`tests/test_config_schema_is_documented.py`.
+
+### Fixed — a control zone painted the sea
+
+A schematic assessment is usually handed over as a rectangle, and nothing
+stopped it filling the Black Sea, the Sea of Azov, the Kakhovka reservoir and
+the Syvash lagoons the colour of held territory — a muddy purple-brown with
+the bathymetry contours still faintly visible underneath. Armies hold ground.
+Zones are clipped to land now, with `over_water: true` for a claim that
+really is maritime.
+
+### Fixed — one water system at two depths
+
+Lakes were drawn under the control fills as "basemap" while rivers rode above
+them. On a plate of southern Ukraine the Dnieper crossed a zone as a blue line
+and then ran into its own reservoir, which the same zone had painted brown.
+Water is physical fact and a claim does not move it, so the whole system —
+bathymetry, lakes, rivers — now sits above the claim and reads as one thing.
+
+### Added — lakes have depth
+
+The sea's halo buffers outward from the coast into open water. A lake has no
+open water to buffer into, so the same cue is built the other way round:
+rings stepped inward from its own shore, which also makes them say something
+true, since a wide lagoon fills with rings and a narrow trench barely takes
+one. A lake was the only water on the plate with no shape to it.
+
+### Added — one logic for transparency, replacing thirty numbers
+
+Every alpha was its own literal, tuned alone in whichever pass added the
+layer: 0.85, 0.9, 0.75, 0.7, 0.4, 0.3, 0.5 — thirty-odd of them, so two
+things that meant the same to a reader were drawn at different strengths
+because they were written in different months.
+
+`COMPOSITING` states what an alpha is allowed to mean, and every natural
+layer now draws from it:
+
+- **ground** (land, sea, a lake's body) is **opaque** — nothing is beneath it,
+  and a translucent substrate drifts towards whatever is;
+- **modulation** (relief) is the one layer that blends rather than covers,
+  taking the ground's luminance and never its hue;
+- **depth_cue** (bathymetry rings, lake shelf) is faint — it answers a
+  question the reader has not asked yet;
+- **claim** (areas of control) is the *only* translucent fill, and it is
+  translucent for a reason: the claim is about ground the reader must still
+  see;
+- **fact_line** (coast, frontiers, admin borders, rivers) is near-opaque — a
+  boundary a reader can barely see is one they will doubt;
+- **mark** (front line, axes, markers, every label) never fades.
+
+The ordering is the argument: a hint is fainter than a claim, and a claim is
+fainter than a fact. A test asserts both the ordering and that the layers
+reference the table rather than literals, because a constant nobody
+references is decoration.
+
+### Added — the plate can be questioned on a page
+
+A situation map now carries its own controls inside the SVG, with no page
+script, no map library and no tile server:
+
+- **layer switches** — terrain, water, borders, control, places, notes;
+- **a confidence filter**, which is the control this genre exists for: show
+  only what is assessed, or admit reported movement, or admit a belligerent's
+  unverified claim;
+- **a clickable legend** that isolates one class;
+- **shareable state** in the URL fragment, so "assessed only, no terrain" is a
+  link rather than an instruction.
+
+It degrades by construction: the panel ships `display:none` and the script
+reveals it, so an `<img>` embed, a rasteriser, a PDF or a browser with
+scripting off all see exactly the plate that shipped before. A plate with no
+thematic layer gets neither panel nor script.
+
+Verified by executing the plate's own script against the plate's own markup
+under Node, clicking every control and reading back what moved —
+`tests/test_plate_is_interactive.py`, skipped where Node is absent. A
+rasteriser cannot check this: `resvg` draws the document, it does not run it,
+so it would report a healthy plate whose every control is dead.
+
+### Fixed — blending leaked into the host page
+
+The plate carries `isolation: isolate`. These SVGs are inlined into HTML, and
+without a stacking context of its own a blended layer composites against
+whatever the page has behind it: the same map came out different on a white
+article and a dark one.
+
 ## [0.9.4] - 2026-10-02: terrain you can see through the thematic fill
 
 A Ralph Eyeball Loop on the physical layers — relief, lakes, rivers — and how
