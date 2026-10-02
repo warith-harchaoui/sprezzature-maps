@@ -117,7 +117,10 @@ def controls_size(ts: float, *, tiers: tuple[str, ...] = ()) -> tuple[float, flo
     return 132 * ts, pad * 2 + 16 * ts + rows * row
 
 
-def controls_markup(width: float, height: float, ts: float, palette: dict[str, str],
+# The palette is one of make_situation_map's _PLATES entries: colour strings
+# with one opacity number among them, which is why the value type is a union.
+def controls_markup(width: float, height: float, ts: float,
+                    palette: dict[str, str | float],
                     *, tiers: tuple[str, ...] = (),
                     origin: tuple[float, float] | None = None) -> str:
     """Return the control panel, hidden until the script reveals it.

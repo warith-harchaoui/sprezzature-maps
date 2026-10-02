@@ -48,6 +48,22 @@ jobs:
       - name: Lint
         run: ruff check sprezzature_maps scripts tests
 
+      # The type half of the gate, which this repository was missing while
+      # its six siblings got it. The miss was not free: mcp.py's two `main`
+      # definitions took different arguments, and a prose comment opening a
+      # line with `# type:` -- PEP 484's type-comment syntax -- made mypy
+      # refuse to parse make_situation_map.py at all, so scripts/ had never
+      # been checked. What it found once it could read them included the
+      # river layer binding its stroke width to `width`, the canvas width
+      # the legend is laid out from. Once, on one version: this is a gate,
+      # not a matrix. scripts/ is a separate invocation because those
+      # modules import siblings by bare name off a runtime sys.path.
+      - name: Mypy
+        if: matrix.python-version == '3.12'
+        run: |
+          mypy sprezzature_maps
+          mypy scripts
+
       - name: Tests
         run: python -m pytest -q
 

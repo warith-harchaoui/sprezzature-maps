@@ -91,7 +91,11 @@ _CAPTION_TEXT = (43, 41, 38)
 _GUTTER_PX = 26
 
 
-def _caption_font(size: int) -> ImageFont.ImageFont:
+# Pillow's two loaders return two unrelated classes -- `truetype` a
+# FreeTypeFont, `load_default` an ImageFont -- and FreeTypeFont is not a
+# subclass of ImageFont, so the union is the real return type and naming
+# only one of them was a claim the fallback path contradicted.
+def _caption_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Load the editorial-serif caption face, falling back to Pillow's default.
 
     Parameters
@@ -101,7 +105,7 @@ def _caption_font(size: int) -> ImageFont.ImageFont:
 
     Returns
     -------
-    PIL.ImageFont.ImageFont
+    PIL.ImageFont.FreeTypeFont or PIL.ImageFont.ImageFont
         A loaded TrueType font from :data:`_CAPTION_FONT_CANDIDATES`, or
         Pillow's built-in bitmap font if none of those paths exist on this
         machine -- this script is a documentation-figure build tool, not
@@ -126,7 +130,10 @@ def _render_panel(
     res_lat_deg: float,
     lat_top: float,
     trim: tuple[int, int, int, int],
-    **shade_kwargs: float,
+    *,
+    vertical_exaggeration: float = DEFAULT_VERTICAL_EXAGGERATION,
+    texture_alpha: float = DEFAULT_TEXTURE_ALPHA,
+    hillshade_weight: float = DEFAULT_HILLSHADE_WEIGHT,
 ) -> np.ndarray:
     """Compute one duotone-shaded, padding-trimmed panel via the real shading function.
 
@@ -140,9 +147,12 @@ def _render_panel(
         window doesn't fade real terrain at the bbox edge -- see
         :func:`_elevation_window`'s docstring -- and would otherwise show
         up as a soft, uninformative border in a small illustrative figure).
-    **shade_kwargs
-        Forwarded to :func:`_compute_terrain_shade` (``vertical_exaggeration``,
-        ``texture_alpha``, ``hillshade_weight``).
+    vertical_exaggeration, texture_alpha, hillshade_weight : float, optional
+        Forwarded to :func:`_compute_terrain_shade`. Named rather than
+        relayed through ``**kwargs``: these three are what the figure varies
+        from panel to panel, and spelling them out keeps the relay from
+        offering ``flatten_sea``, a bool the float-typed relay claimed to
+        accept and this figure never sets.
 
     Returns
     -------
@@ -157,7 +167,15 @@ def _render_panel(
     >>> panel.shape
     (30, 30, 3)
     """
-    shade = _compute_terrain_shade(elevation, res_lon_deg, res_lat_deg, lat_top, **shade_kwargs)
+    shade = _compute_terrain_shade(
+        elevation,
+        res_lon_deg,
+        res_lat_deg,
+        lat_top,
+        vertical_exaggeration=vertical_exaggeration,
+        texture_alpha=texture_alpha,
+        hillshade_weight=hillshade_weight,
+    )
     row0, row1, col0, col1 = trim
     return _duotone_lut()[shade[row0:row1, col0:col1]]
 
@@ -243,8 +261,22 @@ def main() -> None:
     row1 = round((pn - south) / res_lat_deg)
     trim = (row0, row1, col0, col1)
 
-    def panel(**kwargs: float) -> np.ndarray:
-        return _render_panel(elevation, res_lon_deg, res_lat_deg, pn, trim, **kwargs)
+    def panel(
+        *,
+        vertical_exaggeration: float = DEFAULT_VERTICAL_EXAGGERATION,
+        texture_alpha: float = DEFAULT_TEXTURE_ALPHA,
+        hillshade_weight: float = DEFAULT_HILLSHADE_WEIGHT,
+    ) -> np.ndarray:
+        return _render_panel(
+            elevation,
+            res_lon_deg,
+            res_lat_deg,
+            pn,
+            trim,
+            vertical_exaggeration=vertical_exaggeration,
+            texture_alpha=texture_alpha,
+            hillshade_weight=hillshade_weight,
+        )
 
     vertical_true = panel(vertical_exaggeration=1.0, hillshade_weight=1.0)
     vertical_default = panel(

@@ -76,7 +76,11 @@ _CAPTION_TEXT = (43, 41, 38)
 _ALPS_BBOX = (5.5, 43.5, 16.5, 48.0)
 
 
-def _caption_font(size: int) -> ImageFont.ImageFont:
+# Pillow's two loaders return two unrelated classes -- `truetype` a
+# FreeTypeFont, `load_default` an ImageFont -- and FreeTypeFont is not a
+# subclass of ImageFont, so the union is the real return type and naming
+# only one of them was a claim the fallback path contradicted.
+def _caption_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Load the editorial-serif caption face, falling back to Pillow's default.
 
     Parameters
@@ -86,7 +90,7 @@ def _caption_font(size: int) -> ImageFont.ImageFont:
 
     Returns
     -------
-    PIL.ImageFont.ImageFont
+    PIL.ImageFont.FreeTypeFont or PIL.ImageFont.ImageFont
         A loaded TrueType font, or Pillow's built-in bitmap font if none of
         the candidate system paths exist on this machine.
 
