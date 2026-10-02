@@ -72,13 +72,16 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
-Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira :
-un choroplèthe demande environ une seconde, une carte de situation plutôt
-dix. Profilé, ce temps est du travail réel et non du gaspillage — environ
-4 s de calcul d'ombrage du relief à partir de la grille d'élévation, 3 s de
-découpe géométrique et 1,5 s de chargement des atlas embarqués, chacun lu
-exactement une fois. `basemap: {relief: false}` dans la configuration divise
-ce temps par deux si le relief ne vous sert pas.
+Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira.
+Un choroplèthe demande environ une seconde. Une carte de situation dépend de
+la quantité de monde dans le cadre : la démo Europe embarquée demande une
+dizaine de secondes à froid, une planche régionale comme l'est de la RDC
+environ trois une fois le processus chaud. Sur le temps de la démo, environ
+2 s vont à l'ombrage du relief, environ 2 s au chargement des atlas embarqués
+et aux imports — payés une fois par processus, donc un serveur rend sa
+deuxième planche plus vite que la première — et le reste est de la géométrie
+réelle. `basemap: {relief: false}` supprime le coût du relief si vous n'en
+avez pas besoin.
 
 Voir [`EXAMPLES.md`](EXAMPLES.md) pour davantage de recettes, y compris
 l'API HTTP. Voir [`doc/CARTOGRAPHY.tex`](doc/CARTOGRAPHY.tex) pour la
