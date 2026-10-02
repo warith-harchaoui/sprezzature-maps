@@ -210,7 +210,7 @@ import json
 import math
 import sys
 import warnings
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -262,6 +262,14 @@ else:
     _tooltip_spec = importlib.util.spec_from_file_location(
         "_svg_figures_tooltip", figures_scripts_dir() / "_svg.py"
     )
+    # A None spec or loader means the sibling checkout moved or lost the file:
+    # say so here rather than let it surface as an AttributeError one line down.
+    if _tooltip_spec is None or _tooltip_spec.loader is None:
+        raise ImportError(
+            f"cannot load _svg.py from {figures_scripts_dir()}: "
+            "the sprezzature-figures checkout this script borrows from is "
+            "missing or incomplete."
+        )
     _svg_figures = importlib.util.module_from_spec(_tooltip_spec)
     sys.modules["_svg_figures_tooltip"] = _svg_figures
     _tooltip_spec.loader.exec_module(_svg_figures)
@@ -368,7 +376,9 @@ COMPOSITING: dict[str, float] = {
     "mark": 1.00,
 }
 
-_PLATES: dict[str, dict[str, str]] = {
+# Values are colour strings except `bathy_opacity`, which carries a number
+# straight out of COMPOSITING so the two stay in step.
+_PLATES: dict[str, dict[str, str | float]] = {
     "day": {
         "plate": "#ffffff",
         "panel": "#ffffff",
@@ -2125,10 +2135,18 @@ def _relief_layer(
     # solve needed, unlike Equal Earth's forward-only closed form.
     lon_grid, lat_grid = proj.transform(world_x, world_y, direction="INVERSE")
     valid_grid = np.ones_like(lon_grid, dtype=bool)
+    # Named rather than splatted: both callees take four bounds and two pixel
+    # extents, and `*bbox` on a list hides that arity from the type checker --
+    # which then reads the two pixel arguments as overflow.
+    west, south, east, north = bbox
     if hypsometric:
-        shade, elevation, shade_bounds = terrain_relief_for_bbox(*bbox, plot_w, plot_h)
+        shade, elevation, shade_bounds = terrain_relief_for_bbox(
+            west, south, east, north, plot_w, plot_h
+        )
     else:
-        shade, shade_bounds = terrain_shade_for_bbox(*bbox, plot_w, plot_h)
+        shade, shade_bounds = terrain_shade_for_bbox(
+            west, south, east, north, plot_w, plot_h
+        )
         elevation = None
     relief_rgba = sample_terrain_shade(
         lon_grid, lat_grid, valid_grid, shade, shade_bounds, elevation=elevation
@@ -2141,9 +2159,8 @@ def _relief_layer(
     # everything the land clip is about to throw away, and a mean is dragged
     # about by those tails; the median answers "what does this plate's
     # terrain typically look like", which is the question a swatch asks.
-    tone = tuple(
-        int(v) for v in np.median(relief_rgba[..., :3].reshape(-1, 3), axis=0)
-    )
+    median_rgb = np.median(relief_rgba[..., :3].reshape(-1, 3), axis=0)
+    tone = (int(median_rgb[0]), int(median_rgb[1]), int(median_rgb[2]))
     markup = (
         '<defs><clipPath id="relief-clip">'
         f'<path d="{clip_path_d}"/></clipPath></defs>'
@@ -2902,7 +2919,7 @@ def _lakes_layer(
 
 def _bathymetry_layer(
     land_proj: Any, sea_proj: Any, vp: dict[str, Any], bath: dict[str, Any],
-    palette: dict[str, Any] | None = None,
+    palette: dict[str, str | float] | None = None,
 ) -> str:
     """Return concentric depth-contour halos buffered out from the coast into the sea."""
     palette = palette or _PLATES["day"]
@@ -3856,12 +3873,12 @@ def _markers_layer(
         color = it.get("color", "#b03a3a")
         r = float(it.get("r", 5))
         precision = _precision_of(it.get("precision"), _GEO_PRECISION, "precision")
-        # A stated uncertainty radius, in kilometres on the ground, drawn to
-        # the plate's own scale. Deliberately *not* defaulted from the event
-        # type: ACLED publishes per-type buffers (5 km for battles and
-        # explosions, 2 km for riots), but those measure how far an event's
-        # effect reached, not how badly its position is known. Borrowing one
-        # for the other would dress a guess as a measurement.
+        # A stated uncertainty radius, in kilometres on the ground, drawn
+        # to the plate's own scale. Deliberately *not* defaulted from the
+        # event type: ACLED publishes per-type buffers (5 km for battles
+        # and explosions, 2 km for riots), but those measure how far an
+        # event's effect reached, not how badly its position is known.
+        # Borrowing one for the other would dress a guess as a measurement.
         radius_km = it.get("radius_km")
         halo = ""
         if radius_km is not None:
@@ -4205,7 +4222,7 @@ def _cities_layer(
     cfg: dict[str, Any],
     proj: Transformer,
     vp: dict[str, Any],
-    bbox: tuple[float, float, float, float],
+    bbox: Sequence[float],
     region: Any | None = None,
 ) -> str:
     """
