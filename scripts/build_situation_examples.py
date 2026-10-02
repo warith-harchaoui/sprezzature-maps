@@ -69,6 +69,7 @@ from make_situation_map import (  # noqa: E402
     load_country,
     load_lakes,
     load_land,
+    validate_config,
 )
 from shapely.geometry import (  # noqa: E402
     LineString,
@@ -912,12 +913,283 @@ def build_drc() -> dict[str, Any]:
         },
     }
 
+
+# --------------------------------------------------------------------------- #
+# Reference plates: the natural layers, with nothing competing for attention   #
+# --------------------------------------------------------------------------- #
+#
+# These four carry no areas of control. They exist because the conflict plates
+# are a bad place to judge terrain, water and labels: a reader looking at
+# Ukraine is looking at the front line, and the relief under it only has to
+# not get in the way. Here there is nothing else to look at, so the basemap
+# has to stand on its own.
+#
+# They were in the website's gallery for months with no generator at all --
+# rendered once in August, before this package was split out of the monorepo,
+# and carried along as files ever since. That is output without a recipe, and
+# it showed: opened today, those files have neither a ``<title>`` nor a
+# ``<desc>``. They predate the accessibility work entirely. So these are not
+# the old configs recovered -- they are the same four subjects, redrawn by the
+# current generator. Recovering the originals byte-for-byte would have
+# faithfully reproduced four inaccessible maps.
+
+
+def build_switzerland() -> dict[str, Any]:
+    """The Alpine relief, at the scale where a lake is a place and not a dot.
+
+    Switzerland is the hardest small test this generator has. The relief
+    carries almost all the information; the lakes are large enough to need
+    labelling and close enough together to collide; and the country's own
+    outline is so indented that a frontier drawn too thick eats the terrain
+    behind it. It is also the one plate where a reader is likely to know the
+    ground well enough to catch a mistake.
+    """
+    return {
+        "title": "Switzerland: Relief and Water",
+        "subtitle": (
+            "A reference plate: terrain, lakes and rivers with no thematic "
+            "layer over them"
+        ),
+        "region": {"bbox": [5.7, 45.6, 10.7, 48.0]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+        },
+        "frontiers": {"focus": "Switzerland", "label_neighbours": True},
+        "internal_borders": {"show": True, "label_names": True},
+        # Lake Geneva and Lake Constance are shared borders as much as they are
+        # water, and both carry a frontier down the middle. Labelling them is
+        # not decoration here: an unlabelled lake on a border plate reads as a
+        # gap in the land.
+        "lakes": {
+            "always_label": ["Lake Geneva", "Bodensee"],
+            "depth_rings": True,
+        },
+        "rivers": {"always_label": ["Rhine", "Rhône"]},
+        "cities": {"show": True, "max_rank": 8},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; SRTM-derived shaded relief",
+        "labels": {
+            "places": [
+                {"lon": 7.4474, "lat": 46.9480, "text": "Bern", "capital": True},
+                {"lon": 8.5417, "lat": 47.3769, "text": "Zurich"},
+                {"lon": 6.1432, "lat": 46.2044, "text": "Geneva", "anchor": "end"},
+                {"lon": 7.5886, "lat": 47.5596, "text": "Basel", "anchor": "above"},
+                {"lon": 8.9511, "lat": 46.0037, "text": "Lugano", "size": 11},
+                {"lon": 9.5215, "lat": 46.8508, "text": "Chur", "size": 11},
+                {"lon": 7.9904, "lat": 46.5333, "text": "Interlaken", "size": 11},
+                {"lon": 7.3604, "lat": 46.2331, "text": "Sion", "size": 11, "anchor": "below"},
+            ],
+        },
+    }
+
+
+def build_iberia() -> dict[str, Any]:
+    """Two countries, one peninsula, and the rivers that cross between them.
+
+    The point of this one is the river network. Iberia's great rivers -- the
+    Tagus, the Douro, the Ebro, the Guadalquivir -- run most of their length
+    in one country and reach the sea in another, which is exactly the case
+    where labelling a river once, at the right place, is hard.
+    """
+    return {
+        "title": "The Iberian Peninsula",
+        "subtitle": "A reference plate: relief, the great rivers, and the Meseta",
+        "region": {"bbox": [-10.0, 35.6, 4.6, 44.2]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.35},
+        },
+        "frontiers": {"focus": "Spain", "label_neighbours": True},
+        "rivers": {
+            "always_label": ["Tagus", "Duero", "Ebro"],
+            # Natural Earth carries the Tagus twice, once under each
+            # country's name for it, and the auto-labeller cannot know they
+            # are one river -- so the plate printed "Tagus" and "Tajo" on the
+            # same water, forty millimetres apart.
+            "skip": ["Tajo"],
+            "label_max_scalerank": 7,
+        },
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 8},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; SRTM-derived shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": -8.6, "lat": 40.6, "text": "ATLANTIC OCEAN", "size": 14, "tracking": 5},
+                {"lon": 0.5, "lat": 39.6, "text": "Mediterranean Sea", "size": 12, "tracking": 2.4},
+                {"lon": -5.4, "lat": 36.25, "text": "Strait of Gibraltar", "size": 9},
+            ],
+            "places": [
+                {"lon": -3.7038, "lat": 40.4168, "text": "Madrid", "capital": True},
+                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "capital": True, "anchor": "end"},
+                {"lon": 2.1734, "lat": 41.3851, "text": "Barcelona"},
+                {"lon": -5.9845, "lat": 37.3891, "text": "Seville", "anchor": "below"},
+                {"lon": -0.3763, "lat": 39.4699, "text": "Valencia"},
+                {"lon": -8.6110, "lat": 41.1496, "text": "Porto", "size": 11, "anchor": "end"},
+                {"lon": -2.9350, "lat": 43.2630, "text": "Bilbao", "size": 11},
+                {"lon": -4.4214, "lat": 36.7213, "text": "Malaga", "size": 11, "anchor": "below"},
+                {"lon": -5.6635, "lat": 40.9701, "text": "Salamanca", "size": 11},
+                {"lon": -0.8891, "lat": 41.6488, "text": "Zaragoza", "size": 11},
+            ],
+            "territories": [
+                {"lon": -3.9, "lat": 41.3, "text": "MESETA CENTRAL", "size": 11, "tracking": 3},
+                {"lon": -3.2, "lat": 37.1, "text": "SIERRA NEVADA", "size": 9, "tracking": 2},
+                {"lon": 0.5, "lat": 42.7, "text": "PYRENEES", "size": 10, "tracking": 2.5},
+            ],
+        },
+    }
+
+
+def build_western_europe() -> dict[str, Any]:
+    """The plate the skill documentation points at, at last reproducible.
+
+    ``SKILL.md`` cites this map as the worked example of what the generator
+    produces, which made it the single most-referenced artifact in the
+    package -- and it was the one nothing could rebuild.
+
+    At this scale every one of the generator's label heuristics is under
+    pressure at once: a dozen countries, three seas, the Alps, and a
+    coastline that runs from Gibraltar to Denmark. It is the plate where a
+    regression in label placement shows up first.
+    """
+    return {
+        "title": "Western Europe",
+        "subtitle": "A reference plate: the physical base the thematic maps are drawn on",
+        "region": {"bbox": [-10.5, 35.5, 19.5, 55.5]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 7, "color": "#ffffff", "opacity": 0.35},
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "rivers": {
+            "always_label": ["Rhine", "Danube", "Rhône", "Loire", "Elbe", "Po"],
+            "label_max_scalerank": 6,
+        },
+        "lakes": {"depth_rings": True, "label_min_area_frac": 0.0012},
+        "cities": {"show": True, "max_rank": 7},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; SRTM-derived shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": -8.0, "lat": 47.0, "text": "ATLANTIC OCEAN", "size": 16, "tracking": 7},
+                {"lon": 5.0, "lat": 42.0, "text": "Mediterranean Sea", "size": 13, "tracking": 3},
+                {"lon": 3.5, "lat": 54.3, "text": "North Sea", "size": 12, "tracking": 2.4},
+                {"lon": 14.5, "lat": 41.0, "text": "Tyrrhenian Sea", "size": 10, "tracking": 2},
+                {"lon": -3.0, "lat": 50.0, "text": "English Channel", "size": 9, "tracking": 1.8},
+            ],
+            "places": [
+                {"lon": 2.3522, "lat": 48.8566, "text": "Paris", "capital": True},
+                {"lon": 13.4050, "lat": 52.5200, "text": "Berlin", "capital": True},
+                {"lon": -3.7038, "lat": 40.4168, "text": "Madrid", "capital": True},
+                {"lon": 12.4964, "lat": 41.9028, "text": "Rome", "capital": True},
+                {"lon": -0.1276, "lat": 51.5074, "text": "London", "capital": True, "anchor": "above"},
+                {"lon": 4.3517, "lat": 50.8503, "text": "Brussels", "size": 11, "anchor": "end"},
+                {"lon": 8.5417, "lat": 47.3769, "text": "Zurich", "size": 11},
+                {"lon": 9.1900, "lat": 45.4642, "text": "Milan", "size": 11},
+                {"lon": 5.3698, "lat": 43.2965, "text": "Marseille", "size": 11, "anchor": "below"},
+                {"lon": 9.9937, "lat": 53.5511, "text": "Hamburg", "size": 11},
+                {"lon": 16.3738, "lat": 48.2082, "text": "Vienna", "size": 11},
+                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "size": 11, "anchor": "end"},
+            ],
+            "territories": [
+                {"lon": 10.0, "lat": 46.6, "text": "ALPS", "size": 12, "tracking": 4},
+                {"lon": 0.5, "lat": 42.7, "text": "PYRENEES", "size": 10, "tracking": 2.5},
+            ],
+        },
+    }
+
+
+def build_himalaya() -> dict[str, Any]:
+    """The hardest relief on the planet, which is the point.
+
+    Everywhere else the shaded relief is a background. Here it is the
+    subject: eight kilometres of elevation inside a few degrees of longitude,
+    which is where a hillshade either holds up or turns into mud. The plate
+    is kept deliberately bare -- no control zones, few labels -- so that any
+    failure in the terrain rendering has nowhere to hide.
+
+    It is also where the river layer earns its keep: the Indus, the Ganges
+    and the Brahmaputra all rise within this frame, on the far side of the
+    range from the plains they define.
+    """
+    return {
+        "title": "The Himalaya and the Tibetan Plateau",
+        "subtitle": "A reference plate: eight kilometres of relief, and the rivers that leave it",
+        "region": {"bbox": [71.5, 24.5, 93.5, 37.5]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "rivers": {
+            "always_label": ["Indus", "Ganges", "Brahmaputra", "Sutlej"],
+            "label_max_scalerank": 6,
+        },
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 7},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; SRTM-derived shaded relief",
+        "labels": {
+            "places": [
+                {"lon": 77.2090, "lat": 28.6139, "text": "Delhi", "capital": True},
+                {"lon": 85.3240, "lat": 27.7172, "text": "Kathmandu", "capital": True},
+                {"lon": 91.1162, "lat": 29.6500, "text": "Lhasa", "size": 12},
+                {"lon": 74.3587, "lat": 31.5204, "text": "Lahore", "size": 11},
+                {"lon": 88.3639, "lat": 22.5726, "text": "Kolkata", "size": 11},
+                {"lon": 74.7973, "lat": 34.0837, "text": "Srinagar", "size": 11},
+                {"lon": 77.5946, "lat": 29.9680, "text": "Dehradun", "size": 10, "anchor": "end"},
+            ],
+            "territories": [
+                {"lon": 84.0, "lat": 32.5, "text": "TIBETAN PLATEAU", "size": 13, "tracking": 5},
+                {"lon": 82.5, "lat": 28.6, "text": "H I M A L A Y A", "size": 13, "tracking": 4},
+                {"lon": 75.5, "lat": 35.6, "text": "KARAKORAM", "size": 10, "tracking": 2.5},
+                {"lon": 79.5, "lat": 26.6, "text": "GANGETIC PLAIN", "size": 10, "tracking": 2.5},
+            ],
+        },
+    }
+
+
 BUILDERS = {
     "ukraine": build_ukraine,
     "syria": build_syria,
     "libya": build_libya,
     "sudan": build_sudan,
     "drc": build_drc,
+    "switzerland": build_switzerland,
+    "iberia": build_iberia,
+    "western-europe": build_western_europe,
+    "himalaya": build_himalaya,
 }
 
 PNG_WIDTH = 1300  # export raster width, px
@@ -1020,6 +1292,13 @@ def main(argv: list[str]) -> None:
     SHIP.mkdir(parents=True, exist_ok=True)
     for name in names:
         cfg = BUILDERS[name]()
+        # Validate before writing anything. These configs ship as the worked
+        # examples of what the generator accepts, so a dead option in one is
+        # not a private mistake -- it is documentation that lies. Three of
+        # them carried ``areas_of_control.hatch_color`` past a validator that
+        # refuses it, for as long as this script has existed, because this
+        # script never asked.
+        validate_config(cfg)
         yaml_path = SHIP / f"{name}.yaml"
         yaml_path.write_text(json.dumps(cfg, indent=2))
         # The generator is imported, not shelled out to: the subprocess call

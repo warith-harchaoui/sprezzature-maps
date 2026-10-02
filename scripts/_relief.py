@@ -118,6 +118,41 @@ _DUOTONE_STOPS: tuple[tuple[float, str], ...] = (
     (1.00, "#F2E7C8"),
 )
 
+# Hypsometric tints: elevation in metres -> colour. The duotone above maps
+# *illumination*, which is a function of slope and aspect, so two pieces of
+# flat ground shade identically however far apart they are vertically. On
+# the Himalaya plate that is not a subtlety: the Tibetan Plateau at 4 500 m
+# and the Gangetic Plain at 100 m are both flat, both came out the same
+# colour, and the single most important fact about the region -- that there
+# is a four-kilometre step between them -- was invisible on a plate whose
+# subtitle promised eight kilometres of relief.
+#
+# The stops follow the convention every physical atlas has used since the
+# nineteenth century, and it is worth being clear that the convention is
+# *not* a picture of vegetation: the green at the bottom does not mean
+# forest and the white at the top does not mean snow. They are an ordered
+# sequence chosen so that height reads as height. Imhof's objection to
+# naive hypsometry -- that strong colours fight the shading -- is answered
+# by keeping every stop desaturated and letting the hillshade supply the
+# modelling.
+#: How much of its swing the hillshade keeps once a hypsometric tint is
+#: carrying the elevation. Swept 0.20/0.35/0.50 against the Himalaya: at
+#: 0.50 the Tibetan Plateau's own ridges start eating the four-kilometre
+#: step to the plain again, which is the thing the tint is there to show.
+_HYPSO_MODEL_RANGE: float = 0.35
+
+_HYPSOMETRIC_STOPS: tuple[tuple[float, str], ...] = (
+    (-400.0, "#9fb0a2"),   # depressions: a cool grey-green, not a lake blue
+    (0.0, "#a8bc96"),      # sea level
+    (300.0, "#c3cb9c"),    # plains
+    (900.0, "#d8cfa2"),    # low hills
+    (1800.0, "#d2bb92"),   # uplands
+    (3000.0, "#c0a287"),   # high country
+    (4500.0, "#b49a8e"),   # plateau
+    (6000.0, "#cfc5c2"),   # the altitudes where ground is rock and ice
+    (8900.0, "#f0ecec"),
+)
+
 # The raw source's actual data rarely uses its own full 0-255 range: flat
 # open ocean sits at a fixed ~146 baseline and even dramatic terrain (the
 # Himalaya, sampled directly from the vendored raster) only reaches
@@ -892,6 +927,40 @@ def terrain_shade_for_bbox(
     return shade, padded_bounds
 
 
+def terrain_relief_for_bbox(
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+    plot_w_px: float,
+    plot_h_px: float,
+) -> tuple[np.ndarray, np.ndarray, tuple[float, float, float, float]]:
+    """As :func:`terrain_shade_for_bbox`, but keep the elevation it computed.
+
+    The shade path reads a window of real elevation in metres, derives
+    illumination from it, and drops the metres on the floor. Hypsometric
+    tinting needs exactly those metres, and re-reading the window to get
+    them back would double the only expensive part of the whole operation.
+
+    Returns ``(shade, elevation_m, bounds)``. The two arrays share a grid,
+    so one set of sampling weights serves both.
+
+    Examples
+    --------
+    >>> shade, elev, bounds = terrain_relief_for_bbox(85.0, 27.0, 89.0, 30.0, 600, 450)
+    >>> shade.shape == elev.shape
+    True
+    >>> bool(elev.max() > 5000)  # the Himalaya really is up there
+    True
+    """
+    tier_path = select_elevation_tier(west, south, east, north, plot_w_px, plot_h_px)
+    elevation, padded_bounds = _elevation_window(west, south, east, north, path=tier_path)
+    h, w = elevation.shape
+    pw, ps, pe, pn = padded_bounds
+    shade = _compute_terrain_shade(elevation, (pe - pw) / w, (pn - ps) / h, pn)
+    return shade, elevation, padded_bounds
+
+
 def sample_terrain_shade(
     lon_deg: np.ndarray,
     lat_deg: np.ndarray,
@@ -900,6 +969,7 @@ def sample_terrain_shade(
     bounds: tuple[float, float, float, float],
     *,
     opacity: float = DEFAULT_RELIEF_OPACITY,
+    elevation: np.ndarray | None = None,
 ) -> np.ndarray:
     """Bilinearly sample a precomputed terrain-shade array and apply the duotone.
 
@@ -918,6 +988,13 @@ def sample_terrain_shade(
         call.
     opacity : float, optional
         As in :func:`sample_relief`.
+    elevation : numpy.ndarray, optional
+        Metres, on the same grid as ``shade`` (both come from one
+        :func:`terrain_relief_for_bbox` call). Supplying it switches the
+        output from pure illumination to **hypsometric tint modelled by
+        illumination**: height sets the colour, the hillshade sets the
+        light on it. Omitted -- the default -- nothing changes, so every
+        existing caller renders exactly what it rendered before.
 
     Returns
     -------
@@ -933,6 +1010,17 @@ def sample_terrain_shade(
     >>> rgba = sample_terrain_shade(lon, lat, valid, shade, bounds)
     >>> rgba.shape
     (1, 1, 4)
+
+    Two pieces of flat ground four kilometres apart vertically. Without
+    elevation they are the same colour, which was the bug:
+
+    >>> flat = np.full((4, 4), 128, dtype=np.uint8)
+    >>> low = np.full((4, 4), 100.0, dtype=np.float32)
+    >>> high = np.full((4, 4), 4500.0, dtype=np.float32)
+    >>> plain = sample_terrain_shade(lon, lat, valid, flat, bounds, elevation=low)
+    >>> plateau = sample_terrain_shade(lon, lat, valid, flat, bounds, elevation=high)
+    >>> bool((plain[..., :3] != plateau[..., :3]).any())
+    True
     """
     west, south, east, north = bounds
     h, w = shade.shape
@@ -949,5 +1037,41 @@ def sample_terrain_shade(
     bottom = shade_f[row1, col0] * (1.0 - frac_col) + shade_f[row1, col1] * frac_col
     interpolated = (top * (1.0 - frac_row) + bottom * frac_row).astype(np.uint8)
     alpha = np.where(valid, round(opacity * 255), 0).astype(np.uint8)
-    rgb = _duotone_lut()[interpolated]
+    if elevation is None:
+        rgb = _duotone_lut()[interpolated]
+    else:
+        # Same grid, so the weights computed above serve both arrays.
+        elev_f = elevation.astype(np.float32)
+        e_top = elev_f[row0, col0] * (1.0 - frac_col) + elev_f[row0, col1] * frac_col
+        e_bot = elev_f[row1, col0] * (1.0 - frac_col) + elev_f[row1, col1] * frac_col
+        metres = e_top * (1.0 - frac_row) + e_bot * frac_row
+        rgb = _hypsometric_rgb(metres, interpolated)
     return np.concatenate([rgb, alpha[..., np.newaxis]], axis=-1).astype(np.uint8)
+
+
+def _hypsometric_rgb(metres: np.ndarray, shade: np.ndarray) -> np.ndarray:
+    """Tint by height, then model by light.
+
+    Two steps, and the order is the whole point. The hypsometric ramp fixes
+    a hue per elevation -- that is what makes a plateau read as high. The
+    hillshade is then applied as *lightness only*, around a neutral middle,
+    so a ridge and its shadow stay recognisably the same height.
+
+    The shade is deliberately not allowed its full swing here. At full
+    strength the modelling overwhelms the tint and the result goes back to
+    looking like illumination with a colour cast -- the exact failure the
+    tinting exists to fix. ``_HYPSO_MODEL_RANGE`` is the compromise: enough
+    to see every ridge, not enough to lose the step between the plateau and
+    the plain.
+    """
+    stops = np.array([e for e, _ in _HYPSOMETRIC_STOPS], dtype=np.float32)
+    colours = np.array(
+        [[int(h[i:i + 2], 16) for i in (1, 3, 5)] for _, h in _HYPSOMETRIC_STOPS],
+        dtype=np.float32,
+    )
+    base = np.stack(
+        [np.interp(metres, stops, colours[:, c]) for c in range(3)], axis=-1
+    )
+    # Shade is centred near 128 for flat ground; map it to a gain about 1.
+    gain = 1.0 + _HYPSO_MODEL_RANGE * (shade.astype(np.float32) - 128.0) / 127.0
+    return np.clip(base * gain[..., np.newaxis], 0, 255).astype(np.uint8)

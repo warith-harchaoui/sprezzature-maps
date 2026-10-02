@@ -2,6 +2,121 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.11.0] - 2026-10-02: six maps nobody could rebuild, and a plateau that looked like a plain
+
+The website's gallery carried twelve maps. Five had builders. The other
+seven — four situation plates, three choropleths — were rendered once in
+August, before this package was split out of the monorepo, and carried along
+as files ever since. When the 0.10.1 fix went out, the five with recipes
+were regenerated in one command and the rest were not, because nobody could.
+
+Rebuilding them meant looking hard at four plates whose entire subject is
+the physical base, and that turned up a run of things the conflict plates
+had been hiding.
+
+### Added
+
+- **Four reference plates with builders**: `switzerland`, `iberia`,
+  `western-europe` (the one `SKILL.md` cites as its worked example) and
+  `himalaya`. They carry no thematic layer on purpose — a reader looking at
+  Ukraine is looking at the front line, and the terrain under it only has to
+  stay out of the way. Here there is nothing else to look at.
+
+  These are not the lost configs recovered. The August files have neither a
+  `<title>` nor a `<desc>`: they predate the accessibility work entirely, so
+  reproducing them faithfully would have reissued four inaccessible maps.
+
+- **`scripts/build_choropleth_examples.py`** for the three choropleth
+  variants, which had no generator in either repository.
+
+- **Hypsometric tinting.** The relief duotone maps *illumination*, which is
+  a function of slope and aspect, so two pieces of flat ground shade
+  identically however far apart they are vertically. On the Himalaya plate
+  that is not a subtlety: the Tibetan Plateau at 4 500 m and the Gangetic
+  Plain at 100 m are both flat, both came out the same colour, and the
+  single most important fact about the region — that there is a
+  four-kilometre step between them — was invisible on a plate whose subtitle
+  promises eight kilometres of relief.
+
+  Height now sets the colour and the hillshade sets the light on it, in that
+  order. Default follows the visual hierarchy: on for a plate with no
+  thematic layer, off under one, where a second colour scheme would compete
+  with the one encoding who holds the ground. `basemap.hypsometric` settles
+  it either way.
+
+- **`basemap.relief_strength`.** The blend strength was a constant swept
+  *with the control fills in place* — its own comment says so, because three
+  multiplies stack. That is the right number for a plate about who holds the
+  ground and the wrong one for a plate with nothing on top, where restraint
+  just throws away contrast. Measured on the Himalaya, the tuned-for-conflict
+  value rendered the whole range inside 13% of the available tonal range.
+
+### Fixed
+
+- **`labels.territories` drew nothing.** It was in the schema, in the
+  validator and in the module docstring, and no layer read it. A config
+  naming the Tibetan Plateau was accepted in full, rendered without
+  complaint, and produced no text — strictly worse than a refusal, which is
+  at least one error message. Found by looking at a picture, which is the
+  only way it could have been found.
+
+- **A water name that matches nothing is now refused.** This repository's
+  rule is that a mistyped config key is refused rather than ignored, and it
+  was only ever enforced on *keys*. `lakes.always_label`, `lakes.skip`,
+  `lakes.former`, `lakes.historic`, `rivers.always_label` and `rivers.skip`
+  take proper nouns matched by exact string equality against Natural Earth,
+  and a name matching nothing did nothing, quietly.
+
+  Not hypothetical: the Ukraine plate draws the Kakhovka Reservoir as
+  drained purely because `lakes.former` matches Natural Earth's spelling of
+  it. Had that drifted, the plate would have gone back to painting 2 150 km²
+  of water that is not there and said nothing about it. Four names in
+  configs written for this release were wrong.
+
+  The check is against the whole dataset rather than the plate's own bbox:
+  naming a river that exists but lies elsewhere is reasonable for a shared
+  config, while naming one that exists nowhere is a typo every time.
+
+- **The example builder never validated its own configs**, which is how
+  `areas_of_control.hatch_color` — read by the generator, absent from the
+  registry, therefore refused — survived on three shipped plates. These
+  configs *are* the worked examples of what the generator accepts, so a dead
+  option in one is not a private mistake; it is documentation that lies.
+
+- **The subtitle was printed across the map, on every plate, always.** The
+  title is drawn at a fixed baseline and the plate was fitted from `padding`
+  alone, so the two were laid out as if the other did not exist: at the
+  default padding the map began fourteen units *above* the title's own
+  baseline. On the Ukraine plate the subtitle ran through a frontier and the
+  Dnieper. No test noticed, because no test asks where text lands.
+
+- **The legend swatch no longer matches the territory it keys.** Once the
+  terrain is blended under the control fills, the Ukraine plate's declared
+  `#bcd4ec` — a pale blue with the blue channel 24 levels above the green —
+  renders as ground with blue five levels *below* green. The hue is not
+  attenuated, it is gone. The swatch is now composited exactly the way the
+  page composites it, against the terrain tone the plate measures off its
+  own pixels; swatch-to-ground distance falls by 58–67%. Reported by a
+  reader sampling the rendered plate in a browser.
+
+- **The control panel could land on the legend.** The eastern DRC is the one
+  portrait plate and the one whose legend sits bottom-left, exactly where the
+  panel was nailed: "SHOW / Terrain / Water / …" printed straight through
+  "AREAS OF CONTROL". Invisible to every rendered PNG, because the
+  rasteriser draws the panel hidden. The panel now takes a free corner, and
+  the guard is the property rather than a count — the two boxes must not
+  intersect, on every plate that draws both.
+
+- **A confidence ladder with one rung** was offered on all five conflict
+  plates: a radio button already on and impossible to turn off. A control
+  that cannot change anything is noise.
+
+- `build_doc_map_figures.py` looked one directory level too high and found
+  nothing.
+
+- The Iberian plate labelled the Tagus twice, once under each country's name
+  for it.
+
 ## [0.10.1] - 2026-10-02: two factions that 0.10.0 silently deleted
 
 0.10.0 clipped control zones to land so a schematic rectangle would stop
