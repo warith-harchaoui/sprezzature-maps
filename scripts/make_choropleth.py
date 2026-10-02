@@ -88,6 +88,14 @@ from _topojson import decode_arcs, stitch_ring  # noqa: E402
 _tooltip_spec = importlib.util.spec_from_file_location(
     "_svg_figures_tooltip", figures_scripts_dir() / "_svg.py"
 )
+# A None spec or loader means the sibling checkout moved or lost the file: say
+# so here rather than let it surface as an AttributeError one line down.
+if _tooltip_spec is None or _tooltip_spec.loader is None:
+    raise ImportError(
+        f"cannot load _svg.py from {figures_scripts_dir()}: the "
+        "sprezzature-figures checkout this script borrows from is missing "
+        "or incomplete."
+    )
 _svg_figures = importlib.util.module_from_spec(_tooltip_spec)
 _tooltip_spec.loader.exec_module(_svg_figures)
 tooltip_bubble = _svg_figures.tooltip_bubble
@@ -723,8 +731,11 @@ def build_svg(
     class_colors: list[str] = []
     if class_breaks:
         buckets: list[list[float]] = [[] for _ in range(len(class_breaks) + 1)]
-        for value in all_values:
-            buckets[class_index(value, class_breaks)].append(value)
+        # `datum`, not `value`: further down `value` is the per-country datum,
+        # which may be None, and one name for two lifetimes in one function is
+        # how `width` came to mean a 0.8 px stroke to the legend below.
+        for datum in all_values:
+            buckets[class_index(datum, class_breaks)].append(datum)
         for bucket in buckets:
             centre = (min(bucket) + max(bucket)) / 2.0 if bucket else v_min
             class_colors.append(
@@ -920,7 +931,9 @@ def build_svg(
 
     for country in countries:
         cid = str(country["id"])
-        value = values_by_id.get(cid)
+        # None is a real answer here -- a country the data simply does not
+        # cover -- and is what drives the no-data fill further down.
+        value: float | None = values_by_id.get(cid)
         path_d_parts: list[str] = []
         # Anchor for the hover bubble: centroid of the largest ring/segment
         # (the main landmass), not a naive average across every ring -- a
@@ -1020,7 +1033,13 @@ def build_svg(
                 # tributary thin. Tuned by looking: at 0.5-1.0 px and 55 %
                 # opacity the network was in the file and invisible on the
                 # page, which is the same as not drawing it.
-                width = 1.6 if rank <= 1 else (1.1 if rank == 2 else 0.8)
+                # Named `stroke_w`, not `width`: `width` is this function's
+                # canvas width, and binding a 0.8 px stroke to it here left
+                # the legend and the fullscreen control reading 0.8 instead
+                # of 745 for the rest of the render -- the "No data" swatch
+                # came out at x=-111.2, off the page, on every classed map
+                # drawn with rivers, which is the default.
+                stroke_w = 1.6 if rank <= 1 else (1.1 if rank == 2 else 0.8)
                 for line in _line_segments(feature["geometry"]):
                     points = simplify_screen(
                         [project(lon, lat) for lon, lat in line], simplify
@@ -1030,7 +1049,7 @@ def build_svg(
                     d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in points)
                     parts.append(
                         f'<path d="{d}" fill="none" stroke="{_RIVER_COLOR}" '
-                        f'stroke-width="{width}" stroke-opacity="0.85" '
+                        f'stroke-width="{stroke_w}" stroke-opacity="0.85" '
                         f'stroke-linecap="round"/>'
                     )
 
