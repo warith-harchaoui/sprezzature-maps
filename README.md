@@ -69,13 +69,14 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
-A word on how long that takes, because nothing on screen will tell you: a
-choropleth is about a second, while a situation map is closer to ten.
-Profiled, that time is real work and not waste — roughly 4 s computing
-terrain shading from the elevation grid, 3 s of geometry clipping, and 1.5 s
-loading the vendored atlases, each of which is read exactly once. Setting
-`basemap: {relief: false}` in the config halves it if you do not need the
-terrain.
+A word on how long that takes, because nothing on screen will tell you. A
+choropleth is about a second. A situation map depends on how much world is
+in the frame: the bundled Europe demo is about 10 s from a cold start, a
+regional plate like eastern DRC about 3 s once the process is warm. Of the
+demo's time, roughly 2 s is terrain shading, about 2 s is loading the
+vendored atlases and importing — paid once per process, so a server renders
+its second plate faster than its first — and the rest is real geometry.
+`basemap: {relief: false}` removes the terrain cost if you do not need it.
 
 See [`EXAMPLES.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/EXAMPLES.md) for more recipes, including the HTTP API.
 See [`doc/CARTOGRAPHY.tex`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/doc/CARTOGRAPHY.tex) for the full method

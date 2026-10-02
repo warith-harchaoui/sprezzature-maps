@@ -1518,3 +1518,38 @@ def test_the_natural_layers_draw_from_the_model() -> None:
     assert re.search(rf'stroke-opacity="{re.escape(cue)}"', bathy), (
         "the sea's depth rings and a lake's shelf are the same kind of hint"
     )
+
+
+@pytest.mark.parametrize("name", sorted(_builders()))
+def test_every_class_in_the_legend_is_actually_drawn(name: str) -> None:
+    """
+    A faction in the palette and in the source must reach the page.
+
+    Two shipped plates lost a whole class in 0.10.0 and the suite stayed
+    green: Syria's government — Damascus, Homs, Hama, Latakia, Tartus, the
+    entire west and south — and Libya's NTC. Clipping a hand-drawn zone to
+    the coastline returns a ``GeometryCollection`` whenever the zone's edge
+    grazes the shore, ``projected_geom_to_path`` answered that unrecognised
+    type with an empty string, and the caller read the empty string as
+    "nothing to draw" and moved on. The legend swatch, which is drawn from
+    the palette rather than the geometry, stayed exactly where it was.
+
+    Counting elements would not have caught it. This asserts the invariant
+    that matters: a class the legend promises is a class the map draws.
+    """
+    import re
+
+    cfg = _builders()[name]()
+    palette = cfg.get("areas_of_control", {}).get("palette", {})
+    if not palette:
+        pytest.skip(f"{name} draws no control zones")
+    msm.validate_config(cfg)
+    svg = msm.build_map(cfg)
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
+    for label, colour in palette.items():
+        drawn = len(re.findall(rf'<path[^>]*fill="{re.escape(colour)}"', group))
+        assert drawn >= 1, (
+            f"{name}: '{label}' ({colour}) is in the palette and the source but "
+            "reaches the page as no path at all — the legend promises a class "
+            "the map does not draw"
+        )

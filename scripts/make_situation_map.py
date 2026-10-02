@@ -128,7 +128,8 @@ Basemap layers
     ``{show, width, skip, label_min_length_frac, label_color}``.
 ``lakes``
     ``{show, color, skip, former, historic, always_label,
-    label_min_area_frac}``. ``former`` draws water that has gone;
+    label_min_area_frac, depth_rings}``. ``depth_rings`` is how many shelf
+    rings step inward from a lake's shore; ``0`` draws none. ``former`` draws water that has gone;
     ``historic`` draws a lake whose vendored polygon is its historic
     maximum.
 ``cities``
@@ -143,7 +144,9 @@ The assessment
 ~~~~~~~~~~~~~~
 ``areas_of_control``
     The thematic layer: ``{source, category_field, confidence_field,
-    palette, contested, fill_opacity, casing_width, blend}``.
+    palette, contested, fill_opacity, casing_width, blend, over_water}``.
+    ``over_water: true`` keeps a zone's own shape instead of clipping it to
+    land, for a claim that really is maritime.
 ``front``
     The contact line: ``{line, color, label, legend, legend_label}``.
 ``arrows``
@@ -1364,8 +1367,23 @@ def _projected_ring_to_path(
 
 
 def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) -> str:
-    """Convert a geometry *already in projected metres* into an SVG path string."""
+    """Convert a geometry *already in projected metres* into an SVG path string.
+
+    Handles ``GeometryCollection`` by recursing into its parts. That is not
+    a nicety: clipping a hand-drawn control zone against a coastline returns
+    one whenever the zone's edge grazes the shore -- a polygon plus a stray
+    line fragment where the two touch -- and this function used to answer an
+    unrecognised type with ``""``, which every caller reads as "nothing to
+    draw". Two whole factions vanished from shipped plates that way, the
+    Syrian government and the Libyan NTC, while their legend swatches stayed.
+    A silent empty string is the worst possible answer to a geometry you do
+    not recognise.
+    """
     parts: list[str] = []
+    if geom.geom_type == "GeometryCollection":
+        return " ".join(
+            filter(None, (projected_geom_to_path(part, vp, close) for part in geom.geoms))
+        )
     if geom.geom_type in ("Polygon", "MultiPolygon"):
         polys = geom.geoms if geom.geom_type == "MultiPolygon" else [geom]
         for poly in polys:
@@ -2758,6 +2776,34 @@ def _load_features(spec: Any, base: Path) -> list[dict[str, Any]]:
     return []
 
 
+def _polygonal(geom: Any) -> Any:
+    """Return only the areal parts of ``geom``.
+
+    Intersecting a hand-drawn zone with a coastline can return a
+    ``GeometryCollection``: the polygon the caller meant, plus line or point
+    fragments where the two boundaries touch. A zone is an area, so the
+    fragments are an artefact of the clip and not territory -- and carrying
+    them downstream is how a tangential touch turns into a stray hairline
+    across a plate.
+
+    Examples
+    --------
+    >>> from shapely.geometry import GeometryCollection, LineString, Polygon
+    >>> square = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    >>> mixed = GeometryCollection([square, LineString([(3, 0), (4, 0)])])
+    >>> _polygonal(mixed).geom_type
+    'Polygon'
+    >>> _polygonal(square).geom_type
+    'Polygon'
+    """
+    if geom.geom_type != "GeometryCollection":
+        return geom
+    areal = [part for part in geom.geoms if part.geom_type in ("Polygon", "MultiPolygon")]
+    if not areal:
+        return geom
+    return areal[0] if len(areal) == 1 else unary_union(areal)
+
+
 def _areas_of_control_layer(
     cfg: dict[str, Any],
     proj: Transformer,
@@ -2837,7 +2883,7 @@ def _areas_of_control_layer(
             # A malformed land clip must not lose the zone: the unclipped
             # polygon is still the assessment, it just also covers water.
             with contextlib.suppress(Exception):
-                src = src.intersection(land)
+                src = _polygonal(src.intersection(land))
             if src.is_empty:
                 continue
         if region_box is not None:
