@@ -106,6 +106,12 @@ The plate itself
 ``simplify``
     Vertex-thinning tolerance in output units, applied after projection.
     ``0`` keeps every vertex. See ``_simplify``.
+``interactivity``
+    ``"self-contained"`` (default) gives the plate its own layer switches,
+    confidence filter and clickable legend, carried inside the file with no
+    page script; ``"external"`` leaves them to a page-level script;
+    ``"static"`` ships none. The controls are hidden until the script runs,
+    so an ``<img>`` embed or a rasteriser always sees the plain map.
 
 Basemap layers
 ~~~~~~~~~~~~~~
@@ -194,6 +200,7 @@ from typing import Any
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
 from _places import cities_in_view, place_labels
+from _plate_controls import controls_markup, controls_script, tag_layer
 from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
 from _render import svg_example_path, write_svg
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
@@ -286,6 +293,53 @@ _LAKES_GEOJSON = _ASSETS / "lakes-50m.geojson"
 #: sea to separate at a glance; and the coastline is a light hairline rather
 #: than a dark one, because on a dark plate the shore is where light is, not
 #: where ink is.
+
+#: What an alpha value is allowed to mean on this plate.
+#:
+#: Every opacity here used to be its own number, tuned alone in whichever
+#: pass added the layer: 0.85 and 0.9 and 0.75 and 0.7 and 0.4 and 0.3,
+#: thirty-odd literals with no model behind them. That is not a style, it is
+#: an accumulation, and it shows: two things that mean the same to a reader
+#: were drawn at different strengths because they were written in different
+#: months.
+#:
+#: So opacity is treated as a statement about *what kind of thing the reader
+#: is looking at*, and there are only six kinds:
+#:
+#: ``ground``
+#:     The substrate -- land, sea, the body of a lake. **Opaque**, because
+#:     there is nothing beneath it that the reader is entitled to see. A
+#:     translucent ground is how a basemap drifts towards the colour of
+#:     whatever happens to be under it.
+#: ``modulation``
+#:     Terrain shading. The one layer that *blends* rather than covers: it
+#:     takes the ground's own colour and changes its luminance, never its
+#:     hue. Per plate, because the mode differs (multiply on paper, screen
+#:     on a night plate).
+#: ``depth_cue``
+#:     A hint drawn *inside* water -- bathymetry rings, lake shelf rings.
+#:     Faint on purpose: it answers a question the reader did not ask yet.
+#: ``claim``
+#:     Areas of control. **The only fill that is translucent, and it is
+#:     translucent for a reason**: the claim is *about* ground the reader
+#:     must still be able to see. Everything the confidence ladder does is a
+#:     modification of this one value.
+#: ``fact_line``
+#:     Coastlines, frontiers, administrative borders, rivers. Near-opaque. A
+#:     boundary a reader can barely see is a boundary they will doubt, and
+#:     these are the parts of the plate nobody is asked to take on trust.
+#: ``mark``
+#:     The assessment's own marks and all text -- front line, axes of
+#:     advance, markers, labels. **Never faded.** Legibility is not a place
+#:     to be tasteful.
+COMPOSITING: dict[str, float] = {
+    "ground": 1.00,
+    "depth_cue": 0.30,
+    "claim": 0.78,
+    "fact_line": 0.85,
+    "mark": 1.00,
+}
+
 _PLATES: dict[str, dict[str, str]] = {
     "day": {
         "plate": "#ffffff",
@@ -298,7 +352,7 @@ _PLATES: dict[str, dict[str, str]] = {
         "label_ink": "#1b2733",
         "page": "#eef1f3",
         "bathy": "#ffffff",
-        "bathy_opacity": 0.5,
+        "bathy_opacity": COMPOSITING["depth_cue"],
         "halo": "#ffffff",
         "blend": "multiply",
         "sea": "#a9bccb",
@@ -333,7 +387,7 @@ _PLATES: dict[str, dict[str, str]] = {
         # as an object sitting on something rather than as a hole in it.
         "page": "#05080d",
         "bathy": "#16324f",
-        "bathy_opacity": 0.55,
+        "bathy_opacity": COMPOSITING["depth_cue"],
         # A label halo on a dark plate is dark: a white one would ring every
         # name in the very colour the text is set in.
         "halo": "#0a0f18",
@@ -2187,18 +2241,14 @@ def build_map(cfg: dict[str, Any]) -> str:
         )
         layers.append(
             f'<defs><clipPath id="relief-land-clip"><path d="{land_d}"/></clipPath></defs>'
-            f'<g clip-path="url(#relief-land-clip)" '
+            f'<g id="relief-blend" data-layer-id="relief" '
+            f'clip-path="url(#relief-land-clip)" '
             f'style="mix-blend-mode:{palette["blend"]}" '
             f'opacity="{palette["relief_opacity"]:.2f}">'
             f"{relief}</g>"
         )
 
-    # 3b. lakes --------------------------------------------------------------
-    # Over the land fill, because the coastline data is land-versus-ocean only
-    # and paints every inland water body as dry ground; under the borders and
-    # the control zones, because a lake is basemap, not thematic.
     water_labels: list[tuple[float, float]] = []
-    layers.append(_lakes_layer(cfg, proj, vp, region_box, water_labels))
 
     # 3c. internal-borders (admin-1: US states, FR regions, OSM countries) --- #
     layers.append(_internal_borders_layer(cfg, proj, vp, region_box, plate_region))
@@ -2207,7 +2257,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     layers.append(_admin2_borders_layer(cfg, proj, vp, region_box, plate_region))
 
     # 4. areas-of-control --------------------------------------------------- #
-    layers.append(_areas_of_control_layer(cfg, proj, vp, region_box))
+    layers.append(_areas_of_control_layer(cfg, proj, vp, region_box, land))
 
     # 4a. frontiers (international borders + neighbour labels), drawn over the
     #     control fills for the same reason the coastline below is: a national
@@ -2224,7 +2274,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     coast_d = projected_geom_to_path(coast, vp, close=False)
     layers.append(
         f'<g id="coastline"><path d="{coast_d}" fill="none" stroke="{coast_color}" '
-        f'stroke-width="{0.9 * vp["ts"]:.2f}" stroke-opacity="0.75" '
+        f'stroke-width="{0.9 * vp["ts"]:.2f}" stroke-opacity="{COMPOSITING["fact_line"]:.2f}" '
         f'stroke-linejoin="round" stroke-linecap="round"/></g>'
         if coast_d
         else '<g id="coastline"></g>'
@@ -2234,6 +2284,14 @@ def build_map(cfg: dict[str, Any]) -> str:
     layers.append(_infrastructure_layer(cfg, proj, vp))
 
     # 5b. rivers (over the fills so the water reads) ------------------------ #
+    # Lakes immediately before the rivers, and both above the control fills.
+    # They used to straddle them -- lakes underneath as "basemap", rivers on
+    # top -- which put one water system at two depths: on a plate of southern
+    # Ukraine the Dnieper crossed a control zone as a blue line and then ran
+    # into its own reservoir, which the same zone had painted brown. Water is
+    # physical fact and a claim does not move it, so the whole system sits
+    # above the claim and reads as one thing.
+    layers.append(_lakes_layer(cfg, proj, vp, region_box, water_labels))
     layers.append(_rivers_layer(cfg, proj, vp, region_box, water_labels))
 
     # 5b-bis. cities: the map is populated by default, so a reader always has
@@ -2253,23 +2311,28 @@ def build_map(cfg: dict[str, Any]) -> str:
     # Markers, labels, furniture, legend and frame stay unclipped -- they
     # are annotations allowed to sit in the plate margin.
     region_clip_d = projected_geom_to_path(region_proj, vp)
+    # Each drawn group gets a ``data-layer-id`` so the plate's own controls
+    # can address it. Not the ``id`` it already carries: an id is
+    # document-unique, these plates get inlined several to a page, and two
+    # maps in one article would have the script driving the wrong one.
+    tagged = "".join(tag_layer(layer) for layer in layers[geo_start:])
     layers[geo_start:] = [
         f'<defs><clipPath id="region-clip"><path d="{region_clip_d}"/></clipPath></defs>'
-        f'<g id="geo" clip-path="url(#region-clip)">' + "".join(layers[geo_start:]) + "</g>"
+        f'<g id="geo" clip-path="url(#region-clip)">' + tagged + "</g>"
     ]
 
     # 6. forces ------------------------------------------------------------- #
     marker_legend = cfg.get("marker_legend", [])
-    layers.append(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend))
+    layers.append(tag_layer(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend)))
 
     # 7. events ------------------------------------------------------------- #
-    layers.append(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend))
+    layers.append(tag_layer(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend)))
 
     # 8. annotation-labels -------------------------------------------------- #
-    layers.append(_labels_layer(cfg, proj, vp))
+    layers.append(tag_layer(_labels_layer(cfg, proj, vp)))
     # Editorial notes ride above every map layer and below the furniture:
     # an annotation that a river or a label can cross is not an annotation.
-    layers.append(_annotations_layer(cfg, proj, vp))
+    layers.append(tag_layer(_annotations_layer(cfg, proj, vp)))
 
     # 9. annotation-furniture ---------------------------------------------- #
     layers.append(_furniture_layer(cfg, vp))
@@ -2284,6 +2347,36 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 10. legend ------------------------------------------------------------ #
     layers.append(_legend_layer(cfg, vp))
+
+    # 12. the plate's own controls -------------------------------------------
+    # Drawn last so they sit above every layer they switch, and hidden until
+    # the script reveals them -- an <img> embed, a rasteriser or a browser
+    # with scripting off all keep exactly the plate that shipped before.
+    interactivity = str(cfg.get("interactivity", "self-contained"))
+    if interactivity not in ("self-contained", "external", "static"):
+        raise ValueError(
+            f"unknown interactivity {interactivity!r}; "
+            "known: self-contained, external, static"
+        )
+    has_controls = bool(
+        interactivity == "self-contained" and cfg.get("areas_of_control", {}).get("palette")
+    )
+    if has_controls:
+        layers.append(
+            controls_markup(
+                W,
+                H,
+                vp["ts"],
+                palette,
+                # ``_tiers_present`` answers "which tiers need a legend row",
+                # and deliberately omits ``assessed`` because an unmarked zone
+                # already means that. A *filter* is the other question: the
+                # floor has to be offered, or the most useful setting on the
+                # whole panel -- show me only what is assessed -- is the one
+                # setting a reader cannot reach.
+                tiers=("assessed", *_tiers_present(cfg)),
+            )
+        )
 
     # 10b. attribution -------------------------------------------------------- #
     layers.append(_attribution_layer(cfg, vp, bbox))
@@ -2361,6 +2454,12 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'<rect width="{plate_w:.1f}" height="{plate_h:.1f}" fill="{_pal(cfg)["plate"]}"/>'
         f"{''.join(layers)}"
         f"</g></g>"
+        # Outside the clip and the isolation boundary: a script is not a
+        # drawn thing, and nesting it inside a blended group is asking a
+        # renderer to decide something it has no business deciding.
+        # No panel, no script: a locator plate has nothing to switch, and
+        # four kilobytes of behaviour that returns immediately is weight.
+        f"{controls_script(interactivity) if has_controls else ''}"
         f"</svg>"
     )
 
@@ -2395,6 +2494,54 @@ def _lake_water_color(cfg: dict[str, Any]) -> str:
     settings = cfg.get("lakes", {})
     basemap = cfg.get("basemap", {})
     return settings.get("color", basemap.get("sea_color", _pal(cfg)["sea"]))
+
+
+def _inner_depth_rings(
+    geom: Any, vp: dict[str, Any], rings: int, palette: dict[str, Any]
+) -> str:
+    """Return depth rings buffered *inward* from a water body's own shore.
+
+    The sea gets its halo by buffering outward from the coast into open
+    water. A lake has no open water to buffer into, so the same cue has to
+    be built the other way round: step inward from the shoreline. That also
+    makes the rings say something true about shape, since a wide shallow
+    lagoon fills with them and a narrow trench barely takes one.
+
+    Parameters
+    ----------
+    geom : shapely geometry
+        The lake, already projected into planar metres.
+    vp : dict
+        The viewport, for canvas width and metres-per-unit.
+    rings : int
+        How many to attempt; fewer are drawn when the lake runs out of room.
+    palette : dict
+        The plate palette, for the ring colour the sea already uses.
+
+    Returns
+    -------
+    str
+        Zero or more ``<path>`` elements. Empty when the geometry will not
+        buffer -- a lake that cannot carry rings is still a lake.
+    """
+    # One ring every ~0.4% of the plate width, converted to the projected
+    # metres the geometry is in, so the spacing looks the same at any size.
+    step_m = vp["width"] * 0.004 * vp["m_per_unit"]
+    out: list[str] = []
+    try:
+        for index in range(1, rings + 1):
+            inner = geom.buffer(-step_m * index)
+            if inner.is_empty:
+                break
+            drawn = projected_geom_to_path(inner, vp)
+            if drawn:
+                out.append(
+                    f'<path d="{drawn}" fill="none" stroke="{palette["bathy"]}" '
+                    f'stroke-width="0.6" stroke-opacity="{COMPOSITING["depth_cue"]:.2f}"/>'
+                )
+    except Exception:  # a self-touching lake must not cost the plate its water
+        return ""
+    return "".join(out)
 
 
 def _lakes_layer(
@@ -2473,6 +2620,7 @@ def _lakes_layer(
     always = {n.lower() for n in settings.get("always_label", [])}
     skip = {n.lower() for n in settings.get("skip", [])}
     former = {n.lower() for n in settings.get("former", [])}
+    lake_rings = int(settings.get("depth_rings", 4))
     historic = {n.lower() for n in settings.get("historic", _HISTORIC_EXTENT_LAKES)}
     plate_area = float(vp["width"]) * float(vp["height"])
 
@@ -2517,8 +2665,13 @@ def _lakes_layer(
         else:
             shapes.append(
                 f'<path d="{d}" fill="{color}" stroke="{edge}" '
-                f'stroke-width="{0.6 * ts:.1f}" stroke-opacity="0.75"/>'
+                f'stroke-width="{0.6 * ts:.1f}" stroke-opacity="{COMPOSITING["fact_line"]:.2f}"/>'
             )
+            # The same depth cue the sea gets, for the same reason: a lake
+            # drawn as one flat blue is the only water on the plate with no
+            # shape to it.
+            if lake_rings:
+                shapes.append(_inner_depth_rings(gp, vp, lake_rings, palette))
         if not name:
             continue
         if is_former:
@@ -2606,7 +2759,11 @@ def _load_features(spec: Any, base: Path) -> list[dict[str, Any]]:
 
 
 def _areas_of_control_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any | None = None
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any | None = None,
+    land: Any | None = None,
 ) -> str:
     """Return the territory zones: pastel fill under a white casing; contested = hatch.
 
@@ -2622,6 +2779,8 @@ def _areas_of_control_layer(
     if not features:
         return '<g id="areas-of-control"></g>'
     field = aoc.get("category_field", "actor")
+    # Armies hold ground, not water; see the clip below.
+    over_water = bool(aoc.get("over_water", False))
     # How sure the assessment is, read per feature. Orthogonal to the category:
     # "whose ground is this" and "how well do we know that" are two different
     # questions, and a zone answers both. See :data:`_CONFIDENCE_TIERS`.
@@ -2631,7 +2790,7 @@ def _areas_of_control_layer(
     casing_w = float(aoc.get("casing_width", 2.4))
     # Fill opacity: high enough that the pastel classes read as solid territory,
     # low enough that the paper warmth and the coastline still show through.
-    fill_op = float(aoc.get("fill_opacity", 0.78))
+    fill_op = float(aoc.get("fill_opacity", COMPOSITING["claim"]))
     # How the control colour meets the terrain underneath it. A flat alpha
     # fill averages the hillshade towards a single tone: measured on the
     # 0.78 default, a full black-to-white relief ramp survives as 14 levels
@@ -2666,6 +2825,21 @@ def _areas_of_control_layer(
         # nobody can see, and -- found by rendering it -- a shape so far outside
         # the canvas that resvg dropped its ``mix-blend-mode`` fill entirely,
         # so the eastern-DRC plate came out with no control colours at all.
+        # Armies hold ground, not water. A control polygon handed in as a
+        # rectangle -- which is what a schematic assessment usually is --
+        # otherwise paints the sea, the lakes and the lagoons inside it the
+        # colour of held territory: the Black Sea came out a muddy
+        # purple-brown on a plate of southern Ukraine, with the bathymetry
+        # contours still faintly visible underneath it. Clipping to land is
+        # the fix, and ``areas_of_control.over_water: true`` is the opt-out
+        # for a claim that really is maritime.
+        if land is not None and not over_water:
+            # A malformed land clip must not lose the zone: the unclipped
+            # polygon is still the assessment, it just also covers water.
+            with contextlib.suppress(Exception):
+                src = src.intersection(land)
+            if src.is_empty:
+                continue
         if region_box is not None:
             try:
                 src = src.intersection(region_box)
@@ -2846,7 +3020,7 @@ def _frontiers_layer(
         if d:
             lines.append(
                 f'<path d="{d}" fill="none" stroke="{color}" '
-                f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="0.85" '
+                f'stroke-width="{0.9 * ts:.1f}" stroke-opacity="{COMPOSITING["fact_line"]:.2f}" '
                 f'stroke-dasharray="{3.4 * ts:.1f} {2.4 * ts:.1f}"/>'
             )
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
@@ -3102,7 +3276,7 @@ def _internal_borders_layer(
         if d:
             lines.append(
                 f'<path d="{d}" fill="none" stroke="{color}" '
-                f'stroke-width="{0.6 * ts:.1f}" stroke-opacity="0.75" '
+                f'stroke-width="{0.6 * ts:.1f}" stroke-opacity="{COMPOSITING["fact_line"]:.2f}" '
                 f'stroke-dasharray="{2.0 * ts:.1f} {1.8 * ts:.1f}"/>'
             )
         if do_label and name and vis.area >= min_frac * region_area:
@@ -3158,7 +3332,7 @@ def _admin2_borders_layer(
         if d:
             lines.append(
                 f'<path d="{d}" fill="none" stroke="{color}" '
-                f'stroke-width="{0.45 * ts:.1f}" stroke-opacity="0.7" '
+                f'stroke-width="{0.45 * ts:.1f}" stroke-opacity="{COMPOSITING["fact_line"]:.2f}" '
                 f'stroke-dasharray="{1.4 * ts:.1f} {1.4 * ts:.1f}"/>'
             )
         if do_label and name and vis.area >= min_frac * region_area:
@@ -4451,7 +4625,7 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     if not palette:
         return []
     contested = set(aoc.get("contested", []))
-    fill_op = float(aoc.get("fill_opacity", 0.78))
+    fill_op = float(aoc.get("fill_opacity", COMPOSITING["claim"]))
     rows: list[dict[str, Any]] = [
         {"kind": "class", "label": str(name), "color": color,
          "contested": name in contested, "fill": fill_op}
@@ -4681,12 +4855,22 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
                 f'<line x1="{px + pad:.1f}" y1="{dv:.1f}" x2="{px + panel_w - pad:.1f}" '
                 f'y2="{dv:.1f}" stroke="#e2e6ea" stroke-width="1"/>'
             )
+        # A class row is also the control that isolates it, when the plate
+        # is interactive. Wrapped rather than attributed in place so the hit
+        # target is the whole row, not the eleven-unit swatch.
+        handle = (
+            f' data-legend-category="{_esc(str(row["label"]))}" role="button" tabindex="0"'
+            if row["kind"] == "class"
+            else ""
+        )
+        parts.append(f"<g{handle}>" if handle else "<g>")
         parts.append(_legend_mark(row, px + pad, ry, sw, ts))
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
             f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" '
             f'fill="{_pal(cfg)["legend_ink"]}">{_esc(row["label"])}</text>'
         )
+        parts.append("</g>")
     if footer:
         fy = py + panel_h - 11 * ts
         parts.append(
@@ -4750,7 +4934,7 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
 #: the plate still looks like a finished intelligence product. That is the
 #: worst possible response to a typo, and it is why this list exists.
 CONFIG_KEYS: frozenset[str] = frozenset({
-    "annotations", "inset",
+    "annotations", "inset", "interactivity",
     "areas_of_control", "arrows", "as_of", "attribution", "basemap", "canvas_width",
     "lakes",
     "caption", "events", "forces", "frame", "front", "frontiers",

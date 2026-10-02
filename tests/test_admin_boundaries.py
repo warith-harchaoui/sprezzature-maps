@@ -13,6 +13,8 @@ could catch a future regression automatically.
 
 from __future__ import annotations
 
+import re
+
 from sprezzature_maps import _load_script
 
 m = _load_script("make_situation_map")
@@ -131,10 +133,10 @@ def test_internal_and_admin2_borders_render_real_paths() -> None:
         "admin2_borders": {"show": True},
     }
     svg = m.build_map(cfg)
-    assert '<g id="internal-borders">' in svg
-    assert '<g id="admin2-borders">' in svg
-    internal = svg.split('<g id="internal-borders">', 1)[1].split("</g>", 1)[0]
-    admin2 = svg.split('<g id="admin2-borders">', 1)[1].split("</g>", 1)[0]
+    assert '<g id="internal-borders"' in svg
+    assert '<g id="admin2-borders"' in svg
+    internal = svg.split('<g id="internal-borders"', 1)[1].split("</g>", 1)[0]
+    admin2 = svg.split('<g id="admin2-borders"', 1)[1].split("</g>", 1)[0]
     assert "<path" in internal
     assert "<path" in admin2
 
@@ -149,4 +151,4 @@ def test_admin2_borders_hidden_above_zoom_gate() -> None:
         "admin2_borders": {"show": True},
     }
     svg = m.build_map(cfg)
-    assert '<g id="admin2-borders"></g>' in svg
+    assert re.search(r'<g id="admin2-borders"[^>]*></g>', svg)

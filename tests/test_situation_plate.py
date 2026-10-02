@@ -13,6 +13,7 @@ Author
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -159,8 +160,8 @@ def test_a_hand_placed_name_suppresses_its_automatic_twin() -> None:
     labelled = _plate(
         labels={"places": [{"lon": -3.7038, "lat": 40.4168, "text": "Madrid"}]}
     )
-    cities_plain = plain[plain.index('<g id="cities">') :].split("</g>")[0]
-    cities_labelled = labelled[labelled.index('<g id="cities">') :].split("</g>")[0]
+    cities_plain = plain[plain.index('<g id="cities"') :].split("</g>")[0]
+    cities_labelled = labelled[labelled.index('<g id="cities"') :].split("</g>")[0]
     assert "Madrid" in cities_plain, "precondition: the automatic layer draws Madrid"
     assert "Madrid" not in cities_labelled
     # ...and the hand-placed name is still there, in the labels layer, which
@@ -184,14 +185,14 @@ def test_inland_lakes_are_water_not_land() -> None:
         assert expected in by_name
 
     svg = _plate(region={"bbox": [27.5, -4.0, 30.0, 0.5]}, basemap={"relief": False})
-    lakes_group = svg[svg.index('<g id="lakes">') :].split("</g>")[0]
+    lakes_group = svg[svg.index('<g id="lakes"') :].split("</g>")[0]
     assert lakes_group.count("<path") >= 2
     assert "Lake Kivu" in svg
 
 
 def test_lakes_can_be_switched_off() -> None:
     svg = _plate(region={"bbox": [27.5, -4.0, 30.0, 0.5]}, lakes={"show": False})
-    assert '<g id="lakes"></g>' in svg
+    assert re.search(r'<g id="lakes"[^>]*></g>', svg)
 
 
 def test_a_drained_water_body_can_be_drawn_as_former_rather_than_wet() -> None:
@@ -217,7 +218,7 @@ def test_a_drained_water_body_can_be_drawn_as_former_rather_than_wet() -> None:
         lakes={"former": ["Kakhovka Reservoir"], "always_label": ["Kakhovka Reservoir"]},
     )
     assert ">Kakhovka Reservoir (former)<" in former
-    lakes_group = former[former.index('<g id="lakes">') :].split("</g>")[0]
+    lakes_group = former[former.index('<g id="lakes"') :].split("</g>")[0]
     assert "stroke-dasharray" in lakes_group
     # No fill, because there is no water.
     assert 'fill="none"' in lakes_group
@@ -270,7 +271,7 @@ def test_a_lake_name_and_a_river_name_do_not_print_on_top_of_each_other() -> Non
 
 
 def test_no_arrows_configured_means_an_empty_group_not_a_missing_one() -> None:
-    assert '<g id="arrows"></g>' in _plate()
+    assert re.search(r'<g id="arrows"[^>]*></g>', _plate())
 
 
 def test_an_arrow_is_a_tapered_shaft_and_a_separate_head() -> None:
@@ -281,7 +282,7 @@ def test_an_arrow_is_a_tapered_shaft_and_a_separate_head() -> None:
     svg = _plate(
         arrows=[{"line": [[-8.0, 40.0], [-5.0, 40.5], [-2.0, 41.0]], "label": "Push"}]
     )
-    group = svg[svg.index('<g id="arrows">') :].split("</g>")[0]
+    group = svg[svg.index('<g id="arrows"') :].split("</g>")[0]
     # casing (2) + fill (2) for shaft and head.
     assert group.count("<path") == 4
     assert "PUSH" in group
@@ -291,12 +292,12 @@ def test_a_reported_axis_is_drawn_as_an_outline_not_a_solid() -> None:
     """``solid`` and ``dashed`` are two different claims, and must look it."""
     solid = _plate(arrows=[{"line": [[-8.0, 40.0], [-2.0, 41.0]]}])
     dashed = _plate(arrows=[{"line": [[-8.0, 40.0], [-2.0, 41.0]], "style": "dashed"}])
-    assert "stroke-dasharray" not in solid[solid.index('<g id="arrows">') :].split("</g>")[0]
-    assert "stroke-dasharray" in dashed[dashed.index('<g id="arrows">') :].split("</g>")[0]
+    assert "stroke-dasharray" not in solid[solid.index('<g id="arrows"') :].split("</g>")[0]
+    assert "stroke-dasharray" in dashed[dashed.index('<g id="arrows"') :].split("</g>")[0]
 
 
 def test_a_degenerate_arrow_is_skipped_rather_than_drawn_wrong() -> None:
-    assert '<g id="arrows"></g>' in _plate(arrows=[{"line": [[-8.0, 40.0]]}])
+    assert re.search(r'<g id="arrows"[^>]*></g>', _plate(arrows=[{"line": [[-8.0, 40.0]]}]))
 
 
 def test_a_smooth_curve_still_passes_through_every_point_given() -> None:
@@ -331,7 +332,7 @@ def test_a_shared_border_is_drawn_once_not_once_per_neighbour() -> None:
     }
     msm.validate_config(cfg)
     svg = msm.build_map(cfg)
-    group = svg[svg.index('<g id="frontiers">') :].split("</g>")[0]
+    group = svg[svg.index('<g id="frontiers"') :].split("</g>")[0]
     paths = re.findall(r'<path d="([^"]+)"', group)
     # One union'd polyline -- mapshaper's ``-innerlines`` -- not one per country.
     assert len(paths) == 1, f"expected a single union'd frontier path, got {len(paths)}"
@@ -387,7 +388,7 @@ def test_control_zones_are_clipped_to_the_region_before_drawing() -> None:
             "source": whole_world,
         }
     )
-    group = svg[svg.index('<g id="areas-of-control">') :].split('<g id="frontiers"')[0]
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
     coords = [
         abs(float(v))
         for chunk in group.split('d="')[1:]
@@ -491,7 +492,7 @@ def test_a_claimed_zone_is_not_painted_the_colour_of_held_ground() -> None:
     filled at the same opacity as assessed control asserts control.
     """
     svg = _control(_zone("Red", "claimed"))
-    group = svg[svg.index('<g id="areas-of-control">') :].split('<g id="frontiers"')[0]
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
     zone = [p for p in group.split("<path ") if 'class="hit"' in p][0]
     assert 'fill-opacity="0.00"' in zone, "a claimed zone must carry no solid fill"
     assert "stroke-dasharray" in zone, "and must be outlined as provisional"
@@ -506,7 +507,7 @@ def test_a_reported_zone_stays_the_same_class_only_less_certain() -> None:
     "the red side, probably" rather than "some fifth thing".
     """
     svg = _control(_zone("Red", "reported"))
-    group = svg[svg.index('<g id="areas-of-control">') :].split('<g id="frontiers"')[0]
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
     zone = [p for p in group.split("<path ") if 'class="hit"' in p][0]
     assert 'fill="#d98880"' in zone, "the class colour must survive"
     assert 'fill-opacity="0.00"' not in zone, "reported ground is still drawn as ground"
@@ -538,7 +539,7 @@ def test_a_textured_zone_can_still_be_hovered() -> None:
     never opens, which was already true of every contested zone.
     """
     svg = _control(_zone("Red", "reported"), contested=["Red"])
-    group = svg[svg.index('<g id="areas-of-control">') :].split('<g id="frontiers"')[0]
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
     overlays = [p for p in group.split("<path ") if "url(#" in p and "hit" not in p]
     assert overlays, "this plate must actually draw textures"
     for overlay in overlays:
@@ -552,7 +553,7 @@ def test_the_legend_keys_every_tier_it_draws_and_no_others() -> None:
     so keying it would add a row that says "the normal one".
     """
     svg = _control(_zone("Blue"), _zone("Red", "claimed", west=-4.0))
-    legend = svg[svg.index('<g id="legend">') :]
+    legend = svg[svg.index('<g id="legend"') :]
     assert "Claimed, unverified" in legend
     assert "Reported, not assessed" not in legend, "no tier this plate never draws"
     assert "Assessed" not in legend.split("AREAS OF CONTROL")[1].split("</g>")[0]
@@ -588,15 +589,15 @@ def test_an_approximate_event_loses_its_solid_centre() -> None:
     approx = _plate(
         events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6, "precision": 2}]
     )
-    assert 'fill="#c0392b"' in exact.split('<g id="events">')[1].split("</g>")[0]
-    ring = approx.split('<g id="events">')[1].split("</g>")[0]
+    assert 'fill="#c0392b"' in exact.split('<g id="events"')[1].split("</g>")[0]
+    ring = approx.split('<g id="events"')[1].split("</g>")[0]
     assert 'fill="#ffffff"' in ring and 'stroke="#c0392b"' in ring
     # And precision 3 -- a whole region pinned to its capital -- breaks the
     # ring as well as hollowing it: one step further from "a place".
     region = _plate(
         events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6, "precision": 3}]
     )
-    assert "stroke-dasharray" in region.split('<g id="events">')[1].split("</g>")[0]
+    assert "stroke-dasharray" in region.split('<g id="events"')[1].split("</g>")[0]
 
 
 def test_a_stated_uncertainty_radius_is_drawn_to_the_map_scale() -> None:
@@ -620,7 +621,7 @@ def test_a_stated_uncertainty_radius_is_drawn_to_the_map_scale() -> None:
     }
     msm.validate_config(cfg)
     svg = msm.build_map(cfg)
-    group = svg[svg.index('<g id="events">') :]
+    group = svg[svg.index('<g id="events"') :]
     drawn = float(
         re.search(r'r="([\d.]+)" fill="#c0392b"\s+fill-opacity="0.12"', group).group(1)
     )
@@ -752,7 +753,7 @@ def test_auto_moves_the_key_off_the_map_once_it_stops_being_a_minority() -> None
     narrow = _legend_cfg(375, legend_position="auto")
     assert msm._resolve_legend_position(narrow, 1.0, 375.0) == "below"
     svg = msm.build_map(narrow)
-    legend = svg[svg.index('<g id="legend">') :].split("</g>")[0]
+    legend = svg[svg.index('<g id="legend"') :].split("</g>")[0]
     # A band, not a card: no panel rect, no drop shadow over the map.
     assert "filter=\"url(#panel-shadow)\"" not in legend
     assert "AREAS OF CONTROL" in legend
@@ -886,7 +887,7 @@ def test_a_raster_too_colourful_to_index_still_encodes() -> None:
 
 
 def test_no_annotation_configured_means_an_empty_group_not_a_missing_one() -> None:
-    assert '<g id="annotations"></g>' in _plate()
+    assert re.search(r'<g id="annotations"[^>]*></g>', _plate())
 
 
 def test_an_annotation_circles_its_subject_rather_than_pointing_at_it() -> None:
@@ -904,7 +905,7 @@ def test_an_annotation_circles_its_subject_rather_than_pointing_at_it() -> None:
              "circle_km": 50, "color": "#2f5d92"}
         ]
     )
-    group = svg[svg.index('<g id="annotations">') :].split("</g>")[0]
+    group = svg[svg.index('<g id="annotations"') :].split("</g>")[0]
     assert "marker-end" not in group and "polygon" not in group, "a ring, not an arrowhead"
     ring = float(re.search(r'<circle[^>]*r="([\d.]+)" fill="none"', group).group(1))
     vp = msm.make_viewport(
@@ -921,7 +922,7 @@ def test_an_annotation_stays_legible_over_whatever_it_lands_on() -> None:
     fills it is pointing at, which is exactly where plain text disappears.
     """
     svg = _plate(annotations=[{"at": [-4.0, 40.0], "text": "Held throughout."}])
-    group = svg[svg.index('<g id="annotations">') :].split("</g>")[0]
+    group = svg[svg.index('<g id="annotations"') :].split("</g>")[0]
     assert 'paint-order="stroke"' in group
 
 
@@ -933,7 +934,7 @@ def test_a_long_note_wraps_instead_of_running_off_the_plate() -> None:
                      "of a plate this size without being wrapped first."}
         ]
     )
-    group = svg[svg.index('<g id="annotations">') :].split("</g>")[0]
+    group = svg[svg.index('<g id="annotations"') :].split("</g>")[0]
     assert group.count("<text") >= 3
 
 
@@ -1056,7 +1057,7 @@ def test_the_caption_owns_its_band_rather_than_printing_on_the_map() -> None:
     noise. The hairline rule above it already says a footer starts here.
     """
     svg = _plate(caption="full", source="Open-source reporting", as_of="2026")
-    caption = svg[svg.index('<g id="caption">') :].split("</g>")[0]
+    caption = svg[svg.index('<g id="caption"') :].split("</g>")[0]
     assert "<rect" in caption, "the caption band needs a ground"
 
 
@@ -1064,7 +1065,7 @@ def test_the_caption_owns_its_band_rather_than_printing_on_the_map() -> None:
 
 
 def test_no_inset_configured_means_an_empty_group_not_a_missing_one() -> None:
-    assert '<g id="inset"></g>' in _plate()
+    assert re.search(r'<g id="inset"[^>]*></g>', _plate())
 
 
 def test_the_inset_shows_the_region_inside_a_wider_context() -> None:
@@ -1110,7 +1111,7 @@ def test_the_north_arrow_steps_clear_of_the_inset() -> None:
     import re
 
     def arrow_x(svg: str) -> float:
-        group = svg[svg.index('<g id="annotation-furniture">') :]
+        group = svg[svg.index('<g id="annotation-furniture"') :]
         return float(re.search(r"translate\(([\d.]+),", group).group(1))
 
     assert arrow_x(with_inset) < arrow_x(plain)
@@ -1135,7 +1136,7 @@ def test_a_lake_that_shrank_is_not_drawn_as_the_lake_it_was() -> None:
     nw_iran = {"bbox": [43.5, 35.5, 48.5, 39.5]}
     drawn = _plate(region=nw_iran, basemap={"relief": False})
     assert "Lake Urmia (historic extent)" in drawn
-    lakes = drawn[drawn.index('<g id="lakes">') :].split("</g>")[0]
+    lakes = drawn[drawn.index('<g id="lakes"') :].split("</g>")[0]
     historic = [p for p in lakes.split("<path ") if "stroke-dasharray" in p]
     assert historic, "the historic outline must be drawn dashed"
     # Water, but not a full basin of it: a faded fill, not a solid one and
@@ -1249,8 +1250,8 @@ def test_a_polar_plate_can_be_drawn_at_all() -> None:
     northern Greenland could not be rendered at all.
     """
     svg = _plate(region={"bbox": [-60.0, 78.0, 30.0, 84.0]}, basemap={"relief": False})
-    assert '<g id="basemap-land">' in svg
-    land = svg[svg.index('<g id="basemap-land">') :].split("</g>")[0]
+    assert '<g id="basemap-land"' in svg
+    land = svg[svg.index('<g id="basemap-land"') :].split("</g>")[0]
     assert land.count("<path") >= 1, "the Arctic coastline must actually draw"
 
 
@@ -1306,8 +1307,8 @@ def test_relief_is_blended_over_the_land_not_hidden_under_it() -> None:
     of what a shadow does.
     """
     svg = _plate(basemap={"relief": True})
-    assert '<g id="basemap-land">' in svg
-    land_at = svg.index('<g id="basemap-land">')
+    assert '<g id="basemap-land"' in svg
+    land_at = svg.index('<g id="basemap-land"')
     relief_at = svg.index('<g id="relief"')
     assert relief_at > land_at, "the shading must sit over the land, not under it"
     # Opaque land: the hue is preserved by the blend, not by an opacity
@@ -1349,3 +1350,171 @@ def test_relief_off_still_means_off() -> None:
     svg = _plate(basemap={"relief": False})
     assert '<g id="relief"' not in svg
     assert "relief-land-clip" not in svg
+
+
+# ── the water system ──────────────────────────────────────────────────────
+
+
+def _sea_and_zone() -> str:
+    """A frame where open sea, a reservoir, lagoons and a control zone meet."""
+    return _plate(
+        region={"bbox": [28.0, 44.5, 36.0, 49.5]},
+        basemap={"relief": False},
+        areas_of_control={
+            "category_field": "actor",
+            "palette": {"Held": "#d98880"},
+            "source": {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"actor": "Held"},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[32.0, 44.5], [36.0, 44.5], [36.0, 49.5],
+                                 [32.0, 49.5], [32.0, 44.5]]
+                            ],
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+
+def test_a_control_zone_does_not_paint_the_sea() -> None:
+    """
+    Armies hold ground. A schematic assessment is usually handed over as a
+    rectangle, and nothing stopped it painting the Black Sea the colour of
+    held territory — bathymetry contours still faintly visible under a muddy
+    purple-brown wash.
+    """
+    import re
+
+    from shapely.geometry import box
+
+    svg = _sea_and_zone()
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
+    zone = re.search(r'class="hit"[^>]*d="([^"]+)"', group)
+    assert zone, "the zone must still be drawn"
+    # The drawn zone is no longer the plain rectangle it was handed.
+    corners = re.findall(r"[ML]([-\d.]+),([-\d.]+)", zone.group(1))
+    assert len(corners) > 8, "a land-clipped zone has a coastline, not four corners"
+    assert box  # the import documents what the clip is against
+
+
+def test_over_water_is_the_opt_out_for_a_maritime_claim() -> None:
+    svg = _plate(
+        region={"bbox": [28.0, 44.5, 36.0, 49.5]},
+        basemap={"relief": False},
+        areas_of_control={
+            "category_field": "actor",
+            "palette": {"Held": "#d98880"},
+            "over_water": True,
+            "source": {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"actor": "Held"},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [[32.0, 44.5], [36.0, 44.5], [36.0, 49.5],
+                                 [32.0, 49.5], [32.0, 44.5]]
+                            ],
+                        },
+                    }
+                ],
+            },
+        },
+    )
+    import re
+
+    group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
+    zone = re.search(r'class="hit"[^>]*d="([^"]+)"', group)
+    corners = re.findall(r"[ML]([-\d.]+),([-\d.]+)", zone.group(1))
+    assert len(corners) <= 8, "an explicit maritime claim keeps its own shape"
+
+
+def test_the_whole_water_system_sits_at_one_depth() -> None:
+    """
+    Lakes used to be drawn under the control fills as "basemap" while rivers
+    rode above them, so one water system appeared at two depths: the Dnieper
+    crossed a zone as a blue line and then ran into its own reservoir, which
+    the same zone had painted brown. Water is physical fact; a claim does not
+    move it.
+    """
+    svg = _sea_and_zone()
+    assert svg.index('<g id="areas-of-control"') < svg.index('<g id="lakes"')
+    assert svg.index('<g id="lakes"') < svg.index('<g id="rivers"')
+
+
+def test_a_lake_carries_the_same_depth_cue_the_sea_does() -> None:
+    """
+    A lake drawn as one flat blue was the only water on the plate with no
+    shape to it. The sea's halo buffers outward from the coast; a lake has
+    no open water to buffer into, so the rings step inward from its own
+    shore — which also makes them say something true, since a wide lagoon
+    fills with rings and a narrow trench barely takes one.
+    """
+    svg = _plate(region={"bbox": [28.0, -4.0, 31.0, 0.5]}, basemap={"relief": False})
+    lakes = svg[svg.index('<g id="lakes"') :].split("</g>")[0]
+    assert 'fill="none"' in lakes, "the depth rings are unfilled strokes"
+    assert lakes.count("<path") > 4, "a lake plus its rings is more than one path"
+
+
+def test_lake_depth_rings_can_be_switched_off() -> None:
+    svg = _plate(
+        region={"bbox": [28.0, -4.0, 31.0, 0.5]},
+        basemap={"relief": False},
+        lakes={"depth_rings": 0},
+    )
+    lakes = svg[svg.index('<g id="lakes"') :].split("</g>")[0]
+    assert 'fill="none"' not in lakes
+
+
+def test_opacity_is_a_register_not_a_taste() -> None:
+    """
+    Every alpha on this plate used to be its own number, tuned alone in
+    whichever pass added the layer: thirty-odd literals, so two things that
+    meant the same to a reader were drawn at different strengths because
+    they were written in different months.
+
+    The model says an alpha states *what kind of thing this is*. Ground is
+    opaque because nothing is beneath it. Only a claim is translucent, and
+    only because the reader must still see the ground it is about. A
+    boundary is near-opaque, since one a reader can barely see is one they
+    will doubt. Marks and text never fade.
+    """
+    model = msm.COMPOSITING
+    assert model["ground"] == 1.0, "a translucent substrate drifts towards what is under it"
+    assert model["mark"] == 1.0, "legibility is not a place to be tasteful"
+    assert model["depth_cue"] < model["claim"] < model["fact_line"] < model["ground"], (
+        "the ordering is the argument: a hint is fainter than a claim, "
+        "and a claim is fainter than a fact"
+    )
+
+
+def test_the_natural_layers_draw_from_the_model() -> None:
+    """
+    Both water depth cues speak at one strength, and the lines that state
+    where something *is* speak at another. Checked on the page rather than
+    in the table, because a constant nobody references is decoration.
+    """
+    import re
+
+    svg = _plate(region={"bbox": [28.0, -4.0, 31.0, 0.5]}, basemap={"relief": False})
+    cue = f'{msm.COMPOSITING["depth_cue"]:.2f}'
+    fact = f'{msm.COMPOSITING["fact_line"]:.2f}'
+    lakes = svg[svg.index('<g id="lakes"') :].split("</g>")[0]
+    assert f'stroke-opacity="{cue}"' in lakes, "the lake shelf is a depth cue"
+    assert f'stroke-opacity="{fact}"' in lakes, "its shoreline is a fact"
+    # And the sea's rings agree with the lake's — checked on a coastal frame,
+    # since the Kivu window above is entirely inland and has no sea to ring.
+    coastal = _plate(region={"bbox": [28.0, 44.5, 36.0, 49.5]}, basemap={"relief": False})
+    bathy = coastal[coastal.index('<g id="basemap-bathymetry"') :].split("</g>")[0]
+    assert re.search(rf'stroke-opacity="{re.escape(cue)}"', bathy), (
+        "the sea's depth rings and a lake's shelf are the same kind of hint"
+    )
