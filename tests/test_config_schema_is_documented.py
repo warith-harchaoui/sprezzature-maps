@@ -76,3 +76,42 @@ def test_the_docstring_does_not_promise_keys_the_validator_rejects() -> None:
         f"only in docs {sorted(documented - set(msm.CONFIG_KEYS))}, "
         f"only in code {sorted(set(msm.CONFIG_KEYS) - documented)}"
     )
+
+
+def test_every_nested_key_is_documented_too() -> None:
+    """
+    The gap that let two options ship undocumented.
+
+    This file used to check only top-level keys, so
+    ``areas_of_control.over_water`` and ``lakes.depth_rings`` were added,
+    released, and reached no document at all. A section is a plain dict and
+    nothing enumerated what belonged in it, so nothing could check it.
+
+    ``SECTION_KEYS`` is that enumeration, and it earns its keep twice: the
+    validator refuses a typo one level down, and this asserts the docstring
+    names every option a caller is allowed to set.
+    """
+    doc = msm.__doc__ or ""
+    start = doc.index("Every configuration key")
+    section = doc[start:]
+    missing: list[str] = []
+    for parent, keys in sorted(msm.SECTION_KEYS.items()):
+        for key in sorted(keys):
+            if f"``{key}``" not in section and f"{key}," not in section and f"{key}}}" not in section:
+                missing.append(f"{parent}.{key}")
+    assert not missing, (
+        f"{len(missing)} nested option(s) the generator reads and the reference "
+        f"section never names: {', '.join(missing)}"
+    )
+
+
+def test_every_section_in_the_registry_is_a_real_top_level_key() -> None:
+    """A section nobody can set is a section that does not exist.
+
+    ``admin2_borders`` was read by its layer and refused by
+    ``validate_config`` — four options no config could reach.
+    """
+    unreachable = sorted(set(msm.SECTION_KEYS) - set(msm.CONFIG_KEYS))
+    assert not unreachable, (
+        f"sections the code reads but validate_config rejects: {', '.join(unreachable)}"
+    )

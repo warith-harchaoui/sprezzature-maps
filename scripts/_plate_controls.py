@@ -38,6 +38,7 @@ Author
 from __future__ import annotations
 
 import json
+from collections.abc import Collection
 
 #: Which drawn group belongs to which switch. A reader does not think in
 #: ``admin2-borders``; they think "borders". Grouping is therefore by what
@@ -86,8 +87,39 @@ def layer_key_for(group_id: str) -> str | None:
     return None
 
 
+
+def _steps_for(tiers: Collection[str] | None) -> list[tuple[str, str]]:
+    """Return the confidence ladder to offer, or nothing if it would not be one.
+
+    A plate whose zones are all assessed has a single rung. Offering it draws
+    a radio that is already on and cannot be turned off -- the same "a control
+    that cannot change anything is noise" rule that keeps the whole panel off
+    a locator plate. The eastern DRC is that plate, and it wore the useless
+    rung until someone opened it.
+
+    Both the markup and the sizing ask this, because a panel sized for a row
+    it does not draw is a panel with a hole in it.
+    """
+    steps = [step for step in _CONFIDENCE_STEPS if step[0] in tiers] if tiers else []
+    return steps if len(steps) > 1 else []
+
+
+def controls_size(ts: float, *, tiers: tuple[str, ...] = ()) -> tuple[float, float]:
+    """Return the ``(width, height)`` the panel will occupy, before drawing it.
+
+    So a caller can place the panel against what is already on the plate
+    rather than discover the collision afterwards.
+    """
+    pad = 12 * ts
+    row = 22 * ts
+    steps = _steps_for(tiers)
+    rows = len(_SWITCH_ORDER) + (len(steps) + 1 if steps else 0)
+    return 132 * ts, pad * 2 + 16 * ts + rows * row
+
+
 def controls_markup(width: float, height: float, ts: float, palette: dict[str, str],
-                    *, tiers: tuple[str, ...] = ()) -> str:
+                    *, tiers: tuple[str, ...] = (),
+                    origin: tuple[float, float] | None = None) -> str:
     """Return the control panel, hidden until the script reveals it.
 
     Parameters
@@ -98,6 +130,12 @@ def controls_markup(width: float, height: float, ts: float, palette: dict[str, s
         Type scale, so the panel tracks the plate's own sizing.
     palette : dict
         The resolved plate palette.
+    origin : tuple of (float, float), optional
+        Top-left corner of the panel in plate units. The caller picks it,
+        because only the caller knows where the legend, the scale bar and
+        the north arrow already are -- the panel used to sit in a fixed
+        bottom-left corner and landed on top of the legend on the one
+        bundled plate whose legend is also bottom-left.
     tiers : tuple of str, optional
         The confidence tiers this plate actually draws. The filter is only
         offered when there is something to filter: a plate with no
@@ -113,11 +151,10 @@ def controls_markup(width: float, height: float, ts: float, palette: dict[str, s
     row = 22 * ts
     panel_w = 132 * ts
     switches = list(_SWITCH_ORDER)
-    steps = [s for s in _CONFIDENCE_STEPS if s[0] in tiers] if tiers else []
+    steps = _steps_for(tiers)
     rows = len(switches) + (len(steps) + 1 if steps else 0)
     panel_h = pad * 2 + 16 * ts + rows * row
-    x = 16 * ts
-    y = height - panel_h - 16 * ts
+    x, y = origin if origin is not None else (16 * ts, height - panel_h - 16 * ts)
 
     out: list[str] = [
         f'<g id="plate-controls" style="display:none" transform="translate({x:.1f},{y:.1f})" '

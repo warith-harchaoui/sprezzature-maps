@@ -102,7 +102,7 @@ The plate itself
     ``"auto"`` (a Lambert conformal conic centred on the region) or an
     EPSG code.
 ``frame``
-    ``{page_color, radius}`` for the card the plate sits on.
+    ``{page_color, radius, margin}`` for the card the plate sits on.
 ``simplify``
     Vertex-thinning tolerance in output units, applied after projection.
     ``0`` keeps every vertex. See ``_simplify``.
@@ -116,19 +116,31 @@ The plate itself
 Basemap layers
 ~~~~~~~~~~~~~~
 ``basemap``
-    ``{relief, sea_color, land_color, coast_color, bathymetry}`` -- the
-    physical ground. ``relief: false`` halves render time.
+    ``{relief, relief_strength, hypsometric, plate, sea_color, land_color,
+    coast_color, bathymetry}`` -- the physical ground. ``plate`` is ``"day"`` or
+    ``"night"`` and outranks the individual colours. ``relief: false``
+    removes the terrain cost. ``relief_strength`` (0--1) overrides how hard
+    the hillshade blends; left unset it follows the visual hierarchy, full
+    strength on a plate with no thematic layer and held back under one.
+    ``hypsometric`` colours the ground by elevation as well as by light,
+    and follows the same hierarchy by default.
 ``frontiers``
     International borders: ``{show, color, label_neighbours, focus,
     label_min_area_frac}``.
 ``internal_borders``
     First-level administrative boundaries where a vendored source covers
-    the region: ``{show, color}``.
+    the region: ``{show, color, label_names, label_min_area_frac}``.
+``admin2_borders``
+    The second administrative tier, where a vendored source covers the
+    region and the zoom warrants it: ``{show, color, label_names,
+    label_min_area_frac}``. The layer has always drawn it; the validator
+    refused the key until 0.10.2, so none of these could be set.
 ``rivers``
-    ``{show, width, skip, label_min_length_frac, label_color}``.
+    ``{show, width, color, skip, always_label, label_color,
+    label_min_length_frac, label_max_scalerank}``.
 ``lakes``
-    ``{show, color, skip, former, historic, always_label,
-    label_min_area_frac, depth_rings}``. ``depth_rings`` is how many shelf
+    ``{show, color, edge_color, skip, former, historic, always_label,
+    label_color, label_min_area_frac, depth_rings}``. ``depth_rings`` is how many shelf
     rings step inward from a lake's shore; ``0`` draws none. ``former`` draws water that has gone;
     ``historic`` draws a lake whose vendored polygon is its historic
     maximum.
@@ -136,7 +148,7 @@ Basemap layers
     Automatic populated places: ``{show, size, limit, max_rank,
     hand_placed_clearance}``.
 ``infrastructure``
-    Roads and airports from a caller-supplied source.
+    ``{roads, airports}``, each a caller-supplied GeoJSON source.
 ``inset``
     Locator inset: ``{show, position, bbox, width, zoom}``.
 
@@ -144,11 +156,14 @@ The assessment
 ~~~~~~~~~~~~~~
 ``areas_of_control``
     The thematic layer: ``{source, category_field, confidence_field,
-    palette, contested, fill_opacity, casing_width, blend, over_water}``.
-    ``over_water: true`` keeps a zone's own shape instead of clipping it to
-    land, for a claim that really is maritime.
+    palette, contested, fill_opacity, casing_width, blend, over_water,
+    hatch_color}``. ``over_water: true`` keeps a zone's own shape instead of
+    clipping it to land, for a claim that really is maritime.
+    ``hatch_color`` sets the diagonal rule a contested zone is struck with.
 ``front``
-    The contact line: ``{line, color, label, legend, legend_label}``.
+    The contact line: ``{line, color, label, label_at, label_dx, label_dy,
+    legend, legend_label}``. The three ``label_*`` offsets place the callout
+    by hand when the automatic position lands badly.
 ``arrows``
     Axes of advance: a list of ``{line, color, label, style}``.
 ``forces``, ``events``
@@ -203,8 +218,18 @@ from typing import Any
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
 from _places import cities_in_view, place_labels
-from _plate_controls import controls_markup, controls_script, tag_layer
-from _relief import rgba_to_data_uri, sample_terrain_shade, terrain_shade_for_bbox
+from _plate_controls import (
+    controls_markup,
+    controls_script,
+    controls_size,
+    tag_layer,
+)
+from _relief import (
+    rgba_to_data_uri,
+    sample_terrain_shade,
+    terrain_relief_for_bbox,
+    terrain_shade_for_bbox,
+)
 from _render import svg_example_path, write_svg
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
 from _topojson import decode_arcs, stitch_ring
@@ -1241,12 +1266,48 @@ def build_projection(bbox: list[float], epsg: str | None) -> Transformer:
 # --------------------------------------------------------------------------- #
 
 
+#: Where the title and subtitle sit, in SVG units at ts=1, and how much room
+#: each needs below its baseline. Kept next to :func:`_header_inset` because
+#: the two must agree: these are the same numbers ``_furniture_layer`` draws
+#: at, and a plate whose header is reserved at one height and drawn at
+#: another is worse than one that never reserved anything.
+_TITLE_BASELINE: float = 40.0
+_SUBTITLE_BASELINE: float = 60.0
+_HEADER_CLEARANCE: float = 14.0
+
+
+def _header_inset(cfg: dict[str, Any], pad: float, width: float) -> float:
+    """Return how far down the plate must start to clear its own title.
+
+    The title is drawn at a fixed baseline and the plate was fitted from
+    ``padding`` alone, so the two were laid out as if the other did not
+    exist. With the default padding of 26 the map began 14 units *above* the
+    title's own baseline, and every plate in the gallery had its subtitle
+    printed across the ground -- on the Ukraine plate, straight through a
+    frontier and the Dnieper.
+
+    It had been that way since the generator was written, on every plate,
+    and no test noticed because no test asks where text lands. Someone has
+    to look at the picture.
+
+    Returns ``pad`` unchanged for a plate with no header, so a bare plate
+    is still fitted edge to edge.
+    """
+    ts = max(1.0, width / 1000.0)
+    if cfg.get("subtitle"):
+        return max(pad, (_SUBTITLE_BASELINE + _HEADER_CLEARANCE) * ts)
+    if cfg.get("title"):
+        return max(pad, (_TITLE_BASELINE + _HEADER_CLEARANCE) * ts)
+    return pad
+
+
 def make_viewport(
     proj: Transformer,
     bbox: list[float],
     width: float,
     pad: float,
     simplify: float = DEFAULT_TOLERANCE,
+    pad_top: float | None = None,
 ) -> dict[str, Any]:
     """Project ``bbox`` and return a viewport mapping planar metres -> SVG units.
 
@@ -1275,11 +1336,12 @@ def make_viewport(
     span_y = maxy - miny
     inner_w = width - 2 * pad
     scale = inner_w / span_x
-    height = span_y * scale + 2 * pad
+    top = pad if pad_top is None else pad_top
+    height = span_y * scale + top + pad
 
     def to_svg(x: float, y: float) -> tuple[float, float]:
         sx = pad + (x - minx) * scale
-        sy = pad + (maxy - y) * scale  # flip: projected up -> SVG down
+        sy = top + (maxy - y) * scale  # flip: projected up -> SVG down
         return sx, sy
 
     def to_world(sx: Any, sy: Any) -> tuple[Any, Any]:
@@ -1292,7 +1354,7 @@ def make_viewport(
         :func:`build_map` calls this vectorised over a whole pixel grid.
         """
         x = minx + (sx - pad) / scale
-        y = maxy - (sy - pad) / scale
+        y = maxy - (sy - top) / scale
         return x, y
 
     return {
@@ -1800,6 +1862,46 @@ def _scale_bar_lengths(vp: dict[str, Any]) -> tuple[float, float, float, float]:
     return km, km_len, mi, mi_len
 
 
+def _controls_origin(
+    cfg: dict[str, Any], vp: dict[str, Any], size: tuple[float, float]
+) -> tuple[float, float]:
+    """Return a corner for the control panel that nothing else has taken.
+
+    The panel sat in a fixed bottom-left corner, which is also where the
+    scale bar lives and where a ``bottom-left`` legend lands. On the eastern
+    DRC plate -- the one portrait plate, and the one whose legend is
+    bottom-left -- the two overlapped by about 50 by 20 units and both
+    became unreadable. Found in a browser by a reader, not by the suite.
+
+    Tries the four corners in order of preference and takes the first whose
+    box clears everything :func:`_reserved_boxes` already knows about: the
+    scale bar, a floating legend card, and the locator inset. Falls back to
+    bottom-left if a plate is so crowded that nothing is free, because a
+    panel in a bad corner is still better than no panel.
+    """
+    ts, W, H = vp["ts"], vp["width"], vp["height"]
+    panel_w, panel_h = size
+    margin = 16 * ts
+    # Top-left holds the title block; it is last, and only if nothing else
+    # is free, which is why it is offset below the strapline.
+    candidates = (
+        (margin, H - panel_h - margin),
+        (W - panel_w - margin, H - panel_h - margin),
+        (W - panel_w - margin, 70 * ts),
+        (margin, 70 * ts),
+    )
+    taken = _reserved_boxes(cfg, vp)
+    for x, y in candidates:
+        box_ = (x, y, x + panel_w, y + panel_h)
+        if not any(
+            box_[0] < rx1 and box_[2] > rx0 and box_[1] < ry1 and box_[3] > ry0
+            for rx0, ry0, rx1, ry1 in taken
+        ):
+            return x, y
+    return margin, H - panel_h - margin
+
+
+
 def _scale_bar_origin(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float]:
     """Return where :func:`_furniture_layer` will put the scale bar.
 
@@ -1903,6 +2005,58 @@ def north_arrow(x: float, y: float, ts: float = 1.0) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def _wants_hypsometry(cfg: dict[str, Any]) -> bool:
+    """Whether to colour the terrain by height as well as by light.
+
+    Same hierarchy argument as :func:`_relief_strength`, and the same
+    default: a plate carrying a thematic layer wants the quietest possible
+    base, because a hypsometric ramp is a second colour scheme competing
+    with the one that encodes who holds the ground. A plate carrying no
+    thematic layer has no such competitor, and without the tint it cannot
+    show elevation at all -- only slope.
+
+    ``basemap.hypsometric`` settles it either way for a caller who disagrees.
+    """
+    basemap = cfg.get("basemap") or {}
+    if "hypsometric" in basemap:
+        return bool(basemap["hypsometric"])
+    return not (cfg.get("areas_of_control") or {}).get("source")
+
+
+def _relief_strength(cfg: dict[str, Any], palette: dict[str, Any]) -> float:
+    """Return how hard to blend the hillshade, given what is drawn over it.
+
+    The palette's ``relief_opacity`` was swept against the Albertine Rift
+    *with the control fills in place*, and its comment says so: three
+    multiplies stack, so the terrain has to give way or the class colour goes
+    muddy. That is the correct number for a plate whose subject is who holds
+    the ground.
+
+    It is the wrong number for a plate that has no thematic layer at all.
+    Restraint in the base exists to protect the theme; with no theme to
+    protect, it just throws away contrast. Measured on the Himalaya plate --
+    eight kilometres of relief, the most this generator will ever be asked to
+    draw -- the tuned-for-conflict strength rendered the whole range inside
+    13% of the available tonal range. The plateau and the plain came out the
+    same colour.
+
+    So the strength follows the hierarchy rather than a constant: full when
+    the terrain *is* the subject, held back when something sits on top of it.
+    ``basemap.relief_strength`` overrides both, for the plate that wants to
+    argue with this.
+    """
+    override = (cfg.get("basemap") or {}).get("relief_strength")
+    if override is not None:
+        value = float(override)
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(
+                f"basemap.relief_strength must be between 0 and 1, got {value}"
+            )
+        return value
+    thematic = (cfg.get("areas_of_control") or {}).get("source")
+    return float(palette["relief_opacity"]) if thematic else 1.0
+
+
 def _relief_layer(
     vp: dict[str, Any],
     proj: Transformer,
@@ -1911,7 +2065,8 @@ def _relief_layer(
     height: float,
     clip_path_d: str,
     bbox: list[float],
-) -> str:
+    hypsometric: bool = False,
+) -> tuple[str, tuple[int, int, int]]:
     """Return a base64 ``<image>`` of real-elevation terrain shading, reprojected to this plate's LCC.
 
     Computes a hillshade + fractional-Laplacian "texture shading" blend
@@ -1970,15 +2125,33 @@ def _relief_layer(
     # solve needed, unlike Equal Earth's forward-only closed form.
     lon_grid, lat_grid = proj.transform(world_x, world_y, direction="INVERSE")
     valid_grid = np.ones_like(lon_grid, dtype=bool)
-    shade, shade_bounds = terrain_shade_for_bbox(*bbox, plot_w, plot_h)
-    relief_rgba = sample_terrain_shade(lon_grid, lat_grid, valid_grid, shade, shade_bounds)
-    return (
+    if hypsometric:
+        shade, elevation, shade_bounds = terrain_relief_for_bbox(*bbox, plot_w, plot_h)
+    else:
+        shade, shade_bounds = terrain_shade_for_bbox(*bbox, plot_w, plot_h)
+        elevation = None
+    relief_rgba = sample_terrain_shade(
+        lon_grid, lat_grid, valid_grid, shade, shade_bounds, elevation=elevation
+    )
+    # What this plate's terrain actually averages, so the legend can show a
+    # class the colour that class comes out on the page. Measured off the
+    # pixels about to be drawn rather than modelled from the ramp: a model
+    # would be one more thing that can drift away from the picture.
+    # Median, not mean. The array spans the whole padded canvas, including
+    # everything the land clip is about to throw away, and a mean is dragged
+    # about by those tails; the median answers "what does this plate's
+    # terrain typically look like", which is the question a swatch asks.
+    tone = tuple(
+        int(v) for v in np.median(relief_rgba[..., :3].reshape(-1, 3), axis=0)
+    )
+    markup = (
         '<defs><clipPath id="relief-clip">'
         f'<path d="{clip_path_d}"/></clipPath></defs>'
         f'<g id="relief" clip-path="url(#relief-clip)">'
         f'<image x="{pad:.1f}" y="{pad:.1f}" width="{plot_w}" height="{plot_h}" '
         f'href="{rgba_to_data_uri(relief_rgba)}" preserveAspectRatio="none"/></g>'
     )
+    return markup, tone
 
 
 def _fmt_lon(v: float) -> str:
@@ -2122,7 +2295,10 @@ def build_map(cfg: dict[str, Any]) -> str:
     proj = build_projection(bbox, cfg.get("projection", "auto"))
     width = float(cfg.get("canvas_width", 1000))
     pad = float(cfg.get("padding", 26))
-    vp = make_viewport(proj, bbox, width, pad, float(cfg.get("simplify", DEFAULT_TOLERANCE)))
+    vp = make_viewport(
+        proj, bbox, width, pad, float(cfg.get("simplify", DEFAULT_TOLERANCE)),
+        pad_top=_header_inset(cfg, pad, width),
+    )
     # Computed before any layer draws, because the label layers run first and
     # the furniture that would print over them is drawn last.
     vp["reserved"] = _reserved_boxes(cfg, vp)
@@ -2254,15 +2430,16 @@ def build_map(cfg: dict[str, Any]) -> str:
     # near-black night one the way a lit ridge does. Hardcoding either would
     # have made the night plate black.
     if basemap.get("relief", True):
-        relief = _relief_layer(
-            vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox
+        relief, cfg["_relief_tone"] = _relief_layer(
+            vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox,
+            hypsometric=_wants_hypsometry(cfg),
         )
         layers.append(
             f'<defs><clipPath id="relief-land-clip"><path d="{land_d}"/></clipPath></defs>'
             f'<g id="relief-blend" data-layer-id="relief" '
             f'clip-path="url(#relief-land-clip)" '
             f'style="mix-blend-mode:{palette["blend"]}" '
-            f'opacity="{palette["relief_opacity"]:.2f}">'
+            f'opacity="{_relief_strength(cfg, palette):.2f}">'
             f"{relief}</g>"
         )
 
@@ -2380,19 +2557,21 @@ def build_map(cfg: dict[str, Any]) -> str:
         interactivity == "self-contained" and cfg.get("areas_of_control", {}).get("palette")
     )
     if has_controls:
+        tier_steps = ("assessed", *_tiers_present(cfg))
         layers.append(
             controls_markup(
                 W,
                 H,
                 vp["ts"],
                 palette,
+                origin=_controls_origin(cfg, vp, controls_size(vp["ts"], tiers=tier_steps)),
                 # ``_tiers_present`` answers "which tiers need a legend row",
                 # and deliberately omits ``assessed`` because an unmarked zone
                 # already means that. A *filter* is the other question: the
                 # floor has to be offered, or the most useful setting on the
                 # whole panel -- show me only what is assessed -- is the one
                 # setting a reader cannot reach.
-                tiers=("assessed", *_tiers_present(cfg)),
+                tiers=tier_steps,
             )
         )
 
@@ -4205,6 +4384,40 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
             out.append(f'<g transform="rotate({angle} {x:.1f} {y:.1f})">{txt}</g>')
         else:
             out.append(txt)
+    # Territory labels: the names of physical regions -- a range, a plateau,
+    # a desert, a plain. They are the oldest convention on any physical map
+    # and the one with the firmest rule: a region has no point, so its name
+    # is set wide and faint *across* the ground it names, never beside a dot.
+    # Wide tracking is what tells a reader "this names an area"; a tight
+    # setting would read as a town.
+    #
+    # ``labels.territories`` was in the schema, in the validator and in the
+    # module docstring for months, and no layer read it. A config that set it
+    # was accepted in full and silently drew nothing -- the same shape of
+    # failure as the ``admin2_borders`` section that the validator rejected,
+    # only inverted: promised here, absent there.
+    for region in labels.get("territories", []):
+        x, y = vp["to_svg"](*proj.transform(region["lon"], region["lat"]))
+        size = region.get("size", 12) * ts
+        txt = tracked_text(
+            x,
+            y,
+            region["text"],
+            size=size,
+            # Warm grey rather than the water layer's blue-grey: these names
+            # belong to the land, and a reader scanning for a sea should not
+            # stop on a mountain range.
+            fill=region.get("color", "#8a8070"),
+            tracking=region.get("tracking", 4),
+            weight="500",
+            upper=region.get("upper", True),
+            anchor="middle",
+        )
+        angle = region.get("rotate", 0)
+        if angle:
+            out.append(f'<g transform="rotate({angle} {x:.1f} {y:.1f})">{txt}</g>')
+        else:
+            out.append(txt)
     return f'<g id="annotation-labels">{"".join(out)}</g>'
 
 
@@ -4577,12 +4790,12 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     subtitle = cfg.get("subtitle")
     if title:
         out.append(
-            f'<text x="{26 * ts:.0f}" y="{40 * ts:.0f}" font-family="{_DEFAULT_FONT}" '
+            f'<text x="{26 * ts:.0f}" y="{_TITLE_BASELINE * ts:.0f}" font-family="{_DEFAULT_FONT}" '
             f'font-size="{22 * ts:.0f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}">{_esc(title)}</text>'
         )
     if subtitle:
         out.append(
-            f'<text x="{26 * ts:.0f}" y="{40 * ts + 20 * ts:.0f}" font-family="{_DEFAULT_FONT}" '
+            f'<text x="{26 * ts:.0f}" y="{_SUBTITLE_BASELINE * ts:.0f}" font-family="{_DEFAULT_FONT}" '
             f'font-size="{12.5 * ts:.0f}" fill="{_pal(cfg)["chrome_sub"]}">{_esc(subtitle)}</text>'
         )
     # Same rule as the north arrow above, for the other corner the legend can
@@ -4673,8 +4886,9 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     contested = set(aoc.get("contested", []))
     fill_op = float(aoc.get("fill_opacity", COMPOSITING["claim"]))
     rows: list[dict[str, Any]] = [
-        {"kind": "class", "label": str(name), "color": color,
-         "contested": name in contested, "fill": fill_op}
+        {"kind": "class", "label": str(name),
+         "color": _as_rendered(color, cfg, fill_op),
+         "contested": name in contested, "fill": 1.0}
         for name, color in palette.items()
     ]
     for tier_name in _tiers_present(cfg):
@@ -4692,6 +4906,59 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
                      "precision": _precision_of(
                          mk.get("precision"), _GEO_PRECISION, "precision")})
     return rows
+
+
+def _as_rendered(color: str, cfg: dict[str, Any], fill_op: float) -> str:
+    """Return ``color`` as it will actually come out on the page.
+
+    A legend swatch exists so a reader can match it to the ground. Once the
+    terrain is blended under the control fills, it stops matching: the
+    Ukraine plate declares its government class as ``#bcd4ec``, a pale blue
+    with the blue channel 24 levels above the green, and the ground renders
+    at ``#b1ba b2`` -- blue five levels *below* green. The hue is not
+    attenuated, it is gone, and a reader pairing swatch to territory has to
+    guess. That was found by someone opening the plate in a browser and
+    sampling it, not by any test here.
+
+    The arithmetic below is the SVG's, not an approximation of it: a
+    ``multiply`` group at ``opacity`` s over the land, then the class fill at
+    ``fill_opacity`` f over that. The terrain tone is whatever this plate's
+    own relief averaged, measured in :func:`_relief_layer` off the pixels it
+    was about to draw.
+
+    The alternative was to leave the swatch alone and say in prose that it
+    gives the class and not the colour. That is the documentation fixing a
+    picture, which is the wrong way round.
+    """
+    tone = cfg.get("_relief_tone")
+    if not tone:
+        return color
+    palette = cfg.get("_plate", _PLATES["day"])
+    blend = (cfg.get("areas_of_control") or {}).get(
+        "blend", palette["blend"] if tone else "none"
+    )
+    if blend != "multiply":  # only multiply shifts the hue; screen is the night plate
+        return color
+    land = _hex_to_rgb((cfg.get("basemap") or {}).get("land_color", palette["land"]))
+    klass = _hex_to_rgb(color)
+    strength = _relief_strength(cfg, palette)
+    shaded = [
+        (1.0 - strength) * lc + strength * (lc * tc / 255.0)
+        for lc, tc in zip(land, tone, strict=True)
+    ]
+    out = [
+        round((1.0 - fill_op) * bc + fill_op * (bc * kc / 255.0))
+        for bc, kc in zip(shaded, klass, strict=True)
+    ]
+    return "#" + "".join(f"{max(0, min(255, c)):02x}" for c in out)
+
+
+def _hex_to_rgb(value: str) -> tuple[int, int, int]:
+    """``"#bcd4ec"`` -> ``(188, 212, 236)``."""
+    h = value.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
 
 
 def _legend_mark(row: dict[str, Any], x: float, y: float, sw: float, ts: float) -> str:
@@ -4980,7 +5247,7 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
 #: the plate still looks like a finished intelligence product. That is the
 #: worst possible response to a typo, and it is why this list exists.
 CONFIG_KEYS: frozenset[str] = frozenset({
-    "annotations", "inset", "interactivity",
+    "admin2_borders", "annotations", "inset", "interactivity",
     "areas_of_control", "arrows", "as_of", "attribution", "basemap", "canvas_width",
     "lakes",
     "caption", "events", "forces", "frame", "front", "frontiers",
@@ -4990,7 +5257,9 @@ CONFIG_KEYS: frozenset[str] = frozenset({
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
-_INTERNAL_KEYS: frozenset[str] = frozenset({"_config_dir", "_plate"})
+_INTERNAL_KEYS: frozenset[str] = frozenset(
+    {"_config_dir", "_plate", "_relief_tone"}
+)
 
 
 #: The widest longitude span a Lambert conformal conic will take before
@@ -5104,6 +5373,147 @@ def validate_region(region: Any) -> list[float]:
     return [west, south, east, north]
 
 
+#: Every key each nested section reads, so a typo one level down is refused
+#: the way a typo at the top level already was.
+#:
+#: ``CONFIG_KEYS`` has always caught ``regoin``. It never caught
+#: ``areas_of_control: {palett: ...}``, which is the same mistake in the
+#: same file and just as silent -- the section is a plain dict and an
+#: unread key in it simply does nothing. Two options added in 0.10.0
+#: (``over_water``, ``depth_rings``) also reached no document for exactly
+#: this reason: nothing enumerated them, so nothing could check them.
+#:
+#: Keeping the list here rather than deriving it means one obligation: a new
+#: option has to be added in two places. That is the point. The second place
+#: is what makes it documented and refusable, and
+#: ``tests/test_config_schema_is_documented.py`` fails if the two drift.
+SECTION_KEYS: dict[str, frozenset[str]] = {
+    "admin2_borders": frozenset({"show", "color", "label_names", "label_min_area_frac"}),
+    "areas_of_control": frozenset({
+        "source", "category_field", "confidence_field", "palette", "contested",
+        "fill_opacity", "casing_width", "blend", "over_water", "hatch_color",
+    }),
+    "basemap": frozenset({
+        "relief", "relief_strength", "hypsometric", "plate", "sea_color",
+        "land_color", "coast_color", "bathymetry",
+    }),
+    "cities": frozenset({"show", "size", "limit", "max_rank", "hand_placed_clearance"}),
+    "frame": frozenset({"margin", "page_color", "radius"}),
+    "front": frozenset({
+        "line", "color", "label", "label_at", "label_dx", "label_dy",
+        "legend", "legend_label",
+    }),
+    "frontiers": frozenset({
+        "show", "color", "focus", "label_neighbours", "label_min_area_frac",
+    }),
+    "infrastructure": frozenset({"roads", "airports"}),
+    "inset": frozenset({"show", "bbox", "position", "width", "zoom"}),
+    "internal_borders": frozenset({"show", "color", "label_names", "label_min_area_frac"}),
+    "labels": frozenset({"places", "waters", "water", "territories"}),
+    "lakes": frozenset({
+        "show", "color", "edge_color", "skip", "former", "historic", "always_label",
+        "label_color", "label_min_area_frac", "depth_rings",
+    }),
+    "rivers": frozenset({
+        "show", "width", "color", "skip", "always_label", "label_color",
+        "label_min_length_frac", "label_max_scalerank",
+    }),
+}
+
+
+def _check_section(name: str, value: Any) -> None:
+    """Refuse a nested section carrying a key this generator never reads.
+
+    Same rule and same wording as :func:`validate_config` one level down,
+    because the failure is identical: the key is simply not read, whatever
+    it configures does nothing, and the plate still looks finished.
+
+    Raises
+    ------
+    ValueError
+        Naming the closest known key, since the realistic cause is a typo.
+    """
+    known = SECTION_KEYS.get(name)
+    if known is None or not isinstance(value, dict):
+        return
+    unknown = sorted(set(value) - known)
+    if not unknown:
+        return
+    hints = []
+    for key in unknown:
+        near = get_close_matches(key, sorted(known), n=1, cutoff=0.7)
+        hints.append(f"{key!r}" + (f" (did you mean {near[0]!r}?)" if near else ""))
+    raise ValueError(
+        f"{name} has key(s) this generator never reads, so whatever they "
+        f"configure would be silently dropped: {', '.join(hints)}. "
+        f"Known {name} keys: {', '.join(sorted(known))}"
+    )
+
+
+#: Config options that name real features in a vendored dataset, and the
+#: loader whose names they must appear in. Every one of these is a list of
+#: proper nouns typed by hand, which is the single most typo-prone thing a
+#: config here contains.
+_NAME_LISTS: tuple[tuple[str, str, str], ...] = (
+    ("lakes", "always_label", "lakes"),
+    ("lakes", "skip", "lakes"),
+    ("lakes", "former", "lakes"),
+    ("lakes", "historic", "lakes"),
+    ("rivers", "always_label", "rivers"),
+    ("rivers", "skip", "rivers"),
+)
+
+
+def _known_feature_names(dataset: str) -> set[str]:
+    """Return every name the vendored ``dataset`` carries, lowercased."""
+    source = load_lakes() if dataset == "lakes" else load_rivers()
+    return {str(name).lower() for _geom, name, *_ in source if name}
+
+
+def _check_named_features(cfg: dict[str, Any]) -> None:
+    """Refuse a water name that exists in no vendored dataset.
+
+    This repository's stated rule is that a mistyped config key is refused
+    rather than ignored. That was only ever enforced on *keys*. The values
+    in ``lakes.always_label``, ``rivers.skip`` and their four siblings are
+    proper nouns matched by exact lowercase string equality against Natural
+    Earth, and a name that matched nothing did nothing, quietly.
+
+    It is not a hypothetical. The Ukraine plate draws the Kakhovka
+    Reservoir as *former* -- dashed, unfilled, because it drained in 2023 --
+    purely on the strength of ``lakes.former: ["Kakhovka Reservoir"]``
+    matching Natural Earth's spelling. Had that spelling drifted, the plate
+    would have gone back to painting 2 150 km2 of water that is not there
+    and said nothing about it. Two of these names were wrong in a config
+    written for this very release ("Lake Neuchatel", "Aare") and the only
+    reason anyone noticed is that someone looked at the picture.
+
+    The check is deliberately against the **whole dataset**, not the plate's
+    own bbox: naming a river that exists but lies outside this region is a
+    perfectly reasonable thing for a config shared between plates, while
+    naming one that exists nowhere is a typo every time.
+    """
+    problems: list[str] = []
+    for section, option, dataset in _NAME_LISTS:
+        wanted = (cfg.get(section) or {}).get(option)
+        if not wanted:
+            continue
+        known = _known_feature_names(dataset)
+        for name in wanted:
+            if str(name).lower() in known:
+                continue
+            near = get_close_matches(str(name), sorted(known), n=1, cutoff=0.6)
+            problems.append(
+                f"{section}.{option}: {name!r} matches no {dataset[:-1]} in the "
+                f"vendored data" + (f" (did you mean {near[0]!r}?)" if near else "")
+            )
+    if problems:
+        raise ValueError(
+            "situation map config names water that does not exist, so the "
+            "option would be silently ignored: " + "; ".join(problems)
+        )
+
+
 def validate_config(cfg: dict[str, Any]) -> None:
     """
     Refuse a config with keys this generator does not read.
@@ -5123,6 +5533,12 @@ def validate_config(cfg: dict[str, Any]) -> None:
             "which is what the projection auto-centres on. "
             f"Got keys: {sorted(k for k in cfg if not k.startswith('_')) or 'none'}"
         )
+
+    for section in SECTION_KEYS:
+        if section in cfg:
+            _check_section(section, cfg[section])
+
+    _check_named_features(cfg)
 
     unknown = sorted(set(cfg) - CONFIG_KEYS - _INTERNAL_KEYS)
     if unknown:

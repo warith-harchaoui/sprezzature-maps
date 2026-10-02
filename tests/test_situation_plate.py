@@ -1553,3 +1553,145 @@ def test_every_class_in_the_legend_is_actually_drawn(name: str) -> None:
             "reaches the page as no path at all — the legend promises a class "
             "the map does not draw"
         )
+
+
+# ── furniture must not sit on furniture ───────────────────────────────────
+
+
+def _panel_box(svg: str) -> tuple[float, float, float, float] | None:
+    """Return the control panel's screen box, or ``None`` if it has none."""
+    opening = re.search(r'<g id="plate-controls"[^>]*transform="translate\(([\d.]+),([\d.]+)\)"', svg)
+    if not opening:
+        return None
+    x, y = float(opening.group(1)), float(opening.group(2))
+    panel = re.search(
+        r'<g id="plate-controls".*?<rect[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"', svg, re.S
+    )
+    assert panel, "the panel must draw its own backing rect"
+    return x, y, x + float(panel.group(1)), y + float(panel.group(2))
+
+
+def _legend_band_box(svg: str) -> tuple[float, float, float, float] | None:
+    """Return the legend band's screen box, read off its own backing rect."""
+    band = re.search(
+        r'<g id="legend">\s*<rect[^>]*x="([\d.]+)"[^>]*y="([\d.]+)"'
+        r'[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"',
+        svg,
+    )
+    if not band:
+        return None
+    x, y, w, h = (float(band.group(i)) for i in (1, 2, 3, 4))
+    return x, y, x + w, y + h
+
+
+@pytest.mark.parametrize("name", sorted(_builders()))
+def test_the_control_panel_never_lands_on_the_legend(name: str) -> None:
+    """
+    Two pieces of furniture, one corner, and nothing stopping them sharing it.
+
+    The eastern DRC is the one portrait plate and the one whose legend sits
+    bottom-left, which is exactly where the panel used to be nailed. "SHOW /
+    Terrain / Water / ..." printed straight through "AREAS OF CONTROL", 51 by
+    20 pixels of it, and both became unreadable.
+
+    Nothing here could have caught it: the rasteriser draws the panel hidden,
+    so every rendered PNG was clean, and the suite counted elements rather
+    than asking where they were. It took a reader opening the plate in a
+    browser and measuring with ``getBoundingClientRect``.
+
+    This is the property, not the count -- the panel's box and the legend's
+    box must not intersect, on every plate that draws both.
+    """
+    svg = msm.build_map(_builders()[name]())
+    panel, legend = _panel_box(svg), _legend_band_box(svg)
+    if panel is None or legend is None:
+        pytest.skip(f"{name} draws no {'panel' if panel is None else 'legend band'}")
+    overlap_x = min(panel[2], legend[2]) - max(panel[0], legend[0])
+    overlap_y = min(panel[3], legend[3]) - max(panel[1], legend[1])
+    assert overlap_x <= 0 or overlap_y <= 0, (
+        f"{name}: the control panel overlaps the legend by "
+        f"{overlap_x:.0f} by {overlap_y:.0f} units "
+        f"(panel {panel}, legend {legend})"
+    )
+
+
+# ── a key the schema promises must draw something ─────────────────────────
+
+
+def test_a_territory_label_actually_reaches_the_page() -> None:
+    """
+    ``labels.territories`` was in the schema, in the validator and in the
+    module docstring, and no layer read it.
+
+    A config naming the Tibetan Plateau was accepted in full, rendered
+    without complaint, and drew nothing. That is strictly worse than a
+    refusal: a refusal is one error message, this was four invisible labels
+    and a reader wondering why the generator had ignored them. It was found
+    by looking at a picture, which is the only way it *could* have been
+    found.
+    """
+    cfg = {
+        "title": "Territory names",
+        "region": {"bbox": [72.0, 25.0, 93.0, 37.0]},
+        "canvas_width": 700,
+        "basemap": {"relief": False},
+        "labels": {"territories": [{"lon": 84.0, "lat": 32.5, "text": "Tibetan Plateau"}]},
+    }
+    msm.validate_config(cfg)
+    svg = msm.build_map(cfg)
+    assert "TIBETAN PLATEAU" in svg, (
+        "labels.territories is accepted by the validator but drew nothing"
+    )
+
+
+@pytest.mark.parametrize(
+    ("section", "option"),
+    [
+        ("lakes", "always_label"),
+        ("lakes", "skip"),
+        ("lakes", "former"),
+        ("rivers", "always_label"),
+        ("rivers", "skip"),
+    ],
+)
+def test_a_water_name_that_matches_nothing_is_refused(section: str, option: str) -> None:
+    """
+    The rule this repository states is that a mistyped config key is refused
+    rather than ignored. It was only ever enforced on *keys*.
+
+    These five options take proper nouns matched by exact string equality
+    against Natural Earth, and a name matching nothing did nothing, quietly.
+    The Ukraine plate draws the Kakhovka Reservoir as drained purely because
+    ``lakes.former`` happens to match Natural Earth's spelling of it; had
+    that drifted, the plate would have gone back to painting 2 150 km2 of
+    water that is not there and said nothing.
+
+    Two names in configs written for this very release ("Lake Neuchatel",
+    "Aare") were wrong, and the picture is the only thing that told anyone.
+    """
+    cfg: dict[str, Any] = {
+        "title": "Typo",
+        "region": {"bbox": [5.0, 45.0, 11.0, 48.0]},
+        "canvas_width": 600,
+        "basemap": {"relief": False},
+        section: {option: ["Lake Neverwuz"]},
+    }
+    with pytest.raises(ValueError, match="does not exist"):
+        msm.validate_config(cfg)
+
+
+def test_a_water_name_outside_this_plate_is_still_allowed() -> None:
+    """The check is against the dataset, not the bbox, and that matters.
+
+    Naming a river that exists but lies outside this region is a reasonable
+    thing for a config shared between plates. Only a name that exists
+    *nowhere* is a typo.
+    """
+    cfg = {
+        "title": "Elsewhere",
+        "region": {"bbox": [5.0, 45.0, 11.0, 48.0]},
+        "canvas_width": 600,
+        "basemap": {"relief": False},
+        "rivers": {"always_label": ["Brahmaputra"]},
+    }
+    msm.validate_config(cfg)  # must not raise
