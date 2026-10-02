@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-push gate: block the push on a lint, type or test failure, so a red local
+# state never reaches CI. The steps mirror this repository's own workflow, in
+# the same order, so "the hook passed" and "CI will pass" mean the same thing.
+#
+# One-time setup per clone (the repo config already does it here):
+#   git config core.hooksPath .githooks
+# Bypass, rare and deliberate only:
+#   git push --no-verify
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+# core.hooksPath replaces the global hook directory rather than adding to it,
+# and the global one is where git-lfs installs its own pre-push. This repo
+# keeps assets in LFS (see .gitattributes), so the relay has to be explicit:
+# without it, pushing uploads pointer files and leaves the objects behind.
+if command -v git-lfs >/dev/null 2>&1; then
+  git lfs pre-push "$@"
+fi
+
+echo "[pre-push] ruff..."
+ruff check sprezzature_maps scripts tests || { echo "[pre-push] ruff failed - push aborted."; exit 1; }
+
+echo "[pre-push] mypy..."
+mypy sprezzature_maps && mypy scripts || { echo "[pre-push] mypy failed - push aborted."; exit 1; }
+
+echo "[pre-push] pytest..."
+python3 -m pytest -q || { echo "[pre-push] pytest failed - push aborted."; exit 1; }
+
+echo "[pre-push] doctests..."
+for f in scripts/_geo_colors.py scripts/_relief.py scripts/_svg.py scripts/_render.py scripts/_interactive.py scripts/make_choropleth.py scripts/make_situation_map.py; do python3 -m doctest "$f"; done || { echo "[pre-push] doctests failed - push aborted."; exit 1; }
+
+echo "[pre-push] all green - pushing."
