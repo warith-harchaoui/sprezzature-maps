@@ -1195,7 +1195,7 @@ BUILDERS = {
 PNG_WIDTH = 1300  # export raster width, px
 
 
-def _render_png(svg: Path, png: Path) -> bool:
+def _render_png(svg: Path, png: Path, *, width: int = PNG_WIDTH) -> bool:
     """Rasterise ``svg`` to ``png``; return whether a raster was written.
 
     ``resvg-py`` is a declared dependency of this package, so it is here on any
@@ -1203,18 +1203,23 @@ def _render_png(svg: Path, png: Path) -> bool:
     used to require, and silently skipped every PNG without -- stays as a
     fallback for the one thing resvg occasionally trips on, a system font the
     SVG names but does not embed.
+
+    ``width`` is a parameter rather than the module constant because the
+    gallery publisher renders a world choropleth narrower than a regional
+    plate, and a second copy of this fallback logic is the last thing this
+    repository needs.
     """
     try:
         import resvg_py
 
-        png.write_bytes(bytes(resvg_py.svg_to_bytes(svg_string=svg.read_text(), width=PNG_WIDTH)))
+        png.write_bytes(bytes(resvg_py.svg_to_bytes(svg_string=svg.read_text(), width=width)))
         return True
     except Exception as exc:  # pragma: no cover - fallback path
         rsvg = shutil.which("rsvg-convert")
         if not rsvg:
             print(f"  (skipped PNG for {png.name}: resvg failed [{exc}], no rsvg-convert)")
             return False
-        subprocess.run([rsvg, "-w", str(PNG_WIDTH), str(svg), "-o", str(png)], check=True)
+        subprocess.run([rsvg, "-w", str(width), str(svg), "-o", str(png)], check=True)
         return True
 
 
