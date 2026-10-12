@@ -232,6 +232,7 @@ from _relief import (
 )
 from _render import svg_example_path, write_svg
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
+from _textbox import box_inside, boxes_overlap, text_box, text_width
 from _topojson import decode_arcs, stitch_ring
 
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py -- a genuinely
@@ -292,6 +293,7 @@ try:
     from shapely import make_valid
     from shapely.geometry import (
         MultiPolygon,
+        Point,
         Polygon,
         box,
         shape,
@@ -1856,8 +1858,10 @@ def _scale_bar_lengths(vp: dict[str, Any]) -> tuple[float, float, float, float]:
     fs = 10 * ts
 
     def fits(length: float, total: str, unit: str) -> bool:
-        text = len("0") + len(total) + len(unit)
-        return length >= text * fs * _GLYPH_WIDTH_RATIO + 8 * ts
+        # "0" at the left end of the bar, the rounded distance at the right,
+        # and the unit after it: the bar has to be at least as long as those
+        # three runs set end to end, with a little air.
+        return length >= text_width(f"0{total}{unit}", fs) + 8 * ts
 
     def grow(value: float, metres: float, unit: str) -> tuple[float, float]:
         for _ in range(6):
@@ -2321,6 +2325,36 @@ def build_map(cfg: dict[str, Any]) -> str:
     vp["reserved"] = _reserved_boxes(cfg, vp)
     W, H = vp["width"], vp["height"]
 
+    # The plate's own control panel is furniture too, and it was the one
+    # piece of furniture nothing yielded to. It ships ``display:none`` and
+    # the script turns it on, so a rasteriser never sees it and neither did
+    # any check -- but a reader with scripting on does, and on the Sudan
+    # plate the river label "Blue Nile" sat under the word "Terrain" in it.
+    # Decided here, before the labels, and handed to the drawing call far
+    # below rather than worked out twice.
+    interactivity = str(cfg.get("interactivity", "self-contained"))
+    if interactivity not in ("self-contained", "external", "static"):
+        raise ValueError(
+            f"unknown interactivity {interactivity!r}; "
+            "known: self-contained, external, static"
+        )
+    has_controls = bool(
+        interactivity == "self-contained" and cfg.get("areas_of_control", {}).get("palette")
+    )
+    controls_at: tuple[float, float] | None = None
+    # ``_tiers_present`` answers "which tiers need a legend row", and
+    # deliberately omits ``assessed`` because an unmarked zone already means
+    # that. A *filter* is the other question: the floor has to be offered,
+    # or the most useful setting on the whole panel -- show me only what is
+    # assessed -- is the one setting a reader cannot reach.
+    tier_steps = ("assessed", *_tiers_present(cfg))
+    if has_controls:
+        panel = controls_size(vp["ts"], tiers=tier_steps)
+        controls_at = _controls_origin(cfg, vp, panel)
+        vp["reserved"].append(
+            (controls_at[0], controls_at[1], controls_at[0] + panel[0], controls_at[1] + panel[1])
+        )
+
     basemap = cfg.get("basemap", {})
     # ── plate ────────────────────────────────────────────────────────────
     # "day" is the default and stays exactly as it was: cream land, muted
@@ -2361,6 +2395,26 @@ def build_map(cfg: dict[str, Any]) -> str:
     # The chrome builders take cfg, not a palette; stashing it here beats
     # threading a new argument through nine call sites.
     cfg["_plate"] = palette
+
+    # The author's own names are drawn near the top of the stack and must be
+    # decided at the bottom of it. Every automatic layer below asks the
+    # ledger "is this paper free", and a hand-placed name that is not in it
+    # yet reads as free paper -- which is how "Zuwara" came out of the city
+    # list straight into "TRIPOLI". So these two layers run now, before any
+    # of them, and their markup is held until its turn comes to be drawn.
+    # One call, not two: a layer asked where it will draw and then asked
+    # again later is a layer that can answer differently twice.
+    vp["ink"] = []
+    marker_legend = cfg.get("marker_legend", [])
+    force_marks = tag_layer(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend))
+    event_marks = tag_layer(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend))
+    hand_names = tag_layer(_labels_layer(cfg, proj, vp))
+    hand_notes = tag_layer(_annotations_layer(cfg, proj, vp))
+    # The contact line and the axes of advance carry the author's words too
+    # -- "Approx. Kordofan front", "SPLM-N (REPORTED)" -- and until they
+    # were in the ledger the river layer wrote straight over them.
+    front = _front_line_layer(cfg, proj, vp)
+    advances = _arrows_layer(cfg, proj, vp)
 
     region_box = box(bbox[0], bbox[1], bbox[2], bbox[3])
     # bbox already carries the region's real extent -- reuse it to pick the
@@ -2460,8 +2514,6 @@ def build_map(cfg: dict[str, Any]) -> str:
             f"{relief}</g>"
         )
 
-    water_labels: list[tuple[float, float]] = []
-
     # 3c. internal-borders (admin-1: US states, FR regions, OSM countries) --- #
     layers.append(_internal_borders_layer(cfg, proj, vp, region_box, plate_region))
 
@@ -2503,21 +2555,27 @@ def build_map(cfg: dict[str, Any]) -> str:
     # into its own reservoir, which the same zone had painted brown. Water is
     # physical fact and a claim does not move it, so the whole system sits
     # above the claim and reads as one thing.
-    layers.append(_lakes_layer(cfg, proj, vp, region_box, water_labels))
-    layers.append(_rivers_layer(cfg, proj, vp, region_box, water_labels))
+    layers.append(_lakes_layer(cfg, proj, vp, region_box))
+    # Built before the rivers and drawn after them. A town's name is nailed
+    # to its dot and a river's is free to slide along the water, so the
+    # layer that cannot move chooses first; claim order is not draw order.
+    # Asked the other way round, "Yamuna" took the paper and Agra, Kanpur
+    # and Allahabad all lost their names to keep it.
+    cities = _cities_layer(cfg, proj, vp, bbox, plate_region)
+    layers.append(_rivers_layer(cfg, proj, vp, region_box))
 
     # 5b-bis. cities: the map is populated by default, so a reader always has
     #         somewhere to stand.
-    layers.append(_cities_layer(cfg, proj, vp, bbox, plate_region))
+    layers.append(cities)
 
     # 5c. front line: the emphasised contact line between the control zones,
     #     the single most-read feature of a situation plate.
-    layers.append(_front_line_layer(cfg, proj, vp))
+    layers.append(front)
 
     # 5d. axes of advance: drawn last of the geographic layers, because an
     #     arrow that the coastline or a control fill crossed would stop
     #     reading as movement.
-    layers.append(_arrows_layer(cfg, proj, vp))
+    layers.append(advances)
 
     # Close the geographic stack: wrap layers 1..5d in the region clip.
     # Markers, labels, furniture, legend and frame stay unclipped -- they
@@ -2534,17 +2592,19 @@ def build_map(cfg: dict[str, Any]) -> str:
     ]
 
     # 6. forces ------------------------------------------------------------- #
-    marker_legend = cfg.get("marker_legend", [])
-    layers.append(tag_layer(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend)))
+    # Built at the top of build_map with the other hand-placed layers, so the
+    # names below could be kept off them; drawn here, in their own order.
+    layers.append(force_marks)
 
     # 7. events ------------------------------------------------------------- #
-    layers.append(tag_layer(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend)))
+    layers.append(event_marks)
 
     # 8. annotation-labels -------------------------------------------------- #
-    layers.append(tag_layer(_labels_layer(cfg, proj, vp)))
+    # Built at the top of build_map, drawn here: see the note there.
+    layers.append(hand_names)
     # Editorial notes ride above every map layer and below the furniture:
     # an annotation that a river or a label can cross is not an annotation.
-    layers.append(tag_layer(_annotations_layer(cfg, proj, vp)))
+    layers.append(hand_notes)
 
     # 9. annotation-furniture ---------------------------------------------- #
     layers.append(_furniture_layer(cfg, vp))
@@ -2564,32 +2624,9 @@ def build_map(cfg: dict[str, Any]) -> str:
     # Drawn last so they sit above every layer they switch, and hidden until
     # the script reveals them -- an <img> embed, a rasteriser or a browser
     # with scripting off all keep exactly the plate that shipped before.
-    interactivity = str(cfg.get("interactivity", "self-contained"))
-    if interactivity not in ("self-contained", "external", "static"):
-        raise ValueError(
-            f"unknown interactivity {interactivity!r}; "
-            "known: self-contained, external, static"
-        )
-    has_controls = bool(
-        interactivity == "self-contained" and cfg.get("areas_of_control", {}).get("palette")
-    )
     if has_controls:
-        tier_steps = ("assessed", *_tiers_present(cfg))
         layers.append(
-            controls_markup(
-                W,
-                H,
-                vp["ts"],
-                palette,
-                origin=_controls_origin(cfg, vp, controls_size(vp["ts"], tiers=tier_steps)),
-                # ``_tiers_present`` answers "which tiers need a legend row",
-                # and deliberately omits ``assessed`` because an unmarked zone
-                # already means that. A *filter* is the other question: the
-                # floor has to be offered, or the most useful setting on the
-                # whole panel -- show me only what is assessed -- is the one
-                # setting a reader cannot reach.
-                tiers=tier_steps,
-            )
+            controls_markup(W, H, vp["ts"], palette, origin=controls_at, tiers=tier_steps)
         )
 
     # 10b. attribution -------------------------------------------------------- #
@@ -2763,7 +2800,6 @@ def _lakes_layer(
     proj: Transformer,
     vp: dict[str, Any],
     region_box: Any,
-    placed: list[tuple[float, float]] | None = None,
 ) -> str:
     """Return inland lakes, filled as water and labelled in italic like the rivers.
 
@@ -2840,7 +2876,6 @@ def _lakes_layer(
 
     shapes: list[str] = []
     labels: list[str] = []
-    placed = placed if placed is not None else []
     for geom, name, _rank in load_lakes():
         key = name.lower()
         if key and key in skip:
@@ -2903,11 +2938,31 @@ def _lakes_layer(
         pt = _label_point(biggest)
         x, y = vp["to_svg"](pt.x, pt.y)
         size = 10.5 * ts
-        if not _label_fits(x, y, name, size=size, vp=vp):
+        # The plate's ink ledger has replaced the circle of exclusion the
+        # water layers used to keep around each other's names: a radius is
+        # the right shape for a dot and the wrong one for a word, and 58
+        # units of it rejected "Lake Kivu" six characters clear of "Bukavu"
+        # while letting "Blue Nile" sit inside "AD-DAMAZIN", which is 56
+        # units long and was written by a different layer the radius never
+        # saw.
+        #
+        # A lake is an area, so its name moves inside it rather than being
+        # dropped -- ``biggest`` is already projected, so the check needs
+        # ``to_world`` and no inverse projection. The Kakhovka Reservoir is
+        # why: its deepest point is under a marker on the Ukraine plate, and
+        # "(former)" is the one word on that plate saying the water is gone.
+        at = _claim_area_label(
+            biggest, name, size=size, tracking=0.0, vp=vp, caps=False,
+            anchor_xy=(x, y),
+            # One line-height of water's worth of slack, in ground metres.
+            # A name a line outside its own shoreline still reads as that
+            # water's name; a name a line outside a border reads as the
+            # neighbouring country's, which is why only water gets this.
+            slack=size * vp["m_per_unit"],
+        )
+        if at is None:
             continue
-        if any((x - px) ** 2 + (y - py) ** 2 < (58 * ts) ** 2 for px, py in placed):
-            continue
-        placed.append((x, y))
+        x, y = at
         labels.append(
             f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="middle" '
             f'font-family="{_DEFAULT_FONT}" font-size="{size:.1f}" font-style="italic" '
@@ -3247,13 +3302,12 @@ def _frontiers_layer(
             continue
         pieces.append(poly.boundary.intersection(region_box))
         if do_label and name and name.lower() not in focus and vis.area >= min_frac * region_area:
-            pt = _label_point(vis)
-            x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            if _label_fits(
-                x, y, name, size=9.5 * ts, tracking=2.2, vp=vp, region=region
-            ):
+            at = _claim_area_label(
+                vis, name, size=9.5 * ts, tracking=2.2, vp=vp, proj=proj, region=region
+            )
+            if at is not None:
                 labels.append(
-                    tracked_text(x, y, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
+                    tracked_text(*at, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
                 )
     if pieces:
         # unary_union nodes the collection and merges the coincident runs, so a
@@ -3268,11 +3322,11 @@ def _frontiers_layer(
     return f'<g id="frontiers">{"".join(lines)}{"".join(labels)}</g>'
 
 
-#: Average glyph advance as a fraction of font size, for the house sans at the
-#: weights territory labels use. Same constant, same purpose, as
-#: ``_places._GLYPH_WIDTH_RATIO``: estimating a label's width without
-#: measuring text, which an SVG writer cannot do.
-_GLYPH_WIDTH_RATIO = 0.55
+#: Breathing room between two pieces of text, in units at ``ts=1``. Touching
+#: boxes are not a collision -- two names a hair apart read as two names --
+#: but a hair is all it takes for the white halo of one to eat the stem of
+#: the other, so the ledger keeps a little more than nothing between them.
+_LABEL_CLEARANCE = 1.5
 
 
 def _label_fits(
@@ -3285,6 +3339,7 @@ def _label_fits(
     vp: dict[str, Any],
     region: Any | None = None,
     anchor: str = "middle",
+    caps: bool = False,
 ) -> bool:
     """Return whether a label lands wholly inside the drawn map, not merely inside the plate.
 
@@ -3315,21 +3370,27 @@ def _label_fits(
     tracking : float, optional
         Extra letter-spacing in user units, as passed to :func:`tracked_text`.
     vp : dict
-        The viewport, for its ``width``/``height``.
+        The viewport, for its ``width``/``height``, the furniture rectangles
+        in ``reserved`` and the names already drawn in ``ink``.
     region : shapely Polygon, optional
         The region clip in plate coordinates. When given, the label box must
         fit inside it; when ``None``, the plate rectangle is used.
     anchor : str, optional
         ``"middle"`` (the territory labels) or ``"start"`` (the city layer).
+    caps : bool, optional
+        True when the drawing call upper-cases the label, as
+        :func:`tracked_text` does. It changes the answer by a fifth of the
+        label's width, so it is passed rather than guessed.
 
     Returns
     -------
     bool
-        True when the whole label lies inside the clip.
+        True when the whole label lies inside the clip and touches nothing
+        already on the plate.
 
     Examples
     --------
-    >>> vp = {"width": 200.0, "height": 100.0}
+    >>> vp = {"width": 200.0, "height": 100.0, "ts": 1.0}
     >>> _label_fits(100, 50, "CHAD", size=10, tracking=2, vp=vp)
     True
 
@@ -3339,25 +3400,36 @@ def _label_fits(
     >>> _label_fits(6, 50, "CHAD", size=10, tracking=2, vp=vp)
     False
 
-    And a label well inside the plate still fails when the region clip does
-    not reach it:
+    A label well inside the plate still fails when the region clip does not
+    reach it:
 
     >>> from shapely.geometry import box as _box
     >>> _label_fits(100, 50, "CHAD", size=10, tracking=2, vp=vp,
     ...             region=_box(0, 0, 60, 100))
     False
+
+    And it fails when another layer has already inked that paper:
+
+    >>> vp["ink"] = [(90.0, 44.0, 110.0, 52.0)]
+    >>> _label_fits(100, 50, "CHAD", size=10, tracking=2, vp=vp)
+    False
     """
-    width = len(text) * (size * _GLYPH_WIDTH_RATIO + tracking)
-    x0 = x - width / 2.0 if anchor == "middle" else x
-    x1 = x0 + width
-    # Cap height above the baseline, a little descender room below.
-    y0, y1 = y - 0.78 * size, y + 0.24 * size
+    x0, y0, x1, y1 = text_box(
+        x, y, text, size=size, tracking=tracking, anchor=anchor, caps=caps
+    )
     # Furniture owns its rectangles and labels yield: a name with a scale bar
     # through it is not a name. Read off the viewport rather than passed in,
     # so every layer that places text -- cities, territories, neighbours --
     # obeys the same reservation without a new argument at each call site.
-    for rx0, ry0, rx1, ry1 in vp.get("reserved", ()):
-        if x0 < rx1 and x1 > rx0 and y0 < ry1 and y1 > ry0:
+    #
+    # ``ink`` is the same idea one step further: every name already committed
+    # to this plate, whichever layer wrote it. Before it existed each layer
+    # dodged only its own output, which is how a river name and a town name
+    # drawn by two different layers ended up sharing the same paper on four
+    # of the nine plates -- found by measuring the shipped SVGs, not by the
+    # suite, because nothing had ever compared two layers' boxes.
+    for other in (*vp.get("reserved", ()), *vp.get("ink", ())):
+        if boxes_overlap((x0, y0, x1, y1), other, pad=_LABEL_CLEARANCE * vp.get("ts", 1.0)):
             return False
     if region is None:
         return x0 >= 0.0 and x1 <= float(vp["width"]) and y0 >= 0.0 and y1 <= float(vp["height"])
@@ -3365,6 +3437,254 @@ def _label_fits(
         return bool(region.contains(box(x0, y0, x1, y1)))
     except Exception:  # a degenerate clip must not cost the plate its labels
         return x0 >= 0.0 and x1 <= float(vp["width"])
+
+
+def _claim_label(
+    x: float,
+    y: float,
+    text: str,
+    *,
+    size: float,
+    tracking: float = 0.0,
+    vp: dict[str, Any],
+    region: Any | None = None,
+    anchor: str = "middle",
+    caps: bool = False,
+) -> bool:
+    """Ask :func:`_label_fits`, and on a yes take the paper as well.
+
+    Asking and taking are one call on purpose. The alternative -- a layer
+    that tests and then forgets to record -- is the failure this whole
+    mechanism exists to stop, and this repository has already paid for the
+    two-call version once: :func:`_scale_bar_origin` was split out of
+    :func:`_furniture_layer` precisely because a rectangle computed twice
+    drifts, and then the reservation protects empty paper while the thing
+    itself prints over a name somewhere else.
+
+    Parameters are :func:`_label_fits`'s, unchanged.
+
+    Returns
+    -------
+    bool
+        True when the label was placed *and* its box is now in the plate's
+        ink ledger, so every later layer will see it.
+    """
+    if not _label_fits(
+        x, y, text, size=size, tracking=tracking, vp=vp,
+        region=region, anchor=anchor, caps=caps,
+    ):
+        return False
+    vp.setdefault("ink", []).append(
+        text_box(x, y, text, size=size, tracking=tracking, anchor=anchor, caps=caps)
+    )
+    return True
+
+
+def _claim_area_label(
+    vis: Any,
+    name: str,
+    *,
+    size: float,
+    tracking: float,
+    vp: dict[str, Any],
+    proj: Transformer | None = None,
+    region: Any | None = None,
+    caps: bool = True,
+    anchor_xy: tuple[float, float] | None = None,
+    slack: float = 0.0,
+) -> tuple[float, float] | None:
+    """Place the name of an area, letting it move *within* that area.
+
+    An area label has no one correct point the way a town's does. It wants
+    the deepest spot inside the shape (:func:`_label_point`), but if that
+    paper is taken, any other spot inside the same shape still names the
+    same thing -- which is more than a town's name can say about being
+    moved. So the name steps up and down the shape rather than being
+    dropped, and every step is checked back against the geometry, so it can
+    never walk out of the country it names.
+
+    ``PORTUGAL`` is the case that asked for this: its deepest point sits
+    two units above the author's ``ATLANTIC OCEAN``, close enough that the
+    two read as one block, and the first version of the ledger answered by
+    deleting the country's name from a plate of Iberia.
+
+    Parameters
+    ----------
+    vis : shapely geometry
+        The part of the area inside the region, in lon/lat.
+    name : str
+        The label, upper-cased by :func:`tracked_text` when drawn.
+    size, tracking : float
+        Type size and letter-spacing, in plate units.
+    vp : dict
+        The viewport, for ``to_svg``/``to_world`` and the ink ledger.
+    proj : pyproj.Transformer, optional
+        The plate's projection, when ``vis`` is in lon/lat: used forwards to
+        place and backwards to check that a moved label is still over its
+        own ground. Leave it out when ``vis`` has already been projected,
+        as the water layers' geometry has -- then ``vp["to_world"]`` alone
+        answers the same question.
+    region : shapely Polygon or None, optional
+        The region clip, passed through to :func:`_label_fits`.
+    caps : bool, optional
+        Whether the drawing call upper-cases the name.
+    anchor_xy : tuple of float, optional
+        The starting point in plate coordinates, when the caller has
+        already computed it.
+    slack : float, optional
+        How far outside the shape a moved label may still sit, in the units
+        ``vis`` is expressed in. Zero for a country, where a name past the
+        border names the wrong country. Water is the exception the atlases
+        all make: a lake too narrow to hold its own name is named *beside*
+        the water, and on these plates the Kakhovka Reservoir is exactly
+        that -- a 191-unit name over a basin 19 units deep.
+
+    Returns
+    -------
+    tuple of float, or None
+        The ``(x, y)`` the label was placed at, or ``None`` when every
+        candidate inside the shape was already taken.
+    """
+    if anchor_xy is not None:
+        x, y = anchor_xy
+    else:
+        pt = _label_point(vis)
+        x, y = vp["to_svg"](*(proj.transform(pt.x, pt.y) if proj else (pt.x, pt.y)))
+
+    # Down the page by a line and a third: far enough to clear whatever
+    # blocked the label, near enough that the name is still visibly on the
+    # same ground. Across the page by rather more, because a label is many
+    # times wider than it is tall and a half-step sideways clears nothing:
+    # what blocked "Kakhovka Reservoir (former)" was a 10-unit marker dot
+    # in the middle of a 191-unit name, and only a shift of about half the
+    # name's own width takes the name off it. An elongated lake has that
+    # room sideways and none at all up and down, and a tall country is the
+    # other way about, which is why both axes are offered.
+    down = size * 1.35
+    wide = text_width(name.upper() if caps else name, size, tracking)
+    # Three sideways steps rather than one. Half the name's width clears a
+    # blocker sitting dead centre, but most blockers are not dead centre,
+    # and the nearest step that works is the one to take: the Kakhovka
+    # Reservoir's name clears the marker beside it at 0.42 of its width and
+    # would have been thrown away by a list that only offered 0.56.
+    offsets = (
+        (0.0, 0.0),
+        (0.0, -down), (0.0, down),
+        (-0.28 * wide, 0.0), (0.28 * wide, 0.0),
+        (-0.42 * wide, 0.0), (0.42 * wide, 0.0),
+        (-0.56 * wide, 0.0), (0.56 * wide, 0.0),
+        (0.0, -2.0 * down), (0.0, 2.0 * down),
+        (-0.42 * wide, -down), (0.42 * wide, -down),
+        (-0.42 * wide, down), (0.42 * wide, down),
+    )
+    for dx, dy in offsets:
+        cx, cy = x + dx, y + dy
+        if (dx or dy):
+            wx, wy = vp["to_world"](cx, cy)
+            if proj is not None:
+                wx, wy = proj.transform(wx, wy, direction="INVERSE")
+            # Checked back against the geometry every time, so a name can
+            # never walk out of the thing it names.
+            point = Point(wx, wy)
+            if not (vis.contains(point) if slack <= 0 else vis.distance(point) <= slack):
+                continue
+        if _claim_label(
+            cx, cy, name, size=size, tracking=tracking, vp=vp, region=region, caps=caps
+        ):
+            return cx, cy
+    return None
+
+
+def _rotated_box(
+    box_: tuple[float, float, float, float], angle_deg: float, cx: float, cy: float
+) -> tuple[float, float, float, float]:
+    """Return the upright box that contains ``box_`` turned about ``(cx, cy)``.
+
+    A water or territory name may be set at an angle to follow the thing it
+    names. The ledger stores upright rectangles, so a turned label is stored
+    as the smallest upright one that covers it -- generous by the corners,
+    which is the right direction to be wrong in when the question is whether
+    two names touch.
+
+    Examples
+    --------
+    A square turned a quarter-circle about its own centre is itself:
+
+    >>> tuple(round(v, 6) for v in _rotated_box((-1, -1, 1, 1), 90, 0, 0))
+    (-1.0, -1.0, 1.0, 1.0)
+
+    Turned an eighth, it needs a box wider by root two:
+
+    >>> tuple(round(v, 4) for v in _rotated_box((-1, -1, 1, 1), 45, 0, 0))
+    (-1.4142, -1.4142, 1.4142, 1.4142)
+    """
+    rad = math.radians(angle_deg)
+    cos, sin = math.cos(rad), math.sin(rad)
+    xs, ys = [], []
+    for px, py in (
+        (box_[0], box_[1]), (box_[2], box_[1]), (box_[2], box_[3]), (box_[0], box_[3])
+    ):
+        dx, dy = px - cx, py - cy
+        xs.append(cx + dx * cos - dy * sin)
+        ys.append(cy + dx * sin + dy * cos)
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _ink_mark(x: float, y: float, radius: float, vp: dict[str, Any]) -> None:
+    """Record a solid mark -- a dot, a capital's star -- in the plate's ledger.
+
+    Stored as the square around it rather than as a circle: the ledger
+    compares rectangles, and the corners it adds are a couple of units of
+    extra clearance around a glyph that is about to have a name set beside
+    it anyway.
+    """
+    vp.setdefault("ink", []).append((x - radius, y - radius, x + radius, y + radius))
+
+
+def _ink_hand_label(
+    box_: tuple[float, float, float, float], vp: dict[str, Any], what: str
+) -> None:
+    """Record a hand-placed label on the plate, refusing one drawn off it.
+
+    Hand-placed names are the author's argument and are never dropped for
+    want of room -- they go in the ledger unconditionally, and it is the
+    automatic layers that yield to them. But a name the author placed
+    outside the region is not a name the reader will ever see: it is drawn
+    into the margin beyond the frame, or past the bottom of the plate, and
+    nothing says so.
+
+    Three of the nine bundled plates shipped exactly that. ``Kalemie`` sits
+    1.2 degrees south of the eastern-DRC region, ``Kolkata`` 1.9 degrees
+    south of the Himalaya one, and ``Black Sea`` -- a 19-unit tracked name,
+    the plate's whole orientation cue -- 0.9 degrees south of the Ukraine
+    one. All three were written in good faith, accepted in full, and drawn
+    where no reader could find them. That is the same failure as a config
+    key nobody reads, and it gets the same answer this repository gives
+    that: one error message, naming the label, rather than silence.
+
+    Parameters
+    ----------
+    box_ : tuple of float
+        The label's ink rectangle in plate coordinates.
+    vp : dict
+        The viewport; its ``width``/``height`` are the plate.
+    what : str
+        How to name the label in the error, e.g. ``labels.places "Kalemie"``.
+
+    Raises
+    ------
+    ValueError
+        When any part of the label falls outside the plate.
+    """
+    plate = (0.0, 0.0, float(vp["width"]), float(vp["height"]))
+    if not box_inside(box_, plate):
+        raise ValueError(
+            f"{what} is drawn at ({box_[0]:.0f}, {box_[1]:.0f})-({box_[2]:.0f}, "
+            f"{box_[3]:.0f}), outside the {plate[2]:.0f} by {plate[3]:.0f} plate, "
+            "so no reader would see it. Move it inside the region, widen "
+            "region.bbox to include it, or remove it."
+        )
+    vp.setdefault("ink", []).append(box_)
 
 
 def _label_point(vis: Any) -> Any:
@@ -3522,13 +3842,12 @@ def _internal_borders_layer(
                 f'stroke-dasharray="{2.0 * ts:.1f} {1.8 * ts:.1f}"/>'
             )
         if do_label and name and vis.area >= min_frac * region_area:
-            pt = _label_point(vis)
-            x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            if _label_fits(
-                x, y, name, size=8.0 * ts, tracking=1.6, vp=vp, region=region
-            ):
+            at = _claim_area_label(
+                vis, name, size=8.0 * ts, tracking=1.6, vp=vp, proj=proj, region=region
+            )
+            if at is not None:
                 labels.append(
-                    tracked_text(x, y, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500")
+                    tracked_text(*at, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500")
                 )
     return f'<g id="internal-borders">{"".join(lines)}{"".join(labels)}</g>'
 
@@ -3578,13 +3897,12 @@ def _admin2_borders_layer(
                 f'stroke-dasharray="{1.4 * ts:.1f} {1.4 * ts:.1f}"/>'
             )
         if do_label and name and vis.area >= min_frac * region_area:
-            pt = _label_point(vis)
-            x, y = vp["to_svg"](*proj.transform(pt.x, pt.y))
-            if _label_fits(
-                x, y, name, size=6.8 * ts, tracking=1.2, vp=vp, region=region
-            ):
+            at = _claim_area_label(
+                vis, name, size=6.8 * ts, tracking=1.2, vp=vp, proj=proj, region=region
+            )
+            if at is not None:
                 labels.append(
-                    tracked_text(x, y, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500")
+                    tracked_text(*at, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500")
                 )
     return f'<g id="admin2-borders">{"".join(lines)}{"".join(labels)}</g>'
 
@@ -3629,7 +3947,6 @@ def _rivers_layer(
     proj: Transformer,
     vp: dict[str, Any],
     region_box: Any,
-    placed: list[tuple[float, float]] | None = None,
 ) -> str:
     """Return river centerlines (water blue) with italic names for the major ones.
 
@@ -3658,10 +3975,6 @@ def _rivers_layer(
     m_per_unit = vp["m_per_unit"]
     lines: list[str] = []
     labels: list[str] = []
-    # Shared with the lakes layer when build_map passes its list in: the two
-    # name the same water from two datasets, and each one dodging only its own
-    # labels printed "Dnieper" straight through "Kakhovka Reservoir".
-    placed = placed if placed is not None else []
     labeled: set[str] = set()  # one label per named river
     for geom, name, rank in sorted(load_rivers(), key=lambda r: -r[2]):
         try:
@@ -3686,13 +3999,25 @@ def _rivers_layer(
         length_px = comp.length / m_per_unit
         if not ((rank <= max_rank and length_px >= min_px) or name.lower() in always):
             continue
-        mid = comp.interpolate(0.55, normalized=True)
-        x, y = vp["to_svg"](mid.x, mid.y)
-        if any((x - px) ** 2 + (y - py) ** 2 < (58 * ts) ** 2 for px, py in placed):
-            continue
-        placed.append((x, y))
-        labeled.add(name.lower())
         size = 10.5 * ts
+        # A river name is the one label on the plate with somewhere else to
+        # go. A town's name must stay beside its dot or it points at the
+        # wrong town; a river's can sit anywhere along the water, and a name
+        # set along the course is the older convention anyway. So when the
+        # midpoint is taken, walk the reach instead of dropping the name --
+        # and because this layer can move, it is asked last, after the
+        # cities have taken the paper they cannot leave.
+        #
+        # The fractions run outward from the middle: the centre of the
+        # in-view reach is where the name belongs if nothing is in the way.
+        for frac in (0.55, 0.42, 0.68, 0.3, 0.8, 0.2, 0.9):
+            mid = comp.interpolate(frac, normalized=True)
+            x, y = vp["to_svg"](mid.x, mid.y)
+            if _claim_label(x, y, name, size=size, vp=vp):
+                break
+        else:
+            continue
+        labeled.add(name.lower())
         labels.append(
             f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="middle" '
             f'font-family="{_DEFAULT_FONT}" font-size="{size:.1f}" font-style="italic" '
@@ -3740,6 +4065,12 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
         x, y = vp["to_svg"](*proj.transform(at[0], at[1]))
         dx = fr.get("label_dx", 10) * ts
         dy = fr.get("label_dy", -6) * ts
+        _ink_hand_label(
+            text_box(x + dx, y + dy, label, size=10.5 * ts, tracking=1.4,
+                     anchor="start", caps=True),
+            vp,
+            f'the front label "{label}"',
+        )
         parts.append(
             f'<text x="{x + dx:.1f}" y="{y + dy:.1f}" text-anchor="start" '
             f'font-family="{_DEFAULT_FONT}" font-size="{10.5 * ts:.1f}" '
@@ -3915,6 +4246,14 @@ def _markers_layer(
                 f'fill="#ffffff" fill-opacity="0.65" stroke="{color}" '
                 f'stroke-width="{max(1.6, r * 0.45):.1f}"{broken}'
             )
+        # The mark itself goes in the ledger; the uncertainty halo does not.
+        # A halo is a hollow ring that can be kilometres across, and
+        # reserving its whole disc would clear half a plate of names to
+        # protect paper that is empty. The dot is small, solid, and the one
+        # thing a name must never land on: "Blue Nile" came to rest exactly
+        # on the red mark at Ad-Damazin the first time this ledger ran,
+        # because the ledger knew about words and not about ink.
+        vp.setdefault("ink", []).append((x - r, y - r, x + r, y + r))
         out.append(
             f'{halo}<circle class="hit" tabindex="0" cx="{x:.1f}" cy="{y:.1f}" '
             f'r="{r:.1f}" {paint}{data} filter="url(#marker-shadow)"/>'
@@ -4203,6 +4542,13 @@ def _arrows_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
             # top of the arrow it names is worse than no name. Which way it
             # runs follows the offset's own direction, so it is always the far
             # side of the arrow that the text grows into.
+            anchor = "end" if (-ty / tnorm) * offset < 0 else "start"
+            _ink_hand_label(
+                text_box(lx, ly, str(label), size=9.0 * ts, tracking=1.4,
+                         anchor=anchor, caps=True),
+                vp,
+                f'the arrow label "{label}"',
+            )
             out.append(
                 tracked_text(
                     lx,
@@ -4212,7 +4558,7 @@ def _arrows_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
                     fill=color,
                     tracking=1.4,
                     weight="700",
-                    anchor="end" if (-ty / tnorm) * offset < 0 else "start",
+                    anchor=anchor,
                 )
             )
     return f'<g id="arrows">{"".join(out)}</g>'
@@ -4300,16 +4646,28 @@ def _cities_layer(
     # "Istanbul" came out as "Ista". A name half outside the frame is worse
     # than no name: the reader sees a dot with a truncated word beside it.
     plate = (0.0, 0.0, float(vp["width"]), float(vp["height"]))
+    # Handing the ledger to the placer, rather than only filtering what it
+    # returns, is what lets a crowded town keep its name: the placer has a
+    # second position to try (the name to the *left* of the dot), and a
+    # caller that only vetoes the first one throws that away. Zuwara lost
+    # its name to TRIPOLI this way, with its left side free the whole time.
     for city, dot_x, dot_y, label_x, label_y in place_labels(
-        chosen, to_svg, font_size=size, dot_radius=2.0 * ts, bounds_px=plate
+        chosen,
+        to_svg,
+        font_size=size,
+        dot_radius=2.0 * ts,
+        bounds_px=plate,
+        avoid=[*vp.get("reserved", ()), *vp.get("ink", ())],
+        clearance=_LABEL_CLEARANCE * ts,
     ):
         # The plate rectangle is the outer bound; the region clip is the real
         # one, and it is narrower wherever the projection bends the frame in.
         # "Asmara" survived the rectangle and came out of the clip as "Asm".
-        if not _label_fits(
+        if not _claim_label(
             label_x, label_y, city.name, size=size, vp=vp, region=region, anchor="start"
         ):
             continue
+        _ink_mark(dot_x, dot_y, 2.0 * ts, vp)
         out.append(
             f'<circle cx="{dot_x:.1f}" cy="{dot_y:.1f}" r="{2.0 * ts:.1f}" '
             f'fill="#2B2B2E" fill-opacity="0.8"/>'
@@ -4350,8 +4708,10 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         if place.get("capital"):
             # A capital gets a ringed star, the classic cartographic capital glyph.
             clear = max(clear, 7.5 * ts)
+            _ink_mark(x, y, 7.0 * ts + 2.2 * ts, vp)  # the star plus its white ring
             out.append(_capital_star(x, y, 7.0 * ts))
         elif place.get("dot", True):
+            _ink_mark(x, y, 2.6 * ts, vp)
             out.append(
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{2.6 * ts:.1f}" fill="#2f343a" '
                 f'stroke="#ffffff" stroke-width="{1.1 * ts:.1f}"/>'
@@ -4367,6 +4727,12 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         else:  # "start": name to the right of the marker
             lx, ly, ta = x + clear + gap, y + 0.32 * size, "start"
         weight = "700" if place.get("capital") else "600"
+        _ink_hand_label(
+            text_box(lx, ly, place["text"], size=size, tracking=tracking,
+                     anchor=ta, caps=True),
+            vp,
+            f'labels.places "{place["text"]}"',
+        )
         out.append(
             tracked_text(
                 lx,
@@ -4387,6 +4753,16 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
     for w in waters:
         x, y = vp["to_svg"](*proj.transform(w["lon"], w["lat"]))
         angle = w.get("rotate", 0)
+        _ink_hand_label(
+            _rotated_box(
+                text_box(x, y, w["text"], size=w.get("size", 19) * ts,
+                         tracking=w.get("tracking", 6), anchor="middle",
+                         caps=w.get("upper", True)),
+                angle, x, y,
+            ),
+            vp,
+            f'labels.waters "{w["text"]}"',
+        )
         txt = tracked_text(
             x,
             y,
@@ -4416,6 +4792,16 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
     for region in labels.get("territories", []):
         x, y = vp["to_svg"](*proj.transform(region["lon"], region["lat"]))
         size = region.get("size", 12) * ts
+        _ink_hand_label(
+            _rotated_box(
+                text_box(x, y, region["text"], size=size,
+                         tracking=region.get("tracking", 4), anchor="middle",
+                         caps=region.get("upper", True)),
+                region.get("rotate", 0), x, y,
+            ),
+            vp,
+            f'labels.territories "{region["text"]}"',
+        )
         txt = tracked_text(
             x,
             y,
@@ -4538,6 +4924,12 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
         )
         pad = 3 * ts if place == "right" else (-3 * ts if place == "left" else 0.0)
         for i, line in enumerate(lines):
+            _ink_hand_label(
+                text_box(tx + pad, first + i * size * 1.24, line,
+                         size=size, anchor=anchor),
+                vp,
+                f'the annotation "{line}"',
+            )
             out.append(
                 f'<text x="{tx + pad:.1f}" y="{first + i * size * 1.24:.1f}" '
                 f'text-anchor="{anchor}" font-family="{_DEFAULT_FONT}" '
@@ -5089,10 +5481,12 @@ def _legend_band_dims(
     row_h = 23 * ts
     sw = 15 * ts
     gutter = 18 * ts
-    # No text measurement is available to an SVG writer, so estimate from the
-    # same glyph-advance ratio the label layer uses.
-    widest = max(len(r["label"]) for r in rows)
-    col_w = sw + 10 * ts + widest * 12.0 * ts * _GLYPH_WIDTH_RATIO + gutter
+    # The widest row sets the column, measured at the size the band actually
+    # draws it (``row_fs`` below is 12.0 * ts). Counting characters and
+    # multiplying by a flat advance put "SPLM-N (al-Hilu)" and "Russian-
+    # occupied (approx.)" in the same column as "RSF", which is how a label
+    # ends up over its neighbour's swatch.
+    col_w = sw + 10 * ts + max(text_width(r["label"], 12.0 * ts) for r in rows) + gutter
     columns = max(1, min(len(rows), int((map_w - 2 * pad) // col_w) if col_w else 1))
     band_rows = -(-len(rows) // columns)
     foot_h = 20 * ts if cfg.get("legend_footer") else 0.0

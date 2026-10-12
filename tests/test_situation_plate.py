@@ -25,6 +25,9 @@ from sprezzature_maps import _load_script
 msm = _load_script("make_situation_map")
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
+
+from _textbox import text_width  # noqa: E402
 
 #: A small, fast region with land, a coast and a neighbour to label.
 _IBERIA = [-10.0, 36.0, 4.0, 44.0]
@@ -798,7 +801,10 @@ def test_the_scale_bar_is_long_enough_to_carry_its_own_labels() -> None:
                    re.findall(r'<rect x="([-\d.]+)"[^>]*width="([\d.]+)"', svg)]
         assert len(labels) == 2 and len(lengths) == 4
         for label, length in zip(labels, (lengths[1], lengths[3]), strict=True):
-            needed = (len("0") + len(label)) * 10 * vp["ts"] * msm._GLYPH_WIDTH_RATIO
+            # Measured, not counted. A flat advance per character said
+            # "200KM" fitted a bar it overran by a fifth, because K and M
+            # are among the widest glyphs in the face and a digit is not.
+            needed = text_width(f"0{label}", 10 * vp["ts"])
             assert length >= needed, f"{width}: '{label}' does not fit its {length:.0f}-unit bar"
         # And neither bar may run off the plate.
         assert max(lengths) < width, f"{width}: a scale bar overruns the canvas"

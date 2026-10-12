@@ -273,7 +273,11 @@ def build_ukraine() -> dict[str, Any]:
         ],
         "labels": {
             "waters": [
-                {"lon": 31.3, "lat": 43.15, "text": "Black Sea", "size": 19, "tracking": 7},
+                # 43.15 put this 0.9 degrees south of the region and drew the
+                # plate's largest orientation cue 50 units below its bottom edge,
+                # where nobody ever saw it. 44.45 is open water west of Crimea
+                # and inside the frame.
+                {"lon": 31.3, "lat": 44.45, "text": "Black Sea", "size": 19, "tracking": 7},
                 {"lon": 37.0, "lat": 46.35, "text": "Sea of Azov", "size": 11, "tracking": 2.4},
             ],
             "places": [
@@ -908,7 +912,6 @@ def build_drc() -> dict[str, Any]:
                 {"lon": 29.1500, "lat": -3.4000, "text": "Uvira", "size": 11},
                 {"lon": 28.7301, "lat": -3.9344, "text": "Minembwe", "size": 11, "anchor": "end"},
                 {"lon": 29.0940, "lat": -4.1041, "text": "Baraka", "size": 11},
-                {"lon": 29.1906, "lat": -5.9128, "text": "Kalemie", "size": 11},
             ],
         },
     }
@@ -1166,7 +1169,6 @@ def build_himalaya() -> dict[str, Any]:
                 {"lon": 85.3240, "lat": 27.7172, "text": "Kathmandu", "capital": True},
                 {"lon": 91.1162, "lat": 29.6500, "text": "Lhasa", "size": 12},
                 {"lon": 74.3587, "lat": 31.5204, "text": "Lahore", "size": 11},
-                {"lon": 88.3639, "lat": 22.5726, "text": "Kolkata", "size": 11},
                 {"lon": 74.7973, "lat": 34.0837, "text": "Srinagar", "size": 11},
                 {"lon": 77.5946, "lat": 29.9680, "text": "Dehradun", "size": 10, "anchor": "end"},
             ],
@@ -1213,14 +1215,49 @@ def _render_png(svg: Path, png: Path, *, width: int = PNG_WIDTH) -> bool:
         import resvg_py
 
         png.write_bytes(bytes(resvg_py.svg_to_bytes(svg_string=svg.read_text(), width=width)))
-        return True
     except Exception as exc:  # pragma: no cover - fallback path
         rsvg = shutil.which("rsvg-convert")
         if not rsvg:
             print(f"  (skipped PNG for {png.name}: resvg failed [{exc}], no rsvg-convert)")
             return False
         subprocess.run([rsvg, "-w", str(width), str(svg), "-o", str(png)], check=True)
-        return True
+    _shrink_png(png)
+    return True
+
+
+#: Palette size for the published rasters. A map is not a photograph: it is
+#: a few dozen flat fills, a hillshade ramp and some text, and 256 entries
+#: hold all of that. Measured on the twelve gallery maps, truecolour costs
+#: four to five times the bytes for a maximum per-channel difference of 14
+#: out of 255 and a mean of one or two -- invisible in a side-by-side crop
+#: of the bathymetry rings, which is the smoothest gradient these maps draw.
+_PALETTE_COLORS = 256
+
+
+def _shrink_png(png: Path) -> None:
+    """Re-encode a rendered raster as a 256-colour PNG, in place.
+
+    The gallery's nine situation plates went out at 0.75 to 1.75 MB each,
+    which is most of a 14 MB page for twelve thumbnails. Pillow is already
+    a dependency and its octree quantiser does the job, so this needs no
+    new tool: the Congo plate falls from 1 755 KB to 266 KB, the Iberia one
+    from 1 008 to 208, and the world choropleth from 226 to 48.
+
+    Octree rather than median cut, which measured three times larger here,
+    and with Floyd-Steinberg dithering so the relief's gradients break up
+    into noise rather than into bands.
+    """
+    try:
+        from PIL import Image
+    except ImportError:  # pragma: no cover - Pillow is a declared dependency
+        return
+    with Image.open(png) as raster:
+        flat = raster.convert("RGB").quantize(
+            colors=_PALETTE_COLORS,
+            method=Image.Quantize.FASTOCTREE,
+            dither=Image.Dither.FLOYDSTEINBERG,
+        )
+    flat.save(png, optimize=True)
 
 
 # Every named layer the generator emits, bottom -> top.
