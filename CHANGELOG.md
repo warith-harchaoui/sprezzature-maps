@@ -2,6 +2,90 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.13.0] - 2026-10-12: eight names printed on top of each other, three drawn off the page, and a ruler that was wrong about every capital letter
+
+Every placement defect this repository has ever fixed was found by rendering
+a plate and looking at it. That finds the plate you looked at and the defect
+you looked for. This release measures the finished SVG instead -- walks the
+markup, composes the ancestor transforms, and asks where every visible word
+actually lands -- and the first run of it found eight collisions and three
+invisible labels across the nine bundled plates, none of which any of the
+243 existing tests could see.
+
+### Fixed
+
+- **A flat glyph width was wrong by a fifth on every capital.** Each layer
+  that decided "does this label fit" estimated text at 0.55 em per
+  character, whatever the character. Measured against the six faces these
+  plates declare (`Roboto, 'Helvetica Neue', Arial, sans-serif`), that is
+  about right for lower case, which averages 0.54 em, and wrong for the
+  capitals cartography sets its names in, which average 0.69. `DONETSK` was
+  measured at 38.5 units and draws at 49.0. The new `scripts/_textbox.py`
+  carries a per-character advance table taken as the *maximum* across those
+  six faces -- the question asked of it is always "may this be drawn here",
+  and an answer that only holds for readers who have Roboto installed is not
+  an answer -- plus the real ink extents above and below the baseline,
+  measured from the glyph outlines rather than from the fonts' declared line
+  metrics.
+- **Eight names printed on top of each other, every one across two layers.**
+  `Sutlej` inside `Jullundur` and `Yamuna` inside `Agra` on the Himalaya
+  plate; `Blue Nile` inside `AD-DAMAZIN` and `S. SUDAN` inside `Malakal` on
+  the Sudan one; `Zuwara` inside `TRIPOLI` on Libya; `Seine` inside `PARIS`
+  on Western Europe; `ITALY`, `POLAND` and `SPAIN` sitting on Milan, Warsaw
+  and Madrid on the demo. Each layer dodged only the labels it had drawn
+  itself. There is now one ink ledger per plate, `vp["ink"]`, holding every
+  name already committed and every solid mark -- marker dots, capitals'
+  stars -- whichever layer wrote it, and `_claim_label` asks and takes in a
+  single call so a layer cannot test one rectangle and occupy another.
+- **Three hand-placed labels were drawn off the plate, in silence.**
+  `Kalemie` sits 1.2 degrees south of the eastern-DRC region, `Kolkata` 1.9
+  degrees south of the Himalaya one, and `Black Sea` -- 19 units of tracked
+  capitals, the Ukraine plate's largest orientation cue -- 0.9 degrees south
+  of its own. All three were accepted in full and drawn into the margin
+  where no reader could find them. A hand-placed label outside the plate is
+  now refused by name, the same answer this package already gives a water
+  name that matches nothing in the dataset. The two cities are gone from
+  their configs and the Black Sea label moved into open water inside the
+  frame.
+- **The plate's own control panel was the one piece of furniture nothing
+  yielded to.** It ships `display:none` and the plate's script turns it on,
+  so no rasteriser ever drew it and no check ever saw it -- but a reader
+  with scripting on does, and the Sudan plate's `Blue Nile` sat under the
+  word `Terrain` in it. The panel's box is now reserved before any label
+  layer runs.
+- **The scale bar and the legend band measured their own text the same
+  wrong way.** Both now measure it.
+
+### Changed
+
+- **The layer that can move is the one that moves.** A town's name is nailed
+  to its dot; a river's can sit anywhere along the water and a country's
+  anywhere inside its own border. So claim order is no longer draw order:
+  the cities are placed before the rivers, a river name tries seven points
+  along its course, and an area name tries eleven positions inside its own
+  shape, every one checked back against the geometry so it can never walk
+  out of the country or the lake it names. Asked the other way round, the
+  first version of this cost the Himalaya plate Agra, Kanpur and Allahabad
+  to keep one river label. Nothing is lost on any of the nine plates now,
+  and `TANZANIA`, `Chandigarh` and `Bucharest` are gained.
+- **Published rasters are 256-colour PNGs.** A map is not a photograph: a
+  few dozen flat fills, a hillshade ramp and some text. The twelve gallery
+  maps fall from 9.9 MB to 1.9 MB -- the Congo plate from 1 755 KB to 267 --
+  for a maximum per-channel difference of 14 out of 255, invisible in a
+  side-by-side crop of the bathymetry rings, which is the smoothest gradient
+  these maps draw. Pillow was already a dependency; no new tool.
+
+### Added
+
+- `tests/test_nothing_is_drawn_on_anything.py`: the measurement, as a gate.
+  It re-reads the finished SVG rather than the generator's intentions,
+  composes the transform chain by hand (`getBBox()` ignores ancestor
+  transforms and lies; there is no browser here anyway), skips the hover
+  tooltips that are held at `opacity: 0` and would otherwise be 42 of the 43
+  "collisions" on the Ukraine plate, and asserts that no two names share
+  paper and that every name is on the plate. Verified in the negative on
+  both properties.
+
 ## [0.12.0] - 2026-10-02: three defects a type gate found, one of them on every default map
 
 This package was left out of the sweep that gave its six sibling packages a

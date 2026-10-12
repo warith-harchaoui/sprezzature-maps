@@ -39,11 +39,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from _assets import geo_dir
-
-#: Average glyph advance as a fraction of the font size, for the house sans.
-#: Labels only need a box wide enough to reject overlaps, so a flat ratio is
-#: adequate here in a way it is not for fitting text to a fixed width.
-_GLYPH_WIDTH_RATIO = 0.55
+from _textbox import boxes_overlap, ink_bottom, ink_top, text_width
 
 #: How prominent a city must be to appear, by how much of the world is in
 #: frame. Keyed by the larger of the view's longitude and latitude span in
@@ -135,6 +131,8 @@ def place_labels(
     font_size: float = 9.0,
     dot_radius: float = 1.8,
     bounds_px: tuple[float, float, float, float] | None = None,
+    avoid: Sequence[tuple[float, float, float, float]] = (),
+    clearance: float = 1.0,
 ) -> list[tuple[City, float, float, float, float]]:
     """
     Place a label per city, dropping any that would collide.
@@ -147,37 +145,54 @@ def place_labels(
     A dropped city is not moved elsewhere. A name nudged away from its dot
     points at the wrong place and a reader has no way to know, which is worse
     than a name that simply is not there.
+
+    Parameters
+    ----------
+    cities : sequence of City
+        Candidates, most prominent first: the order is the priority order.
+    project : callable
+        ``(lon, lat) -> (x, y)`` in canvas units.
+    font_size : float, optional
+        Size the names will be drawn at.
+    dot_radius : float, optional
+        Radius of the place dot, which the name is set clear of.
+    bounds_px : tuple, optional
+        The canvas rectangle. A name that would leave it is not drawn.
+    avoid : sequence of tuple, optional
+        Boxes already inked by somebody else -- furniture, hand-placed
+        names, water labels. Passed in rather than discovered, because this
+        module has no idea what else is on the page; both candidate
+        positions are tested against them, so a name blocked on its right
+        can still go on its left instead of being lost.
+    clearance : float, optional
+        Breathing room kept between two boxes, in canvas units.
     """
-    placed: list[tuple[float, float, float, float]] = []
+    placed: list[tuple[float, float, float, float]] = list(avoid)
     kept: list[tuple[City, float, float, float, float]] = []
     gap = dot_radius + 3.0
-    half_height = font_size * 0.62
+    # The name is set on a baseline a little below the dot's centre line, and
+    # that offset belongs in the box: measuring a centred box and drawing a
+    # dropped one is how a label clears its neighbour on paper that is not
+    # the paper it lands on.
+    baseline_drop = font_size * 0.31
 
     for city in cities:
         dot_x, dot_y = project(city.lon, city.lat)
-        width = len(city.name) * font_size * _GLYPH_WIDTH_RATIO
+        width = text_width(city.name, font_size)
+        baseline = dot_y + baseline_drop
+        top = baseline - ink_top(city.name) * font_size
+        bottom = baseline + ink_bottom(city.name) * font_size
 
-        for label_x, box_left in (
-            (dot_x + gap, dot_x + gap),
-            (dot_x - gap - width, dot_x - gap - width),
-        ):
-            box = (box_left, dot_y - half_height, box_left + width, dot_y + half_height)
+        for label_x in (dot_x + gap, dot_x - gap - width):
+            box = (label_x, top, label_x + width, bottom)
             if bounds_px is not None:
                 x0, y0, x1, y1 = bounds_px
                 if box[0] < x0 or box[2] > x1 or box[1] < y0 or box[3] > y1:
                     continue
-            if any(_overlaps(box, other) for other in placed):
+            if any(boxes_overlap(box, other, pad=clearance) for other in placed):
                 continue
             placed.append(box)
-            kept.append((city, dot_x, dot_y, label_x, dot_y + half_height * 0.5))
+            kept.append((city, dot_x, dot_y, label_x, baseline))
             break
 
     return kept
-
-
-def _overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
-    """Whether two label boxes intersect, with a pixel of breathing room."""
-    pad = 1.0
-    return not (
-        a[2] + pad < b[0] or b[2] + pad < a[0] or a[3] + pad < b[1] or b[3] + pad < a[1]
-    )

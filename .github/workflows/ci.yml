@@ -69,6 +69,6 @@ jobs:
 
       - name: Doctests (scripts/)
         run: |
-          for f in scripts/_geo_colors.py scripts/_relief.py scripts/_svg.py scripts/_render.py scripts/_interactive.py scripts/make_choropleth.py scripts/make_situation_map.py; do
+          for f in scripts/_geo_colors.py scripts/_relief.py scripts/_svg.py scripts/_textbox.py scripts/_render.py scripts/_interactive.py scripts/make_choropleth.py scripts/make_situation_map.py; do
             python -m doctest "$f"
           done
