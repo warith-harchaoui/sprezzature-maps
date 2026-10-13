@@ -166,3 +166,40 @@ version-controlled history) by how often it changes, not by its size.
 `.gitattributes` documents the reasoning behind each tracked pattern.
 Never fetch geo data over the network at render time; every render runs
 offline, against data already vendored into the repo.
+
+## The sibling repository
+
+`sprezzature-figures` is not a dependency this repo happens to have. The two
+were one project until the split, they ship into the same website, and a
+reader meets both. **Before building something the sibling already has, read
+its version and mirror it on purpose**, and when you have to deviate, say so
+where the deviation lives rather than leaving the next reader to wonder which
+of two near-identical files is right.
+
+What is deliberately shared today:
+
+| Here | There | Shared because |
+|---|---|---|
+| `make-map`'s argparse shape | `make-figure` | Someone who knows one recognises the other |
+| `web/tools/build_map_kits.py` | `web/tools/build_figure_kits.py` | Same download chip, same `--only` / `--check`, same per-language kits |
+| `_load_script` in `sprezzature_maps/__init__.py` | the figures loader | Same `scripts/` layout, same caching |
+| The Ralph Eyeball Loop | `references/ralph-eyeball-loop.md` | One verification discipline, not two |
+| This file | its `CODING.md` | In spirit, by hand |
+
+Where they part, and why — each stated in the code that parts:
+
+- **A kit from here cannot bundle its engine.** A figure kit ships its drawing
+  code and runs on the standard library. A plate needs a projection, geometry
+  and a vendored atlas, so a map kit declares `pip install sprezzature-maps`
+  instead. `build_map_kits.py` says this in its header.
+- **Schematic place-shaped charts stay there.** Hex maps, dot density, spike
+  maps and binned grids plot points or cells; this repo draws real coastlines
+  under a real projection. `TRIGGERS.md` routes on exactly that question.
+- **No Studio here.** The conversational editor ships with the figures
+  package; maps get their own when there is one.
+
+A pattern proven on one side is the default for the other. That includes the
+unglamorous ones: `TRIGGERS.md` is machine-read on both sides, and
+`tests/test_triggers_are_real.py` resolving every command and tool name it
+prints against the surface that must answer it is a test the sibling wants
+too.
