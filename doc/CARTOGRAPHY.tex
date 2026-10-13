@@ -213,6 +213,7 @@ from known vertices, so only the relief raster's per-pixel sampling
 uses it.
 
 \subsection{Perceptually uniform color: OKLab and OKLCH}
+\label{sec:oklab}
 
 A choropleth's fill color is the whole message, so the color ramp has
 to satisfy a property naive interpolation in the standard three-channel
@@ -1078,6 +1079,7 @@ harmful one is to silently promote an unverified claim to assessed
 control on a plate that still looks finished.
 
 \subsection{Locational precision}
+\label{sec:locational-precision}
 
 ACLED records a code from 1 to 3 beside every event
 \cite{acled-codebook}, explicitly \emph{to reflect the fact that the
@@ -1120,6 +1122,111 @@ Temporal precision follows the same code
 (\texttt{time\_precision}: exact day, week, month) and is spoken in the
 tooltip rather than implied, so a date known only to the month reads as
 \emph{month of March 2026} rather than as a day.
+
+\subsection{Reading a conflict dataset without upgrading it}
+\label{sec:conflict-data}
+
+Section~\ref{sec:locational-precision} describes a convention. This one
+describes what happens when the convention meets the two datasets that
+peace-and-conflict research actually runs on, and the answer is not a
+formatting problem.
+
+ACLED \parencite{acled-codebook} and the UCDP Georeferenced Event Dataset
+\parencite{sundberg-ucdp-ged, hogbladh-ged-codebook} both publish a row per
+event with coordinates, a date and a death count, and both publish, beside
+every coordinate, a code for how well that coordinate is known. ACLED's
+runs 1 to 3. UCDP's runs 1 to 7, and its definitions are worth quoting,
+because they are the whole argument: 2 is \emph{within at maximum a ca.\
+25\,km radius around a known point}; 3 and 4 are an administrative
+division's centroid standing in for the division, at the second and first
+order; 5 is \emph{a linear feature \dots\ or a fuzzy polygon without
+defined borders}; and 6 is \emph{only the country where the event took
+place in is known}.
+
+Every row still carries latitude and longitude to six decimal places,
+including the 6s. A map that plots them all identically asserts a position
+the source explicitly declined to give, once per row, several hundred times
+in a figure, and nothing on the page says so.
+
+\paragraph{Seven steps onto three.} The two scales were built for different
+purposes, so the mapping is a judgement and is written out rather than
+buried in a branch:
+
+\begin{center}
+\begin{tabular}{@{}cll@{}}
+\toprule
+\texttt{where\_prec} & UCDP's definition & Drawn as \\
+\midrule
+1 & exact location known and coded & filled dot \\
+2 & within ca.\ 25\,km of a known point & ring, \emph{plus} a 25\,km halo \\
+3 & an admin-2 centroid for the division & ring \\
+4 & an admin-1 centroid for the region & broken ring \\
+5 & a linear feature or fuzzy polygon & broken ring \\
+6 & only the country is known & \textbf{not drawn} \\
+7 & international waters or airspace & broken ring \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two rows carry the reasoning. At \texttt{where\_prec}~2 the dataset
+\emph{states} a radius, so the radius is drawn --- the case
+Section~\ref{sec:locational-precision} reserves for a caller who supplies
+one, here supplied by the source itself. At 6 there is no honest position
+at all, so the row is dropped; and because a silent drop is the other half
+of the same dishonesty, the count goes onto the plate's own method line:
+\emph{1\,284 UCDP events drawn; 2023-01-02 to 2023-12-30. Not drawn: 37
+located only to the country.}
+
+UCDP's date precision needed one more step than this project had. Its
+\texttt{date\_prec}~5 means \emph{a range longer than one month but not
+more than one calendar year}, and the scale stopped at ``month of''.
+Mapping a year onto ``month of'' would have stated a month the source never
+gave, which is an error in the direction that overstates, so the scale grew
+a fourth step --- \emph{in 2023} --- rather than rounding down into it.
+
+\paragraph{What the categorical palette may and may not be asked to do.}
+Event classes need colour: six for ACLED's event types, three for UCDP's
+types of violence. The set is Okabe-Ito \parencite{okabe-ito}, at its published
+values, and two decisions about it were settled by measurement rather than
+by assertion.
+
+The first is the order. The palette is consumed as a \emph{prefix} --- a
+plate with three classes takes the first three --- so the order was chosen
+by searching all $6! = 720$ permutations for the one whose every prefix has
+the largest minimum pairwise distance in OKLab
+(Section~\ref{sec:oklab}) under protanopia, deuteranopia and tritanopia at
+once, simulated with the model of \textcite{machado-cvd}. At three classes
+that raises the floor from $0.084$ to $0.189$; the published order is a
+fine set and a worse sequence.
+
+The second is what \emph{not} to do. The obvious improvement is to darken
+the pale members until every disc clears the 3:1 contrast ratio against
+this project's cream land, where Okabe-Ito's orange manages 1.96:1. It was
+implemented, measured, and rejected: forcing six colours to one luminance
+drops the worst simulated pair from $0.076$ to $0.019$ --- four times less
+separable --- because lightness is the one channel all three deficiencies
+leave intact, and equalising contrast is exactly the operation that removes
+it.
+
+The resolution is that the two jobs belong to two parts of the mark. A
+marker is drawn cased: a filled disc with a white stroke, or a white disc
+with a coloured ring. \textbf{The casing is what makes the mark visible
+against the ground; the fill is what says which category it is.} Loading
+both onto the fill is what put them in conflict. Past five classes neither
+holds comfortably, and the loader says so once, naming the coarser column
+that would fix it, rather than drawing a sixth hue in silence.
+
+\paragraph{Magnitude, bounded by the page.} A fatality count may be
+encoded as the disc's area, which means the radius goes as its square root:
+scaling the radius directly would quadruple the ink for twice the deaths.
+The scale runs between a floor and a ceiling and is set by the largest
+value \emph{in the file}, not by a constant, because conflict magnitudes
+span four orders and no constant survives both a protest and a massacre.
+The first implementation had no ceiling and put a 120-fatality mark at
+radius 33 on an 1\,100-unit plate: a disc wider than Darfur, drawn as a
+cogwheel, since an approximate ring's stroke scales with its radius. No
+test caught it. Rendering it and looking at it did, which is not the first
+time in this document that sentence has been true.
 
 \subsection{Provenance at the mark}
 
