@@ -2,7 +2,7 @@
 
 All notable changes to sprezzature-maps are documented here.
 
-## [0.13.0] - 2026-10-12: eight names printed on top of each other, three drawn off the page, and a ruler that was wrong about every capital letter
+## [0.13.0] - 2026-10-13: eight names printed on top of each other, twelve drawn where no reader gets them, and a ruler that was wrong about every capital letter
 
 Every placement defect this repository has ever fixed was found by rendering
 a plate and looking at it. That finds the plate you looked at and the defect
@@ -47,6 +47,32 @@ invisible labels across the nine bundled plates, none of which any of the
   name that matches nothing in the dataset. The two cities are gone from
   their configs and the Black Sea label moved into open water inside the
   frame.
+- **And the rectangle those three were measured against was the wrong one.**
+  The plate is a rectangle; the map drawn on it, under a conic, is a
+  trapezoid narrower at the top and the bottom, and the paper in between
+  belongs to the margin. Measuring the plate caught the three names that
+  fell off the page and said yes to nine more that a reader sees broken:
+  `EL GENEINA` and `MEDITERRANEAN SEA` opened out on the margin, `LISBON`
+  and `ATLANTIC OCEAN` lost letters to it on the Iberia and the Western
+  Europe plate alike, `LUHANSK` ran off the eastern edge, `BLACK SEA` laid
+  its whole baseline along the neat line, and `Danube` -- in the river
+  layer, which the region clip really does cut -- lost its last letter. The
+  drawn map is now built once per plate as `vp["region"]`, before any layer
+  runs, and it is what the fit test and the hand-placed guard both measure
+  against. It lives on the viewport rather than travelling as an argument
+  for the same reason the ink ledger does: a rule that has to be passed at
+  every call site is a rule that gets missed at one, and it was -- the
+  river layer asked without it, which is how `Danube` got cut.
+- **Two of those names, moved off the margin, landed on dry ground.** A sea
+  name written across a country says the country is sea, so this is the
+  same defect pointing the other way, and no rectangle catches it -- the
+  render does. `MEDITERRANEAN SEA` was set across Idlib province and
+  `ATLANTIC OCEAN` across Portugal, directly under the word `PORTUGAL`.
+  Neither plate has a horizontal stretch of water wide enough for the name
+  laid flat: the Mediterranean is 70 km wide on the Syria plate and the
+  Atlantic a comparable strip on Iberia. Both names now follow their water
+  instead, set upright along the coast with `rotate: -90`, clear of the
+  shore and of every city name.
 - **The plate's own control panel was the one piece of furniture nothing
   yielded to.** It ships `display:none` and the plate's script turns it on,
   so no rasteriser ever drew it and no check ever saw it -- but a reader
@@ -83,8 +109,16 @@ invisible labels across the nine bundled plates, none of which any of the
   transforms and lies; there is no browser here anyway), skips the hover
   tooltips that are held at `opacity: 0` and would otherwise be 42 of the 43
   "collisions" on the Ukraine plate, and asserts that no two names share
-  paper and that every name is on the plate. Verified in the negative on
-  both properties.
+  paper, that every name is on the plate, and that every name pointing at
+  ground is on the drawn map -- the third read back out of the markup's own
+  `region-clip`, through that element's transform chain, rather than
+  recomputed from the config, because what the generator meant to clip to
+  and what it wrote into `<defs>` are two different claims and only the
+  second one reaches a reader. The furniture entitled to the margin -- the
+  title band, caption, legend, scale bar, north arrow, source line and
+  control panel -- is exempt by name, and named as a denylist on purpose:
+  a new layer that puts a name on the ground is covered by saying nothing
+  at all. Verified in the negative on all three properties.
 
 ## [0.12.0] - 2026-10-02: three defects a type gate found, one of them on every default map
 
