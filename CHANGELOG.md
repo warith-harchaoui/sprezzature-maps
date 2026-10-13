@@ -71,6 +71,17 @@ All notable changes to sprezzature-maps are documented here.
   Darfur, drawn as a cogwheel because an approximate ring's stroke scales
   with its radius. The scale now runs between `base_radius` and
   `max_radius`, area-true, against the largest value in the file.
+- `doc/CARTOGRAPHY.tex` gains **Reading a conflict dataset without
+  upgrading it**: UCDP's seven geo-precision steps quoted from the codebook
+  and mapped onto this generator's three in a table, why `where_prec` 6 is
+  refused a position and counted on the plate instead, why the date scale
+  grew a fourth step rather than rounding a year down into "month of", the
+  720-permutation search behind the palette order, the measurement that
+  killed the obvious contrast fix, and the unbounded proportional symbol
+  that only a render caught. Three references added, each verified against
+  its publisher: Sundberg & Melander (2013) and Högbladh (2025) -- the two
+  citations the GED codebook requires of every user -- and Okabe & Ito
+  (2008) for the palette.
 - `LANDSCAPE.md` gains the conflict-research field: what ACLED and UCDP
   actually ship, which tools fetch, filter and plot them, and the six things
   this package deliberately leaves to CShapes, PRIO-GRID, geoBoundaries,
