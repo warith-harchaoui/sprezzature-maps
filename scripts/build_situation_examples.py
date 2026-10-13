@@ -273,11 +273,14 @@ def build_ukraine() -> dict[str, Any]:
         ],
         "labels": {
             "waters": [
-                # 43.15 put this 0.9 degrees south of the region and drew the
-                # plate's largest orientation cue 50 units below its bottom edge,
-                # where nobody ever saw it. 44.45 is open water west of Crimea
-                # and inside the frame.
-                {"lon": 31.3, "lat": 44.45, "text": "Black Sea", "size": 19, "tracking": 7},
+                # The plate's largest orientation cue, and it has taken three
+                # goes. 43.15 drew it 50 units below the plate's bottom edge,
+                # where nobody ever saw it. 44.45 brought it onto the plate but
+                # laid its baseline along the neat line, every glyph bottom on
+                # the edge of the drawn map. 44.60 lifts it clear -- and that
+                # alone walked it into SEVASTOPOL, so it moves west as well, to
+                # open sea south of Odesa and well off the peninsula.
+                {"lon": 30.6, "lat": 44.60, "text": "Black Sea", "size": 19, "tracking": 7},
                 {"lon": 37.0, "lat": 46.35, "text": "Sea of Azov", "size": 11, "tracking": 2.4},
             ],
             "places": [
@@ -291,7 +294,9 @@ def build_ukraine() -> dict[str, Any]:
                     "text": "Donetsk",
                     "anchor": "end",
                 },  # clear of Avdiivka marker
-                {"lon": 39.3031, "lat": 48.5678, "text": "Luhansk"},
+                # Set to the left: the default right-hand setting ran the
+                # name off the plate's east edge.
+                {"lon": 39.3031, "lat": 48.5678, "text": "Luhansk", "anchor": "end"},
                 {"lon": 37.5494, "lat": 47.0958, "text": "Mariupol", "anchor": "above"},
                 {"lon": 32.6250, "lat": 46.6425, "text": "Kherson", "anchor": "above"},
                 {"lon": 35.1175, "lat": 47.8500, "text": "Zaporizhzhia", "anchor": "end"},
@@ -378,8 +383,18 @@ def build_syria() -> dict[str, Any]:
         "marker_legend": [{"color": "#c0392b", "label": "Contested city (approx.)"}],
         "labels": {
             "water": {
-                "lon": 35.55,
-                "lat": 35.95,
+                # Set upright along the coast, because this plate has no
+                # horizontal sea to write on. 35.55 opened the name out on
+                # the margin ("ME" fell past the clip); 35.95 brought it
+                # inside and wrote half of it across Idlib province, which
+                # is the same label misplaced the other way -- a sea name on
+                # land says the land is sea. The water here is a strip some
+                # 70 km wide and 500 long, so the name follows the strip:
+                # turned a quarter-circle anticlockwise, reading upwards off
+                # Latakia, in open water the whole way.
+                "lon": 35.50,
+                "lat": 35.30,
+                "rotate": -90,
                 "text": "Mediterranean Sea",
                 "size": 12,
                 "tracking": 2,
@@ -728,7 +743,10 @@ def build_sudan() -> dict[str, Any]:
                     "lon": 34.350, "lat": 11.767, "text": "Ad-Damazin",
                     "dot": False, "clear": 5.5, "anchor": "below",
                 },
-                {"lon": 22.435, "lat": 13.434, "text": "El Geneina", "size": 11, "anchor": "end"},
+                # Set above the dot: El Geneina is 0.5 degrees from the
+                # plate's west edge, so a left-hand name opens on the margin,
+                # and a right-hand one runs straight into TAWILA.
+                {"lon": 22.435, "lat": 13.434, "text": "El Geneina", "size": 11, "anchor": "above"},
                 {"lon": 23.477, "lat": 12.900, "text": "Zalingei", "size": 11, "anchor": "end"},
                 {"lon": 24.861, "lat": 13.514, "text": "Tawila", "size": 11, "anchor": "end"},
                 {"lon": 30.483, "lat": 19.167, "text": "Dongola", "size": 11},
@@ -1034,13 +1052,27 @@ def build_iberia() -> dict[str, Any]:
         "source": "Natural Earth 1:50m physical and cultural vectors; SRTM-derived shaded relief",
         "labels": {
             "waters": [
-                {"lon": -8.6, "lat": 40.6, "text": "ATLANTIC OCEAN", "size": 14, "tracking": 5},
+                # -8.6 set the "A" over the neat line: a conic's west edge
+                # slants, so a name wide enough to matter can sit well inside
+                # the plate and still open on the paper. -8.4 cleared the
+                # neat line and then wrote ATLANTIC OCEAN across Portugal,
+                # directly under the word PORTUGAL -- inside the map and
+                # still naming the wrong thing. The Atlantic on this plate
+                # is a strip too narrow for the name laid flat, so the name
+                # is turned to match it: upright off the Portuguese coast,
+                # between Porto and Lisbon, clear of both.
+                {
+                    "lon": -9.55, "lat": 40.4, "text": "ATLANTIC OCEAN",
+                    "size": 14, "tracking": 5, "rotate": -90,
+                },
                 {"lon": 0.5, "lat": 39.6, "text": "Mediterranean Sea", "size": 12, "tracking": 2.4},
                 {"lon": -5.4, "lat": 36.25, "text": "Strait of Gibraltar", "size": 9},
             ],
             "places": [
                 {"lon": -3.7038, "lat": 40.4168, "text": "Madrid", "capital": True},
-                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "capital": True, "anchor": "end"},
+                # Inland, not seaward: Lisbon is the westernmost city on the
+                # plate and a left-hand name lost "LI" to the margin.
+                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "capital": True, "anchor": "start"},
                 {"lon": 2.1734, "lat": 41.3851, "text": "Barcelona"},
                 {"lon": -5.9845, "lat": 37.3891, "text": "Seville", "anchor": "below"},
                 {"lon": -0.3763, "lat": 39.4699, "text": "Valencia"},
@@ -1098,7 +1130,10 @@ def build_western_europe() -> dict[str, Any]:
         "source": "Natural Earth 1:50m physical and cultural vectors; SRTM-derived shaded relief",
         "labels": {
             "waters": [
-                {"lon": -8.0, "lat": 47.0, "text": "ATLANTIC OCEAN", "size": 16, "tracking": 7},
+                # Widest name on the plate, against the same slanted west
+                # edge: -8.0 began it two letters out on the margin. -6.2 is
+                # still open Atlantic west of Brittany.
+                {"lon": -6.2, "lat": 47.0, "text": "ATLANTIC OCEAN", "size": 16, "tracking": 7},
                 {"lon": 5.0, "lat": 42.0, "text": "Mediterranean Sea", "size": 13, "tracking": 3},
                 {"lon": 3.5, "lat": 54.3, "text": "North Sea", "size": 12, "tracking": 2.4},
                 {"lon": 14.5, "lat": 41.0, "text": "Tyrrhenian Sea", "size": 10, "tracking": 2},
@@ -1116,7 +1151,8 @@ def build_western_europe() -> dict[str, Any]:
                 {"lon": 5.3698, "lat": 43.2965, "text": "Marseille", "size": 11, "anchor": "below"},
                 {"lon": 9.9937, "lat": 53.5511, "text": "Hamburg", "size": 11},
                 {"lon": 16.3738, "lat": 48.2082, "text": "Vienna", "size": 11},
-                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "size": 11, "anchor": "end"},
+                # Inland, not seaward, for the reason the Iberia plate gives.
+                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "size": 11, "anchor": "start"},
             ],
             "territories": [
                 {"lon": 10.0, "lat": 46.6, "text": "ALPS", "size": 12, "tracking": 4},

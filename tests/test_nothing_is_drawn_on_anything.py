@@ -12,10 +12,22 @@ suite counted elements and never once asked where they were.
 So this file asks where. It re-reads the finished SVG -- not the generator's
 intentions, the actual markup -- walks it, composes the ancestor transforms
 by hand, measures every visible run of text against real font metrics, and
-asserts the two properties a page has to have:
+asserts the three properties a page has to have:
 
-* **no two names share paper**, and
-* **every name is on the plate**.
+* **no two names share paper**,
+* **every name is on the plate**, and
+* **every name that points at ground is on the drawn map**.
+
+The third is the second done properly. The plate is a rectangle; under a
+conic the map drawn on it is a trapezoid, narrower at top and bottom, and
+the paper between the two belongs to the margin. A name out there has not
+fallen off the page -- it passes the plate test -- it has merely stopped
+being on the map, which is the only thing a place name is for. Nine names
+on five plates shipped like that: ``EL GENEINA`` and ``MEDITERRANEAN SEA``
+opened out on the margin, ``LISBON`` and ``ATLANTIC OCEAN`` each lost
+letters to it on two plates apiece, ``LUHANSK`` ran off the eastern edge,
+``BLACK SEA`` laid its baseline along the neat line, and ``Danube`` -- in
+a layer the region clip actually cuts -- had its last letter sliced off.
 
 Three things make the measurement honest rather than decorative:
 
@@ -85,6 +97,71 @@ _TOLERATED_OVERLAP = 0.05
 def _builders() -> dict[str, Any]:
     """The bundled plate builders, by name."""
     return _load_script("build_situation_examples").BUILDERS
+
+
+#: Layers whose text is *about* the plate rather than on the map: the title
+#: band, the caption, the legend, the scale bar, the north arrow, the source
+#: line, the reader's control panel. The generator draws these outside the
+#: region clip on purpose -- they are annotations entitled to the margin.
+#:
+#: Named as a denylist, not an allowlist of map layers, and the direction
+#: matters: the recurring failure in this repository is a rule that covered
+#: everything except the one thing nobody thought of -- a config key no
+#: layer read, a label layer no collision test compared. A new layer that
+#: puts a name on the ground is covered here by saying nothing at all.
+_FURNITURE = frozenset(
+    {
+        "annotation-furniture",
+        "attribution",
+        "caption",
+        "legend",
+        "north-arrow",
+        "plate-controls",
+        "scale-bar",
+    }
+)
+
+
+def _drawn_map(svg: str) -> Any:
+    """Return the region clip -- the ground the plate actually draws -- in root coordinates.
+
+    Read back out of the markup rather than recomputed from the config, for
+    the reason the rest of this file exists: what the generator meant to
+    clip to and what it wrote into ``<defs>`` are two different claims, and
+    only the second one reaches a reader. The path is in the user space of
+    whatever references it, so it is carried through that element's own
+    transform chain to meet the text boxes in the same coordinates.
+    """
+    from shapely.affinity import affine_transform
+    from shapely.geometry import Polygon
+
+    root = ET.fromstring(svg)
+    path = None
+    for clip in root.iter(f"{SVG}clipPath"):
+        if clip.get("id") == "region-clip":
+            path = list(clip)[0].get("d")
+    if path is None:
+        return None
+    nums = [float(v) for v in re.findall(r"-?\d+\.?\d*", path)]
+    poly = Polygon(list(zip(nums[0::2], nums[1::2], strict=True)))
+
+    users: list[tuple[float, ...]] = []
+
+    def walk(el: ET.Element, ctm: tuple[float, ...]) -> None:
+        if el.get("transform"):
+            ctm = _compose(ctm, _transform(el.get("transform", "")))
+        if "region-clip" in (el.get("clip-path") or ""):
+            users.append(ctm)
+        for child in el:
+            walk(child, ctm)
+
+    walk(root, _IDENTITY)
+    if not users:
+        return None
+    a, b, c, d, e, f = users[0]
+    # shapely wants (a, b, d, e, xoff, yoff) for [x' = a x + b y + xoff],
+    # which is SVG's (a, c, b, d, e, f) read in a different order.
+    return affine_transform(poly, [a, c, b, d, e, f])
 
 
 #: The identity, in SVG's ``(a, b, c, d, e, f)`` order: ``x' = a x + c y +
@@ -212,6 +289,18 @@ def _measure(
     return {"layer": layer, "text": body, "box": (min(xs), min(ys), max(xs), max(ys))}
 
 
+def _as_poly(b: tuple[float, ...]) -> Any:
+    """The ink rectangle as a polygon, for the containment tests."""
+    from shapely.geometry import box as _box
+
+    return _box(*b)
+
+
+def _area(b: tuple[float, ...]) -> float:
+    """The ink rectangle's area."""
+    return (b[2] - b[0]) * (b[3] - b[1])
+
+
 def _shared_area(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     """Return the overlap of two boxes as a fraction of the smaller one."""
     if not boxes_overlap(a, b):
@@ -282,6 +371,67 @@ def test_every_name_is_on_the_plate(name: str) -> None:
         f"on a {width:.0f} by {height:.0f} plate"
         for r in strays
     )
+
+
+@pytest.mark.parametrize("name", sorted(_builders()))
+def test_every_name_that_points_at_ground_is_on_the_drawn_map(name: str) -> None:
+    """
+    A name in the margin names nothing, whether or not the clip cuts it.
+
+    The test above asks whether a label is on the plate. That is the wrong
+    rectangle and it said yes to nine names on five plates that a reader
+    sees broken: under a conic the drawn map is a trapezoid, so there is
+    paper inside the plate the map does not cover. What happens out there
+    depends only on which layer wrote the name -- the geographic stack is
+    clipped, so ``Danube`` simply lost its last letter; the hand-placed
+    layer is not, so ``EL GENEINA`` opened on the margin instead. Both are
+    the same defect and neither was visible to a rectangle.
+
+    Furniture is exempt by name, not by position: the title, caption,
+    legend, scale bar, north arrow, source line and control panel are drawn
+    outside the clip deliberately.
+    """
+    svg = msm.build_map(_builders()[name]())
+    drawn = _drawn_map(svg)
+    assert drawn is not None, f"{name}: no region clip in the markup"
+    strays = [
+        (r, drawn.intersection(_as_poly(r["box"])).area / max(_area(r["box"]), 1e-9))
+        for r in _text_boxes(svg)
+        if r["layer"] not in _FURNITURE and not drawn.contains(_as_poly(r["box"]))
+    ]
+    assert not strays, "\n".join(
+        f"{name}: [{r['layer']}] {r['text']!r} is {frac:.0%} on the drawn map, "
+        f"inking ({r['box'][0]:.0f}, {r['box'][1]:.0f})-({r['box'][2]:.0f}, {r['box'][3]:.0f})"
+        for r, frac in strays
+    )
+
+
+def test_the_drawn_map_is_read_back_from_the_markup() -> None:
+    """
+    The clip the test measures is the clip the file carries, transforms and all.
+
+    Without this, a plate whose region clip went missing -- or whose whole
+    map group stopped being translated -- would make the test above pass by
+    having nothing to fail against.
+    """
+    svg = msm.build_map(_builders()["ukraine"]())
+    drawn = _drawn_map(svg)
+    root = ET.fromstring(svg)
+    width, height = _number(root.get("width")), _number(root.get("height"))
+    assert drawn.area > 0.3 * width * height, "the drawn map is implausibly small"
+    # The plate's own frame margin moves it off the origin: a clip read
+    # without the ancestor transform would start at (0, 0).
+    assert drawn.bounds[0] > 0.5 and drawn.bounds[1] > 0.5
+
+
+def test_a_name_in_the_margin_is_caught() -> None:
+    """The measurement fails on a label it is handed in the margin, not just in principle."""
+    cfg = _builders()["ukraine"]()
+    drawn = _drawn_map(msm.build_map(cfg))
+    west, south, east, north = drawn.bounds
+    assert not drawn.contains(_as_poly((west - 40.0, south + 10.0, west - 5.0, south + 24.0)))
+    mid_x, mid_y = (west + east) / 2, (south + north) / 2
+    assert drawn.contains(_as_poly((mid_x - 20, mid_y, mid_x + 20, mid_y + 12)))
 
 
 def test_a_hand_placed_label_outside_the_region_is_refused() -> None:

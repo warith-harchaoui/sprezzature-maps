@@ -2396,6 +2396,24 @@ def build_map(cfg: dict[str, Any]) -> str:
     # threading a new argument through nine call sites.
     cfg["_plate"] = palette
 
+    # The rectangle every name is measured against, built before any layer
+    # runs. Under a conic the drawn map is a trapezoid narrower than the
+    # plate at top and bottom, so the plate rectangle is the wrong shape to
+    # ask "will the reader see this" -- it answers yes for paper the map
+    # does not cover. It lives on the viewport rather than travelling as an
+    # argument for the same reason ``reserved`` and ``ink`` do: a rule that
+    # has to be passed at each call site is a rule that gets missed at one,
+    # and it was. The river layer asked without it and set ``Danube`` half
+    # outside the Western-Europe plate's edge, where the region clip then
+    # cut the last letter off; the hand-placed layer asked the plate and let
+    # ``EL GENEINA``, ``MEDITERRANEAN SEA`` and ``LISBON`` begin out on the
+    # margin, and ``BLACK SEA`` rest its whole baseline on the neat line.
+    region_box = box(bbox[0], bbox[1], bbox[2], bbox[3])
+    region_proj = _project_geom(region_box, proj)
+    plate_region = vp["region"] = Polygon(
+        [vp["to_svg"](px, py) for px, py in region_proj.exterior.coords]
+    )
+
     # The author's own names are drawn near the top of the stack and must be
     # decided at the bottom of it. Every automatic layer below asks the
     # ledger "is this paper free", and a hand-placed name that is not in it
@@ -2416,18 +2434,10 @@ def build_map(cfg: dict[str, Any]) -> str:
     front = _front_line_layer(cfg, proj, vp)
     advances = _arrows_layer(cfg, proj, vp)
 
-    region_box = box(bbox[0], bbox[1], bbox[2], bbox[3])
     # bbox already carries the region's real extent -- reuse it to pick the
     # 10m/50m basemap tier instead of re-deriving it from region_box.
     land = load_land(bbox=bbox).intersection(region_box)
     land_proj = _project_geom(land, proj)
-    region_proj = _project_geom(region_box, proj)
-    # The same polygon the geographic layers are clipped to, in plate
-    # coordinates: every label layer tests against this rather than the
-    # plate rectangle, which is wider than the drawn map under a conic.
-    plate_region = Polygon(
-        [vp["to_svg"](px, py) for px, py in region_proj.exterior.coords]
-    )
     # Projecting a coastline into a conic can leave the result
     # self-touching, and GEOS answers a boolean op on an invalid operand with
     # a raw "TopologyException: side location conflict" rather than a result.
@@ -3431,6 +3441,13 @@ def _label_fits(
     for other in (*vp.get("reserved", ()), *vp.get("ink", ())):
         if boxes_overlap((x0, y0, x1, y1), other, pad=_LABEL_CLEARANCE * vp.get("ts", 1.0)):
             return False
+    # An explicit ``region`` wins; otherwise take the plate's own, so a call
+    # site that forgets the argument still gets the drawn map rather than
+    # quietly falling back to the wider plate. Only a viewport built without
+    # one -- the doctests above, and nothing the generator ships -- reaches
+    # the rectangle.
+    if region is None:
+        region = vp.get("region")
     if region is None:
         return x0 >= 0.0 and x1 <= float(vp["width"]) and y0 >= 0.0 and y1 <= float(vp["height"])
     try:
@@ -3644,45 +3661,58 @@ def _ink_mark(x: float, y: float, radius: float, vp: dict[str, Any]) -> None:
 def _ink_hand_label(
     box_: tuple[float, float, float, float], vp: dict[str, Any], what: str
 ) -> None:
-    """Record a hand-placed label on the plate, refusing one drawn off it.
+    """Record a hand-placed label, refusing one the drawn map does not cover.
 
     Hand-placed names are the author's argument and are never dropped for
     want of room -- they go in the ledger unconditionally, and it is the
-    automatic layers that yield to them. But a name the author placed
-    outside the region is not a name the reader will ever see: it is drawn
-    into the margin beyond the frame, or past the bottom of the plate, and
-    nothing says so.
+    automatic layers that yield to them. But a name the author placed where
+    the map is not drawn is not a name the reader gets: it is set out on the
+    margin, or sliced by the region clip, and nothing says so.
 
-    Three of the nine bundled plates shipped exactly that. ``Kalemie`` sits
-    1.2 degrees south of the eastern-DRC region, ``Kolkata`` 1.9 degrees
+    Three of the nine bundled plates shipped it at its worst. ``Kalemie``
+    sat 1.2 degrees south of the eastern-DRC region, ``Kolkata`` 1.9 degrees
     south of the Himalaya one, and ``Black Sea`` -- a 19-unit tracked name,
     the plate's whole orientation cue -- 0.9 degrees south of the Ukraine
-    one. All three were written in good faith, accepted in full, and drawn
-    where no reader could find them. That is the same failure as a config
-    key nobody reads, and it gets the same answer this repository gives
-    that: one error message, naming the label, rather than silence.
+    one, all three written in good faith, accepted in full, and drawn where
+    no reader could find them.
+
+    Measuring the plate rectangle caught those and stopped there, which is
+    the wrong rectangle and left the quieter half of the same fault in
+    place: under a conic the drawn map is a trapezoid, so a name can sit
+    well inside the plate and still begin out on the paper. Eight more
+    hand-placed names did, on five plates -- ``EL GENEINA`` opened on the
+    margin, ``LISBON`` and ``ATLANTIC OCEAN`` lost letters to it on two
+    plates apiece, ``MEDITERRANEAN SEA`` lost two, ``LUHANSK`` ran off the
+    right-hand edge, and ``BLACK SEA`` laid its baseline along the neat
+    line. The answer is the one this repository gives a config key nobody
+    reads: one error message, naming the label, rather than silence.
 
     Parameters
     ----------
     box_ : tuple of float
         The label's ink rectangle in plate coordinates.
     vp : dict
-        The viewport; its ``width``/``height`` are the plate.
+        The viewport. ``region`` is the drawn map in plate coordinates and
+        is what the label is tested against; a viewport without one falls
+        back to the ``width``/``height`` rectangle.
     what : str
         How to name the label in the error, e.g. ``labels.places "Kalemie"``.
 
     Raises
     ------
     ValueError
-        When any part of the label falls outside the plate.
+        When any part of the label falls outside the drawn map.
     """
     plate = (0.0, 0.0, float(vp["width"]), float(vp["height"]))
-    if not box_inside(box_, plate):
+    region = vp.get("region")
+    inside = box_inside(box_, plate) if region is None else region.contains(box(*box_))
+    if not inside:
+        where = "plate" if region is None else "drawn map"
         raise ValueError(
             f"{what} is drawn at ({box_[0]:.0f}, {box_[1]:.0f})-({box_[2]:.0f}, "
-            f"{box_[3]:.0f}), outside the {plate[2]:.0f} by {plate[3]:.0f} plate, "
-            "so no reader would see it. Move it inside the region, widen "
-            "region.bbox to include it, or remove it."
+            f"{box_[3]:.0f}), outside the {where}, so the reader gets at best "
+            "part of it. Move it inside the region, widen region.bbox to "
+            "include it, or remove it."
         )
     vp.setdefault("ink", []).append(box_)
 
