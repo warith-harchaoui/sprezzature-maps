@@ -411,6 +411,7 @@ invisible at world zoom regardless.
 \section{Regional scale: situation\_map}
 
 \subsection{Lambert Conformal Conic, auto-centered}
+\label{sec:lcc}
 
 A regional plate, a single country or a handful of neighboring ones,
 needs the opposite property from a world choropleth: not equal area,
@@ -1169,6 +1170,152 @@ distance; both are therefore computed once and read by the drawing code and
 the reservation alike. Deriving them twice is how a reservation comes to
 protect empty paper while the bar prints over a name elsewhere on the page.
 
+\subsection{Labels against labels}
+\label{sec:label-ledger}
+
+Furniture against labels is the easy half of the question, because
+furniture is a handful of rectangles known before any layer draws. Labels
+against each other is the hard half, and this generator got it wrong in
+the way a layered renderer usually does: each label layer avoided the
+labels it had drawn itself, and none of them could see the others.
+Measured across the nine bundled plates, eight names printed on top of
+another name, and all eight straddled two different layers --- a river
+name inside a town name (\emph{Sutlej} in \textsc{jullundur},
+\emph{Blue Nile} in \textsc{ad-damazin}, \emph{Seine} in \textsc{paris}),
+or a country name across a town (\textsc{italy} over Milan). No check in
+the suite compared one layer against another, so not one of the eight
+registered as a failure anywhere.
+
+The ruler was wrong before the bookkeeping was. Every ``will this name
+fit'' decision in the codebase --- the label test, the scale bar's
+length, the legend's column width --- estimated text at a flat
+$0.55\,\mathrm{em}$ per character, whatever the character. Measured
+against the six faces these plates actually declare, that constant is
+close for lower case, which averages $0.54\,\mathrm{em}$, and wrong by a
+fifth for the capitals cartography sets its place names in, which average
+$0.69$. \textsc{donetsk} was being measured at 38.5 units and drawn at
+49.0. A fit test that underestimates by a fifth does not merely approve a
+tight placement: it approves an overlap and reports no conflict, which is
+the same silent-wrong-answer failure this document keeps returning to.
+
+\texttt{scripts/\_textbox.py} replaces the constant with a per-character
+advance table, derived once from the font binaries and taken as the
+\emph{maximum} across the declared stack rather than its mean. The
+question the table answers is always ``may this be drawn here'', and an
+answer that holds only for readers who have Roboto installed is not an
+answer. The same file carries the real ink extents above and below the
+baseline --- cap height, descender, the accent on a capital --- measured
+from the glyph outlines, because a font's declared line metrics describe
+the line box and not the ink inside it.
+
+With a ruler that tells the truth, the bookkeeping is one ledger per
+plate: every name already committed and every solid mark a name must not
+touch --- marker discs, capital stars --- whichever layer wrote it.
+Asking and reserving are a single call, because the two-call version of
+this, ask and then draw, is exactly how a layer comes to test one
+rectangle and occupy another. The uncertainty halo is deliberately not in
+the ledger: a hollow ring several kilometres across would reserve half a
+plate of empty paper to protect a mark that is mostly not there.
+
+The ledger makes claim order matter, and claim order is therefore no
+longer draw order. The layers differ in how much freedom they have: a
+town's name is nailed to its dot and can only change sides of it; a
+river's name may sit anywhere along several hundred kilometres of water;
+an area's name may sit anywhere inside its own polygon. Imhof's account
+of the problem is that each name has exactly one optimum position and
+that the alternatives to it are ranked \parencite{imhof-names}; the
+automated literature treats a page of them as one combinatorial
+optimisation and scores whole configurations
+\parencite{christensen-label-placement}. The cheap
+approximation of both, and the one used here, is to serve the constrained
+layers first and let the free ones take what is left: borders, then
+lakes, then towns, then rivers. A river name tries seven points along its
+in-view reach, running outward from the middle. An area name tries
+fifteen positions in and around its own shape --- a line and a third up
+or down, and sideways by $0.28$, $0.42$ or $0.56$ of the name's own
+width, since a label is many times wider than it is tall and a half-step
+sideways clears nothing. Every candidate is checked back through the
+inverse projection, so a name can never walk out of the country or the
+lake it names.
+
+Asked in the other order, the first version of this spent Agra, Kanpur
+and Allahabad on the Himalaya plate to keep one river label. In the order
+above nothing is lost on any of the nine plates, and \textsc{tanzania},
+Chandigarh and Bucharest are gained.
+
+Two layers reached the ledger only because the measurement asked for
+them. The plate's own control panel ships \texttt{display:none} and the
+plate's script turns it on, so no rasteriser ever draws it and no visual
+check had ever seen it --- but a reader with scripting enabled does, and
+on the Sudan plate \emph{Blue Nile} sat under the word \texttt{Terrain}
+in it. A gate that treats \texttt{display:none} as invisible would have
+had the same blind spot, so this one does not. The axes of advance and
+the front line carry the author's words too
+(\textsc{splm-n (reported)}, \emph{Approx.\ Kordofan front}), and were
+being written over by the river layer.
+
+\subsection{The neat line}
+\label{sec:neat-line}
+
+A hand-placed name is the author's argument and is never dropped for want
+of room; the automatic layers yield to it instead. That makes a
+hand-placed name that nobody can read the worst case of all, because
+nothing in the pipeline has any reason to mention it. Three shipped that
+way: \emph{Kalemie} sits $1.2^\circ$ south of the eastern-Congo region,
+\emph{Kolkata} $1.9^\circ$ south of the Himalaya one, and
+\textsc{black sea} --- nineteen units of tracked capitals, the Ukraine
+plate's largest orientation cue --- $0.9^\circ$ south of its own, drawn
+fifty units below the bottom of the page. All three were written in good
+faith, accepted in full, and drawn where no reader would ever find them.
+
+The first answer was to refuse a hand-placed label that falls outside the
+plate, by name, with one error message. That is the right answer measured
+against the wrong rectangle. The plate is a rectangle; the map drawn on
+it, under the Lambert Conformal Conic of Section~\ref{sec:lcc}, is a
+trapezoid, narrower at the top and the bottom than it is in the middle,
+and the paper between the two belongs to the margin. A name out there has
+not fallen off the page --- it passes the plate test --- it has merely
+stopped being on the map, which is the only thing a place name is for.
+
+Nine names on five plates were in that band. What a reader saw depended
+only on which layer had written them. The geographic layers are clipped
+to the region, so \emph{Danube} simply lost its last letter to the clip.
+The hand-placed layer is not clipped, so \textsc{el geneina} and
+\textsc{mediterranean sea} opened out on the white margin instead;
+\textsc{lisbon} and \textsc{atlantic ocean} each lost letters to it on
+two plates apiece, the second because a wide name can sit well inside the
+plate and still cross a slanted west edge; \textsc{luhansk} ran off to
+the east; and \textsc{black sea}, moved onto the page by the first fix,
+came to rest with its whole baseline along the neat line. Measured as the
+fraction of each name's ink that the drawn map actually covers: $97.9$,
+$91.1$, $80.0$ and $77.3\,\%$. All four are plainly wrong on the page and
+all four passed a rectangle.
+
+The drawn map is now built once per plate, before any layer runs, and it
+is what the fit test and the hand-placed guard both measure against. It
+lives on the viewport rather than travelling as an argument, for the
+reason the ink ledger does: a rule that has to be passed at every call
+site is a rule that gets missed at one, and it was --- the river layer
+asked without it, which is how \emph{Danube} came to be cut.
+
+That leaves the half of the defect no rectangle can see. Two of these
+names, pushed off the margin, came to rest on dry ground:
+\textsc{mediterranean sea} lay across Idlib province and
+\textsc{atlantic ocean} across Portugal, directly beneath the word
+\textsc{portugal} --- $49$ and $60\,\%$ of each name's ink on land. A sea
+name written over a country says the country is sea. It is the same
+defect pointing the other way, it is inside every rectangle, and only the
+render shows it.
+
+Neither plate has a horizontal stretch of water wide enough for the name
+laid flat: the Mediterranean is about seventy kilometres across on the
+Syria plate, and the Atlantic a comparable strip on Iberia, against names
+two hundred units long. So the names follow their water instead, set
+upright along the coast, which is the older convention for a sea too
+narrow to letter across and the prescribed treatment for an elongated
+feature \parencite{imhof-names}. Both now read bottom to top in open water,
+clear of the shore, of the neat line and of every town on the plate.
+
 \subsection{The locator inset}
 
 Newsroom practice treats the locator map as the default map, and states its
@@ -1357,6 +1504,28 @@ The Ralph Eyeball Loop is what catches that category of defect, and the
 doctest and test-suite layer is what keeps a later refactor, the
 tier-selection rewrite described above, for one, from silently breaking
 a contract the eyeball pass already validated.
+
+Placement has a third check between those two, because neither of the
+other two scales to it. The eyeball loop finds the plate you looked at
+and the defect you looked for; a test that counts elements never asks
+where they are. So \texttt{tests/test\_nothing\_is\_drawn\_on\_anything.py}
+re-reads the finished SVG --- the markup, not the generator's intentions
+--- composing each element's ancestor transforms by hand, measuring every
+visible run of text against the advance table of
+Section~\ref{sec:label-ledger}, and asserting that no two names share
+paper, that every name is on the plate, and that every name pointing at
+ground is inside the drawn map of Section~\ref{sec:neat-line}. Three
+details make it a measurement rather than a gesture. The browser's own
+\texttt{getBBox()} would not have served even if there were a browser
+here, since it ignores ancestor transforms. The hover tooltips are held
+at \texttt{opacity: 0} and have to be excluded, or they account for 42 of
+the 43 apparent collisions on the Ukraine plate. And the drawn map is
+read back out of the document's own clip path rather than recomputed from
+the config, because what the generator meant to clip to and what it wrote
+into \texttt{<defs>} are two different claims and only the second one
+reaches a reader. The first run of this gate found eight collisions and
+three invisible labels that the 243 tests then in the suite could not
+see.
 
 \section{Roadmap}
 \label{sec:roadmap}

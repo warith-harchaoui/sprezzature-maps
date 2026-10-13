@@ -88,9 +88,9 @@ invisible labels across the nine bundled plates, none of which any of the
   to its dot; a river's can sit anywhere along the water and a country's
   anywhere inside its own border. So claim order is no longer draw order:
   the cities are placed before the rivers, a river name tries seven points
-  along its course, and an area name tries eleven positions inside its own
-  shape, every one checked back against the geometry so it can never walk
-  out of the country or the lake it names. Asked the other way round, the
+  along its course, and an area name tries fifteen positions in and around
+  its own shape, every one checked back against the geometry so it can
+  never walk out of the country or the lake it names. Asked the other way round, the
   first version of this cost the Himalaya plate Agra, Kanpur and Allahabad
   to keep one river label. Nothing is lost on any of the nine plates now,
   and `TANZANIA`, `Chandigarh` and `Bucharest` are gained.
@@ -119,6 +119,18 @@ invisible labels across the nine bundled plates, none of which any of the
   control panel -- is exempt by name, and named as a denylist on purpose:
   a new layer that puts a name on the ground is covered by saying nothing
   at all. Verified in the negative on all three properties.
+- `doc/CARTOGRAPHY.tex` gains **Labels against labels** and **The neat
+  line**, the two techniques above written up as methodology: the flat
+  advance ratio and what replaced it, the one ledger per plate, claim
+  order against draw order, the trapezoid the plate is not, and the two
+  sea names that had to be turned upright because neither plate has water
+  wide enough to letter across. The placement literature is cited where it
+  is followed and where it is only approximated -- Imhof on ranked
+  positions and on elongated features, Christensen, Marks and Shieber on
+  treating the page as one combinatorial problem, which this generator
+  deliberately does not do. The validation section gains the third kind of
+  check these needed, between the eyeball loop and the test suite: reading
+  the finished markup back.
 
 ## [0.12.0] - 2026-10-02: three defects a type gate found, one of them on every default map
 
