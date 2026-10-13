@@ -69,6 +69,34 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+### From a conflict dataset, in one call
+
+The two datasets peace-and-conflict research runs on — [ACLED](https://acleddata.com/methodology/acled-codebook)
+and the [UCDP Georeferenced Event Dataset](https://ucdp.uu.se/downloads/) —
+each record, beside every coordinate, **how well that coordinate is known**:
+ACLED's `geo_precision` 1–3, UCDP's `where_prec` 1–7. ACLED's 3 means a
+provincial capital standing in for a whole province; UCDP's 6 means only the
+country is known. Tools that plot this data draw all of them as the same dot,
+which asserts a street corner the source never gave, once per row.
+
+This generator's markers already draw that distinction — a solid cased disc
+for a named location, a hollow ring for an approximate one, a broken ring for
+a region pinned to its capital, a drawn radius where the dataset states one.
+The loaders are the step between the file and the mark:
+
+```python
+from sprezzature_maps import acled_events, make_situation_map
+
+cfg = {"title": "Sudan: recorded political violence, 2024"}
+cfg.update(acled_events("sudan-2024.csv", derive_region=True))
+make_situation_map(config=cfg, out="sudan.svg")
+```
+
+`ucdp_events` does the same for GED, maps its seven-step precision onto the
+three in a table written out in `scripts/_conflict.py`, and **refuses to place
+the country-level rows at all** — counting them on the plate's own method line
+rather than dropping them in silence. See [`EXAMPLES.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/EXAMPLES.md#conflict-event-data-acled-and-ucdp-ged).
+
 A word on how long that takes, because nothing on screen will tell you. A
 choropleth is about a second. A situation map depends on how much world is
 in the frame: the bundled Europe demo is about 10 s from a cold start, a

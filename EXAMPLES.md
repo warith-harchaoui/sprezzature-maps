@@ -186,3 +186,75 @@ descriptions it advertises come straight from the FastAPI (the Python
 web framework this API is built with) route docstrings in
 `sprezzature_maps/api.py`, so they stay in sync with the HTTP API
 automatically, with nothing to update by hand in two places.
+
+## Conflict event data: ACLED and UCDP GED
+
+A plate from the file a conflict researcher already has, rather than from a
+config written by hand. Both loaders return a *config fragment* — keys the
+generator already reads — so a hand-written config keeps everything it says
+and gains the events:
+
+```python
+from sprezzature_maps import acled_events, make_situation_map
+
+cfg = {
+    "title": "Sudan: recorded political violence, 2024",
+    "subtitle": "ACLED events, drawn at the precision ACLED records",
+    "basemap": {"relief": True},
+}
+cfg.update(acled_events("sudan-2024.csv", derive_region=True))
+make_situation_map(config=cfg, out="sudan.svg")
+```
+
+`sudan-2024.csv` is the export as downloaded. The loader also takes the API
+body (`{"status": 200, "data": [...]}`), a `.jsonl`, or rows already in
+memory — including `DataFrame.to_dict("records")`, which is how it accepts
+pandas without depending on it.
+
+### What it carries across, and why that is the point
+
+Both datasets record **how well each row's position and date are known**, and
+every other tool draws all of them as the same dot. Here the code reaches the
+mark:
+
+| Code | ACLED `geo_precision` | Drawn as |
+|---|---|---|
+| 1 | a named location | a solid cased disc |
+| 2 | a place standing in for a general area | a hollow ring |
+| 3 | a place standing in for a whole region | a hollow **broken** ring |
+
+UCDP's `where_prec` runs 1–7 and is mapped onto those three in a table
+written out in `scripts/_conflict.py`. Two cases are worth knowing before you
+use it:
+
+* `where_prec` **2** states a radius of about 25 km. It is drawn, as a
+  dashed halo to the plate's own scale, rather than flattened into a code.
+* `where_prec` **6** means only the country is known. The row still carries
+  coordinates — every GED row does — and they are a representative point for
+  the whole state. Those rows are **not drawn** by default, and the count
+  goes onto the plate's method line. `country_level="keep"` overrides it.
+
+```python
+from sprezzature_maps import ucdp_events
+
+cfg.update(ucdp_events("ged251.csv", size_by="best", derive_region=True))
+# method: "1,284 UCDP events drawn; 2023-01-02 to 2023-12-30.
+#          Not drawn: 37 located only to the country."
+```
+
+### Options worth knowing
+
+| Argument | Effect |
+|---|---|
+| `colour_by` | ACLED only: `"event_type"` (default, six classes), `"disorder_type"` (three), `"sub_event_type"` |
+| `size_by` | `"fatalities"` (ACLED) or `"best"` (UCDP). Area-true: four times the deaths is twice the radius. Off by default — a dot map of *where* and a bubble map of *how many* are different claims |
+| `derive_region` | Take `region.bbox` from the events instead of writing one |
+| `label_from` | Print a column beside each dot (`"location"`, `"admin1"`). Off by default: two hundred events is not two hundred names |
+| `limit` | Keep at most *n*; the remainder is counted on the plate, never dropped in silence |
+| `vocabulary` | The classes to expect, in legend order. Fixed by default so one colour means one thing across every figure in a paper |
+
+An unreadable precision code, an unparseable coordinate or a class outside
+the vocabulary is an error naming its row, not a row skipped quietly: a
+dataset that has changed under you is worth stopping for, and treating an
+unreadable code as "exact" would upgrade an approximate mark into a confident
+one on a plate that still looks finished.

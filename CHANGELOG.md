@@ -2,6 +2,82 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.14.0] - 2026-10-13: the precision code the datasets ship, and the twenty lines nobody had written
+
+### Added
+
+- **`acled_events()` and `ucdp_events()`: a plate from the file a conflict
+  researcher already has.** ACLED and the UCDP Georeferenced Event Dataset
+  both record, beside every coordinate, how well that coordinate is known --
+  ACLED's `geo_precision` 1-3, UCDP's `where_prec` 1-7 -- and both are
+  explicit about what the weak codes mean: a provincial capital standing in
+  for a whole province, a first-order administrative centroid, or, at UCDP's
+  6, *only the country*. Every tool in this space draws all of them as the
+  same dot, which asserts a street corner the source never gave, once per
+  row, several hundred times a figure. This generator's markers have drawn
+  the distinction since 0.11 -- solid cased disc, hollow ring, broken ring,
+  and a drawn radius where the dataset states one. What was missing was the
+  step between the CSV and the marker, and a missing step is the difference
+  between a feature that exists and a feature anyone uses.
+  `cfg.update(acled_events("sudan-2024.csv", derive_region=True))` is the
+  whole integration; the return value is a config fragment whose every key
+  `build_map` already read. Column names, code ranges and the wording of
+  each code come from the ACLED codebook (October 2024) and the GED codebook
+  (25.1), read rather than recalled, and the mapping from UCDP's seven steps
+  onto this generator's three is written out as a table rather than hidden
+  in a branch.
+- **UCDP `where_prec` 6 is refused a position.** The row carries
+  coordinates -- every GED row does -- and they are a representative point
+  for an entire state. Those rows are not drawn, and the count goes on the
+  plate's own method line, because a silent drop is the other half of the
+  same dishonesty. `country_level="keep"` is there for a caller who knows
+  what they are asserting.
+- **A fourth step on the date-precision scale.** GED's `date_prec` 5 means
+  "known only within a range longer than one month but not more than one
+  calendar year", and the scale stopped at "month of". Rounding a year down
+  to a month would have stated something the source never did, in the
+  direction that overstates. A config that never names 4 is unaffected.
+- **`legend_title`**, so a plate can say what its key is a key *to*.
+
+### Fixed
+
+- **A marker-only plate drew no legend at all.** `_legend_rows` returned
+  early unless `areas_of_control.palette` existed, so `marker_legend` was
+  validated, carried through `build_map`, handed to the marker layer for its
+  tooltips -- and never keyed. A reader got coloured dots and no way to learn
+  what a colour meant. Found by rendering a plate from the new loaders and
+  looking at it.
+- **The legend heading was the string `AREAS OF CONTROL`, always.** On a
+  plate with no areas of control it named a layer the map does not have. It
+  now reads off what the legend actually keys, and `legend_title` overrides.
+
+### Changed
+
+- **The categorical palette is Okabe-Ito at its published values, reordered
+  by prefix.** The palette is consumed as a prefix -- three classes take the
+  first three -- so the order was chosen by searching all 720 permutations
+  for the one whose every prefix has the largest minimum pairwise distance
+  under protanopia, deuteranopia and tritanopia at once. At three classes
+  that lifts the floor from 0.084 to 0.189 in OKLab distance. The obvious
+  alternative was measured and rejected: darkening the pale members until
+  every disc clears 3:1 against the cream land makes the palette *four times
+  less separable*, because equal luminance removes the one channel all three
+  deficiencies leave intact. A marker has a white casing; the casing makes
+  the mark visible and the fill says which category it is. Each prefix floor
+  is pinned in `tests/test_conflict_loaders.py`.
+- **Proportional symbols are bounded by the page, not by the data.** The
+  first version scaled as `base * sqrt(1 + value)` with no ceiling and put a
+  120-fatality mark at radius 33 on a 1100-unit plate -- a disc wider than
+  Darfur, drawn as a cogwheel because an approximate ring's stroke scales
+  with its radius. The scale now runs between `base_radius` and
+  `max_radius`, area-true, against the largest value in the file.
+- `LANDSCAPE.md` gains the conflict-research field: what ACLED and UCDP
+  actually ship, which tools fetch, filter and plot them, and the six things
+  this package deliberately leaves to CShapes, PRIO-GRID, geoBoundaries,
+  GeoPandas and the rest. Including the gap worth naming: NATO APP-6D /
+  MIL-STD-2525D has open implementations in JavaScript, Java, Android and
+  Rust, and none in Python.
+
 ## [0.13.0] - 2026-10-13: eight names printed on top of each other, twelve drawn where no reader gets them, and a ruler that was wrong about every capital letter
 
 Every placement defect this repository has ever fixed was found by rendering

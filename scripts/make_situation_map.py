@@ -183,6 +183,10 @@ Chrome and provenance
     (its own column) , ``"below"`` (a band under the map) or ``"auto"``.
 ``legend_footer``
     A line under the legend's rows.
+``legend_title``
+    The legend's heading. Defaults to ``AREAS OF CONTROL`` when the plate
+    has control classes and ``KEY`` when it is marks alone, so a plate drawn
+    from an event export stops titling a layer it does not have.
 ``marker_legend``
     A list of ``{color, label, precision}`` keying the point markers.
 ``caption``
@@ -4133,7 +4137,15 @@ _GEO_PRECISION: dict[int, str] = {
 
 #: How a date's precision is spoken, after ACLED's ``time_precision``: 1 is
 #: the exact day, 2 is known only to the week, 3 only to the month.
-_TIME_PRECISION: dict[int, str] = {1: "{}", 2: "week of {}", 3: "month of {}"}
+#:
+#: The fourth level is UCDP's, not ACLED's. ``date_prec`` 5 in the
+#: Georeferenced Event Dataset means "known only within a range longer than
+#: one month but not more than one calendar year", and there was no step for
+#: it here. Rounding a year down to "month of" would have stated something
+#: the source never did, in the direction that overstates -- so the scale
+#: grew a step instead. A config that never names 4 is unaffected: 1 to 3
+#: still mean exactly what they meant.
+_TIME_PRECISION: dict[int, str] = {1: "{}", 2: "week of {}", 3: "month of {}", 4: "in {}"}
 
 
 #: Every key a marker in ``forces`` or ``events`` may carry.
@@ -5296,6 +5308,34 @@ def _pal(cfg: dict[str, Any]) -> dict[str, str]:
 _LEGEND_MAX_WIDTH_FRACTION = 0.38
 
 
+def _legend_heading(cfg: dict[str, Any], rows: list[dict[str, Any]]) -> str:
+    """Return the legend card's heading, in capitals, for what it actually keys.
+
+    It was the string ``AREAS OF CONTROL``, always, because for a long time
+    that was the only thing a legend could hold. A plate drawn from an event
+    export has no areas of control and every one of them printed the heading
+    anyway -- a title that names a layer the map does not have, which is a
+    cheaper version of the same lie as a label in the margin.
+
+    ``legend_title`` in the config wins; otherwise the heading is read off
+    the rows: control classes make it areas of control, and marks alone make
+    it a key.
+
+    Examples
+    --------
+    >>> _legend_heading({}, [{"kind": "class"}, {"kind": "marker"}])
+    'AREAS OF CONTROL'
+    >>> _legend_heading({}, [{"kind": "marker"}])
+    'KEY'
+    >>> _legend_heading({"legend_title": "Recorded events"}, [{"kind": "marker"}])
+    'RECORDED EVENTS'
+    """
+    title = cfg.get("legend_title")
+    if title:
+        return str(title).upper()
+    return "AREAS OF CONTROL" if any(r["kind"] == "class" for r in rows) else "KEY"
+
+
 def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     """Return the legend's rows as records, independent of where it is drawn.
 
@@ -5320,8 +5360,14 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     """
     aoc = cfg.get("areas_of_control", {})
     palette = aoc.get("palette", {})
-    if not palette:
-        return []
+    # No early return on an empty palette. A plate can be nothing but marks
+    # -- which is exactly what a plate drawn from an ACLED or UCDP export is
+    # -- and that version of this function answered "no legend" for every one
+    # of them: ``marker_legend`` was accepted by the validator, carried
+    # through ``build_map``, handed to the marker layer for its tooltips, and
+    # never keyed, because an unrelated section was missing. The reader got a
+    # page of coloured dots and no way to learn what a colour meant. The rule
+    # is the one this file applies everywhere else: build what there is.
     contested = set(aoc.get("contested", []))
     fill_op = float(aoc.get("fill_opacity", COMPOSITING["claim"]))
     rows: list[dict[str, Any]] = [
@@ -5597,7 +5643,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         f'rx="{9 * ts:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
         f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
         f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" letter-spacing="1.2">'
-        f"AREAS OF CONTROL</text>",
+        f"{_legend_heading(cfg, rows)}</text>",
     ]
     seen_marker = False
     for i, row in enumerate(rows):
@@ -5655,7 +5701,7 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
         f'stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
         f'<text x="{pad:.1f}" y="{H + pad + 8 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
         f'font-size="{11.5 * ts:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" '
-        f'letter-spacing="1.2">AREAS OF CONTROL</text>',
+        f'letter-spacing="1.2">{_legend_heading(cfg, rows)}</text>',
     ]
     top = H + pad + 20 * ts
     for i, row in enumerate(rows):
@@ -5695,6 +5741,7 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
+    "legend_title",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.

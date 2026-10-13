@@ -22,7 +22,17 @@ from pathlib import Path
 from . import make_choropleth, make_density, make_situation_map
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Return the ``make-map`` parser, fully populated.
+
+    Split out of :func:`main` so the sub-commands this dispatcher really
+    accepts can be read without running it. ``TRIGGERS.md`` tells an agent
+    which of them to call, and ``tests/test_triggers_are_real.py`` resolves
+    every name in that file against this parser: a routing table that names a
+    command the dispatcher does not have sends every agent that trusts it
+    into an argparse error, and the agent reports that the tool is broken
+    rather than that the documentation is.
+    """
     parser = argparse.ArgumentParser(prog="make-map", description=__doc__)
     sub = parser.add_subparsers(dest="kind", required=True)
 
@@ -94,7 +104,11 @@ def main(argv: list[str] | None = None) -> int:
     p_sit.add_argument("--config", help="YAML config; defaults to the bundled demo.")
     p_sit.add_argument("--out", help="Output SVG path.")
 
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     if args.kind == "choropleth":
         kwargs = {}

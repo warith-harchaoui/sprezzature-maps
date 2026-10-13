@@ -146,6 +146,60 @@ workflow beat self-hosting, offline rendering and exact control.
 coordinate conversion. `sprezzature-maps` assumes that work is done; it only
 draws the answer.
 
+## The conflict-research field, specifically
+
+The table above compares *drawing* tools. A political scientist, a conflict
+researcher or an analyst at a think tank does not start by choosing a drawing
+tool: they start with a dataset, and the dataset is almost always one of
+two.
+
+| Dataset | Unit | Where it says it is | When it says it is | Updated |
+|---|---|---|---|---|
+| [ACLED](https://acleddata.com/methodology/acled-codebook) | one political-violence or protest event | `latitude`/`longitude` + `geo_precision` 1–3 | `event_date` + `time_precision` 1–3 | weekly |
+| [UCDP GED](https://ucdp.uu.se/downloads/) | one organised-violence event with ≥1 death | `latitude`/`longitude` + `where_prec` **1–7** | `date_start`/`date_end` + `date_prec` 1–5 | yearly, monthly candidate |
+
+Both ship a precision code beside every coordinate, and both mean something
+specific by it. ACLED's 3 is a provincial capital standing in for a whole
+province. UCDP's 4 is a first-order administrative centroid; its 6 means
+*only the country is known* and the coordinates are a representative point
+for an entire state.
+
+**Every tool in this space draws all of those as the same dot.** `acled`
+and `acled.api` fetch the rows; `acledR`, `conflictr` and
+`acled_conflict_analysis` reshape and plot them; GeoPandas, cartopy and QGIS
+will put a point layer on a basemap; Datawrapper will make it pretty. None of
+them renders a `geo_precision` 3 differently from a 1, which means every one
+of those maps asserts a street corner its source never gave, several hundred
+times per figure, without saying so.
+
+That is this project's opening. The marker layer already draws precision as
+cartography — a solid cased disc for a named location, a hollow ring for an
+approximate one, a broken ring for a region pinned to its capital, a drawn
+radius where the dataset states one — with the wording taken from ACLED's own
+codebook. `scripts/_conflict.py` is the twenty lines between the researcher's
+file and that marker:
+
+```python
+cfg.update(acled_events("sudan-2024.csv", derive_region=True))
+```
+
+What the suite still leaves to others, stated as plainly as the rest of this
+page:
+
+| Need | Here | Where it is better served |
+|---|---|---|
+| Fetch the data | no | `acled` (PyPI), `acled.api`/`acledR` (CRAN), the UCDP API |
+| Filter, aggregate, join to admin units | no | GeoPandas, `acled_conflict_analysis`, QGIS |
+| Historical borders for a pre-2019 map | no — Natural Earth is present-day | [CShapes 2.0](https://doi.org/10.1177/00220027211013563), 1886–2019 |
+| A grid of equal cells for a statistical model | no | [PRIO-GRID](https://doi.org/10.1177/0022343311431287) 0.5° |
+| Subnational polygons beyond the bundled tiers | partly (admin-1, admin-2) | geoBoundaries CGAZ, GADM |
+| NATO APP-6D / MIL-STD-2525D unit symbols | no | `milsymbol` (JS), `mil-sym-java`; **there is no Python renderer** |
+| Draw the result as a finished, citable plate | **yes** | — |
+
+The last row is the whole claim, and the row above it is the most interesting
+gap in the field: the joint military symbology standards have open
+implementations in JavaScript, Java, Android and Rust, and none in Python.
+
 ## The house position
 
 Own the exact output rather than hand it to a runtime, and pay for that by
