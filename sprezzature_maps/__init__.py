@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 # In the source tree the generators live in scripts/; once installed they
 # ship (collision-free) as the sibling package sprezzature_maps_scripts/,
@@ -99,6 +99,27 @@ def make_density(*args: Any, **kwargs: Any) -> Path:
     return _load_script("make_density").make_density(*args, **kwargs)
 
 
+def acled_events(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Return the plate config for an ACLED export. See ``scripts/_conflict.py``.
+
+    The bridge between the file a conflict researcher already has and the
+    marker layer that already knows what ACLED's precision codes mean. The
+    result is a config fragment: ``cfg.update(acled_events("sudan.csv"))``.
+    """
+    return _load_script("_conflict").acled_events(*args, **kwargs)
+
+
+def ucdp_events(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Return the plate config for a UCDP Georeferenced Event Dataset export.
+
+    Same bridge for UCDP, whose seven-step ``where_prec`` is mapped onto this
+    generator's three in a table written out in ``scripts/_conflict.py``
+    rather than hidden in a branch -- including the step that has no honest
+    answer, ``where_prec`` 6, where only the country is known.
+    """
+    return _load_script("_conflict").ucdp_events(*args, **kwargs)
+
+
 def article_sidecar(svg: str) -> dict[str, Any]:
     """Return the metadata a page needs around a finished plate.
 
@@ -122,4 +143,11 @@ def article_sidecar(svg: str) -> dict[str, Any]:
     return _load_script("_sidecar").article_sidecar(svg)
 
 
-__all__ = ["article_sidecar", "make_choropleth", "make_density", "make_situation_map"]
+__all__ = [
+    "acled_events",
+    "article_sidecar",
+    "make_choropleth",
+    "make_density",
+    "make_situation_map",
+    "ucdp_events",
+]
