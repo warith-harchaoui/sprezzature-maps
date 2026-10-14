@@ -360,3 +360,45 @@ One caveat, stated because it is real: the position is the mean of the member
 coordinates, which on a crescent-shaped unit can fall outside the unit it
 represents. That is part of why the mark is drawn at the weakest precision the
 symbology has rather than a confident one.
+
+## Drawing the borders of a past year
+
+The vendored basemap is present-day. For most plates that is what
+"international frontiers" means; for a plate of 1995 it is exactly wrong. A
+map of the Bosnian war with today's borders on it shows a Bosnia that did not
+exist in the form it draws, and nothing on the page says so.
+
+```python
+cfg["frontiers"] = {
+    "source": "cshapes_2.0.geojson",
+    "as_of": "1995-06-30",
+}
+```
+
+The same plate at `1990-06-30` names **Yugoslavia**; at `1995-06-30` it names
+**Croatia** and **Serbia** and draws the border between them. The frontier
+lines, the neighbour labels and the de-duplicated inner lines all come from
+the historical source; the rest of the layer does not know which source it was
+handed.
+
+**A bare year is refused.** `as_of: 1991` is ambiguous for exactly the borders
+this exists to draw — the Soviet Union existed on 1991-01-01 and did not on
+1991-12-31 — so the error asks for a full date and shows one.
+
+**Nothing is vendored, and that is a licence, not an oversight.**
+[CShapes 2.0](https://doi.org/10.1177/00220027211013563) is the only GIS
+dataset mapping state borders worldwide from 1886, and it is published under
+CC BY-NC-SA 4.0. Bundling it into this BSD-licensed package would attach a
+non-commercial clause to the package and a share-alike obligation to anything
+built on it. It is free for the academic use this feature is for, so you
+download it and the licence stays with you. `fields` renames the properties
+for any other source:
+
+```python
+cfg["frontiers"]["fields"] = {"name": ("label",), "start": ("from_y", "m", "d")}
+```
+
+Two caveats, stated rather than hidden. The coastline is present-day, which is
+right — coastlines have not moved. The **cities are present-day too**: a 1990
+plate will still name the towns the vendored basemap knows, so a plate of a
+renamed or vanished place needs `labels.places` written by hand.
