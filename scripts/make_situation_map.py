@@ -126,7 +126,9 @@ Basemap layers
     and follows the same hierarchy by default.
 ``frontiers``
     International borders: ``{show, color, label_neighbours, focus,
-    label_min_area_frac}``.
+    label_min_area_frac}``, plus ``{source, as_of, fields}`` to draw the
+    borders of a past year from a caller-supplied historical GeoJSON
+    instead of the present-day basemap.
 ``internal_borders``
     First-level administrative boundaries where a vendored source covers
     the region: ``{show, color, label_names, label_min_area_frac}``.
@@ -221,6 +223,7 @@ import re
 import sys
 import warnings
 from collections.abc import Iterable, Sequence
+from datetime import date
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -810,6 +813,142 @@ def load_country(name: str, bbox: Iterable[float] | None = None) -> Any:
             polys.append(Polygon(rings[0], rings[1:]))
         return make_valid(MultiPolygon(polys))
     raise KeyError(f"country not found in basemap: {name!r}")
+
+
+#: Property names CShapes 2.0 uses for a polygon's validity window and name.
+#:
+#: Taken from that dataset because it is the one historical-boundary source
+#: this field actually uses -- it is the only GIS dataset mapping state
+#: borders worldwide back to 1886 -- but the names are a default and not a
+#: requirement: ``frontiers.fields`` overrides any of them for another source.
+_CSHAPES_FIELDS: dict[str, Any] = {
+    "name": ("cntry_name", "country_name", "name", "NAME"),
+    "start": ("gwsyear", "gwsmonth", "gwsday"),
+    "end": ("gweyear", "gwemonth", "gweday"),
+}
+
+
+def parse_as_of(raw: Any) -> date:
+    """Return the date a historical map is drawn for, refusing a bare year.
+
+    A year is not a date, and for this feature it is ambiguous in exactly the
+    cases the feature exists for. "1991" is the Soviet Union on 1 January and
+    is not the Soviet Union on 31 December; "1992" is Yugoslavia at either
+    end of a year it spent dissolving. A loader that silently picked one of
+    those would draw a map of a world that is defensible and unstated, which
+    is the failure mode this repository keeps closing.
+
+    Examples
+    --------
+    >>> parse_as_of("1995-07-01")
+    datetime.date(1995, 7, 1)
+    >>> parse_as_of(1991)
+    Traceback (most recent call last):
+      ...
+    ValueError: frontiers.as_of 1991 is a year, not a date, and a year is ambiguous for exactly the borders this draws: the Soviet Union existed on 1991-01-01 and did not on 1991-12-31. Give a full date, e.g. '1991-06-30'.
+    """
+    if isinstance(raw, date):
+        return raw
+    text = str(raw).strip()
+    if re.fullmatch(r"\d{4}", text):
+        raise ValueError(
+            f"frontiers.as_of {text} is a year, not a date, and a year is ambiguous "
+            "for exactly the borders this draws: the Soviet Union existed on "
+            "1991-01-01 and did not on 1991-12-31. Give a full date, e.g. "
+            f"'{text}-06-30'."
+        )
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise ValueError(
+            f"frontiers.as_of {raw!r} is not a date this reads; use YYYY-MM-DD."
+        ) from None
+
+
+def _window(props: dict[str, Any], keys: Sequence[str], fallback: date) -> date:
+    """Return the date in ``props`` under ``keys`` (year, month, day), or ``fallback``."""
+    year = props.get(keys[0])
+    if year is None or year == "":
+        return fallback
+    try:
+        # Month and day default to 1: CShapes carries all three, but a source
+        # that dates its polygons only to the year is still a dated source,
+        # and the first of January is the reading that keeps the window
+        # widest rather than one that silently excludes a border.
+        return date(int(year), int(props.get(keys[1]) or 1), int(props.get(keys[2]) or 1))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def countries_as_of(
+    features: list[dict[str, Any]], as_of: date, fields: dict[str, Any] | None = None
+) -> list[tuple[str, Any]]:
+    """Return ``(name, polygon)`` for the states that existed on ``as_of``.
+
+    The same shape :func:`load_countries` returns, so the frontier layer does
+    not know or care which one it was handed.
+
+    Why this takes a caller-supplied source rather than a vendored one is a
+    licensing fact and not a technical one, and it is worth stating where
+    somebody will read it: CShapes 2.0 -- the only GIS dataset that maps
+    state borders worldwide from 1886 -- is published under CC BY-NC-SA 4.0.
+    Vendoring it into a BSD-licensed package would attach a non-commercial
+    clause to the package and a share-alike obligation to anything built on
+    it. It is free for the academic use this feature is for, so the honest
+    arrangement is that the user downloads it and the licence stays with
+    them.
+
+    Parameters
+    ----------
+    features : list of dict
+        GeoJSON features carrying a validity window in their properties.
+    as_of : datetime.date
+        The day to draw.
+    fields : dict, optional
+        Overrides for the property names, keyed ``name``, ``start``, ``end``.
+        The defaults are CShapes 2.0's.
+
+    Returns
+    -------
+    list of (str, polygon)
+
+    Raises
+    ------
+    ValueError
+        When no feature is valid on that date. Drawing an empty frontier
+        layer would look exactly like a region with no neighbours.
+    """
+    spec = {**_CSHAPES_FIELDS, **(fields or {})}
+    names = spec["name"] if isinstance(spec["name"], (list, tuple)) else (spec["name"],)
+    far_past, far_future = date(1, 1, 1), date(9999, 12, 31)
+
+    out: list[tuple[str, Any]] = []
+    for feat in features:
+        props = feat.get("properties") or {}
+        if not (
+            _window(props, spec["start"], far_past)
+            <= as_of
+            <= _window(props, spec["end"], far_future)
+        ):
+            continue
+        name = next((str(props[k]) for k in names if props.get(k)), "")
+        try:
+            geom = make_valid(shape(feat["geometry"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not geom.is_empty:
+            out.append((name, geom))
+
+    if not out:
+        raise ValueError(
+            f"no feature in the frontiers source is valid on {as_of.isoformat()}. "
+            "An empty frontier layer looks exactly like a region with no "
+            "neighbours, so this is an error rather than a blank map. Check the "
+            "date, and check that the source carries "
+            f"{spec['start'][0]}/{spec['end'][0]} properties (or pass "
+            "frontiers.fields to name the ones it does)."
+        )
+    return out
 
 
 def load_countries(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
@@ -3532,10 +3671,31 @@ def _frontiers_layer(
     # layer, carrying no per-country attribute data (the labels below are
     # per-country and stay in the loop).
     pieces: list[Any] = []
+    # Where the countries come from. The vendored basemap is present-day, and
+    # for most plates that is what "international frontiers" means. It is
+    # exactly wrong for a plate of 1995: a map of the Bosnian war drawn over
+    # 2026 borders is not an approximation, it is a different claim. So a
+    # caller may hand in a historical source and the date to read it at, and
+    # the rest of this layer does not know which one it got.
+    #
     # region_box.bounds is (minx, miny, maxx, maxy) == (west, south, east,
     # north) -- exactly the bbox shape _land_topojson_for_bbox expects, so
     # the frontier layer picks the same 10m/50m tier the basemap itself did.
-    for name, poly in load_countries(bbox=region_box.bounds):
+    if fr.get("source"):
+        if not fr.get("as_of"):
+            raise ValueError(
+                "frontiers.source needs frontiers.as_of: a historical boundary "
+                "file holds every border the world has had, and without a date "
+                "there is no way to know which of them to draw."
+            )
+        countries = countries_as_of(
+            _load_features(fr["source"], Path(cfg.get("_config_dir") or ".")),
+            parse_as_of(fr["as_of"]),
+            fr.get("fields"),
+        )
+    else:
+        countries = load_countries(bbox=region_box.bounds)
+    for name, poly in countries:
         try:
             vis = poly.intersection(region_box)
         except Exception:  # skip a malformed country geometry rather than fail the plate
@@ -6138,6 +6298,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     }),
     "frontiers": frozenset({
         "show", "color", "focus", "label_neighbours", "label_min_area_frac",
+        "source", "as_of", "fields",
     }),
     "infrastructure": frozenset({"roads", "airports"}),
     "inset": frozenset({"show", "bbox", "position", "width", "zoom"}),

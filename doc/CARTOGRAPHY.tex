@@ -1574,6 +1574,59 @@ narrow to letter across and the prescribed treatment for an elongated
 feature \parencite{imhof-names}. Both now read bottom to top in open water,
 clear of the shore, of the neat line and of every town on the plate.
 
+\subsection{The borders of a past year}
+\label{sec:historical-frontiers}
+
+Every boundary source described so far is present-day. Natural Earth draws
+the world as it is, which is what ``international frontiers'' means for a
+plate of a current conflict and is exactly wrong for a plate of a past one. A
+map of the Bosnian war with 2026 borders on it is not an approximation of the
+1995 map; it is a different claim, drawn with the same confidence, and nothing
+on the page distinguishes the two.
+
+So the frontier layer accepts a historical source and the day to read it at.
+The same plate names \textsc{yugoslavia} at 1990-06-30 and \textsc{croatia}
+and \textsc{serbia} at 1995-06-30, with the border between them; the rest of
+the layer --- the de-duplicated inner lines of
+Section~\ref{sec:shared-boundaries}, the neighbour labels, the area threshold
+below which a sliver is not named --- does not know which source it was
+handed.
+
+\paragraph{A year is not a date.} The obvious interface is
+\texttt{as\_of: 1991}, and it is refused. A year is ambiguous in exactly the
+cases this feature exists for: the Soviet Union existed on 1 January 1991 and
+did not on 31 December; Yugoslavia was whole at the start of 1991 and
+dissolving by its middle. A loader that silently resolved a year to one of its
+ends would draw a map of a world that is defensible, unstated, and wrong half
+the time --- the shape of failure this document keeps returning to. The error
+says so and shows a full date to write instead.
+
+The other silence worth closing is the empty one. A date no feature in the
+source is valid on produces no frontiers at all, which on a finished plate
+looks exactly like a region that has no neighbours. That is an error, and the
+message names the properties the loader looked for, because the realistic
+cause is a source that spells its validity window differently.
+
+\paragraph{Why nothing is vendored.} CShapes 2.0
+\parencite{schvitz-cshapes} is the only GIS dataset mapping state borders
+worldwide back to 1886, and this section would be easier if the package simply
+shipped it. It does not, for a reason that is legal rather than technical: the
+dataset is published under CC BY-NC-SA 4.0. Vendoring it into a BSD-licensed
+package would attach a non-commercial clause to the package and a share-alike
+obligation to anything built on it --- a licence this project cannot grant on
+someone else's behalf, quietly inherited by every user who installed a
+cartography library. It is free for the academic use the feature is for, so
+the arrangement that costs nobody anything is that the user downloads it and
+the licence stays with them. The property names default to CShapes' own; a
+\texttt{fields} mapping renames them for any other source.
+
+Two things stay present-day, and both are stated rather than hidden. The
+coastline, correctly --- coastlines have not moved. The \emph{cities},
+incorrectly: a 1990 plate still names the towns the vendored basemap knows, so
+a place that has since been renamed or has ceased to exist needs a hand-placed
+label. That is a real limitation of this feature and not a property of the
+idea.
+
 \subsection{The locator inset}
 
 Newsroom practice treats the locator map as the default map, and states its
@@ -1595,6 +1648,7 @@ than an outline, because at that scale an outline is indistinguishable from
 a border.
 
 \subsection{An aside on shared boundaries}
+\label{sec:shared-boundaries}
 
 A defect found while this section's features were being built belongs
 with them, because its symptom was also a lost convention rather than a

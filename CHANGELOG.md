@@ -40,6 +40,20 @@ visible. The plates look exactly as they did.
 
 ### Added
 
+- **`frontiers.source` + `frontiers.as_of`: the borders of a past year.** The
+  vendored basemap is present-day, which is what "international frontiers"
+  means for most plates and exactly wrong for a plate of 1995: a map of the
+  Bosnian war over 2026 borders is not an approximation, it is a different
+  claim. The same plate now names *Yugoslavia* at `1990-06-30` and *Croatia*
+  and *Serbia* at `1995-06-30`, from a caller-supplied historical GeoJSON
+  read at that date. **A bare year is refused** — `1991` is ambiguous for
+  exactly the borders this draws, since the Soviet Union existed on
+  1991-01-01 and did not on 1991-12-31 — and a date no feature is valid on is
+  an error rather than an empty frontier layer, which looks exactly like a
+  region with no neighbours. Nothing is vendored: CShapes 2.0 is CC
+  BY-NC-SA 4.0 and bundling it would attach a non-commercial clause to this
+  BSD package; the property names default to its own, and `fields` renames
+  them for any other source.
 - **`aggregate`: the honest coarser map.** OCHA's data-responsibility
   guidance, revised January 2025, is blunt that a map plotting where
   vulnerable people are can be the thing that finds them, and that
@@ -71,7 +85,8 @@ visible. The plates look exactly as they did.
   refused, because "90" could be millimetres or pixels and the two differ by
   a factor of three.
 
-- `doc/CARTOGRAPHY.tex` gains **The reader who cannot see it** and **The size
+- `doc/CARTOGRAPHY.tex` gains **Aggregating without pretending**, **The
+  borders of a past year**, **The reader who cannot see it** and **The size
   this figure will actually print at**: why a root role has to follow what
   the plate contains rather than what it looks like, what each reachable
   thing announces and why the precision wording is the half that carries the
