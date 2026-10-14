@@ -249,7 +249,7 @@ cfg.update(ucdp_events("ged251.csv", size_by="best", derive_region=True))
 | `colour_by` | ACLED only: `"event_type"` (default, six classes), `"disorder_type"` (three), `"sub_event_type"` |
 | `size_by` | `"fatalities"` (ACLED) or `"best"` (UCDP). Area-true: four times the deaths is twice the radius. Off by default — a dot map of *where* and a bubble map of *how many* are different claims |
 | `derive_region` | Take `region.bbox` from the events instead of writing one |
-| `label_from` | Print a column beside each dot (`"location"`, `"admin1"`). Off by default: two hundred events is not two hundred names |
+| `tooltip_from` | Name each mark in its hover tooltip from a column (`"location"`, `"admin1"`). It is **not** drawn on the plate: two hundred events is not two hundred names, and the few places worth naming are worth naming by hand in `labels.places` |
 | `limit` | Keep at most *n*; the remainder is counted on the plate, never dropped in silence |
 | `aggregate` | One mark per administrative unit instead of one per event: `"admin1"`, `"admin2"`, or any column name. See below |
 | `vocabulary` | The classes to expect, in legend order. Fixed by default so one colour means one thing across every figure in a paper |
@@ -360,6 +360,52 @@ One caveat, stated because it is real: the position is the mean of the member
 coordinates, which on a crescent-shaped unit can fall outside the unit it
 represents. That is part of why the mark is drawn at the weakest precision the
 symbology has rather than a confident one.
+
+## One panel per window of time
+
+A plate is a snapshot; most of what research says about a conflict is a
+change. `small_multiples` cuts the same config into one panel per `"year"`,
+`"quarter"`, `"month"`, `"week"` or `"day"`:
+
+```python
+cfg = {"title": "Recorded political violence, by quarter"}
+cfg.update(acled_events("export.csv", derive_region=True, size_by="fatalities"))
+cfg["small_multiples"] = {"by": "quarter", "columns": 4}
+make_situation_map(config=cfg, out="by-quarter.svg")
+```
+
+| Key | Effect |
+|---|---|
+| `by` | The window: `"day"`, `"week"`, `"month"`, `"quarter"` (default `"year"`) |
+| `from`, `to` | The span to cover, as ISO dates. Defaults to the span of the dated marks; widen it to state the period under study rather than let the data define it |
+| `columns` | Panels per row (default: up to four) |
+| `panel_width` | One panel's width in plate units (default 420) |
+
+Everything but the marks comes from the single config, so the extent, the
+projection, the basemap and the symbol scale cannot drift between panels the
+way they do when you export one plate per window — and the sheet draws the
+title, the key, the ruler and the credits once rather than once per panel.
+The split happens **after** the loader has run: `acled_events` sizes a
+proportional disc from the largest value in the file, so calling it once per
+window would give each window its own largest value and the same disc would
+stand for a different number in every panel.
+
+Two rules it will not bend.
+
+**A window with nothing in it is still a panel.** A quiet quarter is
+evidence. Dropping its panel closes the gap, and the panels on either side
+then read as consecutive.
+
+**A mark is placed only where its own `time_precision` allows.** A row dated
+*month of March* is an interval, not a day: it belongs in a March panel and
+in no week panel, and a week beginning 28 March reaches into April so it
+belongs in neither month. What fits in no single window is not drawn and is
+counted on the sheet — *Not placed: 8 dated only to a year, which no single
+quarter panel contains* — the same answer the loaders give to a coordinate
+known only to the country.
+
+Past sixty panels the call is refused rather than drawn: pick a coarser `by`
+or narrow the span.
 
 ## Drawing the borders of a past year
 

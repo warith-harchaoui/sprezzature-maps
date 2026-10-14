@@ -31,6 +31,7 @@ it at all.
 | **who holds which ground** | `render_situation_map` | "areas of control", "front line", "contested zones", "who controls what", « carte de situation » |
 | **where events fell, not what a territory scores** | `render_density` | "accumulation map", "where did the strikes land", "heat map of incidents", "point density", « carte de densité » |
 | **a conflict dataset, as exported** | `acled_events` / `ucdp_events`, then `render_situation_map` | "I have an ACLED export", "map this UCDP GED file", "plot these events", "conflict event map", « j'ai un fichier ACLED » |
+| **the same ground at several moments** | `small_multiples` in the config, then `render_situation_map` | "how did it change", "by year", "quarter by quarter", "over time", « évolution » |
 | **place-shaped data without real coastlines** | → **sprezzature-figures** | "hex map", "dot density", "spike map", "binned grid" — schematic maps that plot points or cells |
 
 Three rows are easy to get wrong.

@@ -1272,6 +1272,72 @@ outside the unit it stands for. That is a real limitation and it is part of
 why the mark is drawn at the weakest precision the symbology has rather than a
 confident one.
 
+\subsection{The same plate, once per window of time}
+\label{sec:small-multiples}
+
+A situation plate is a snapshot, and most of what a researcher wants to say
+about a conflict is a change. The two usual answers both give something away.
+An animation asks the reader to compare a frame against one they can no longer
+see, which is a memory task rather than a reading task. One plate exported per
+window is the other answer, and it lets the extent, the projection and the
+symbol scale drift apart between frames, with nothing on the page admitting
+that the panels have stopped being comparable.
+
+Small multiples are the standard remedy, and the standard argument for them is
+that holding everything constant except the one variable under study puts the
+comparison on the page instead of in the reader's head
+\parencite{tufte-envisioning}. The argument is only as good as the constancy,
+which is where an export-per-window loses it. Here the constancy is structural
+rather than disciplined: \texttt{small\_multiples} cuts \emph{one} config into
+one panel per window, so there is no second config for the extent, the
+projection, the basemap or the palette to differ in.
+
+The marker radii matter more than they look. Section~\ref{sec:conflict-data}
+sizes a proportional disc from the largest magnitude \emph{in the file}, which
+means the split has to happen after the loader has run and before anything is
+drawn. Splitting the other way round --- calling \texttt{acled\_events} once
+per window --- gives each window its own largest value, so the same disc stands
+for forty deaths in one panel and four hundred in the next, and the sheet looks
+exactly the same either way.
+
+Two decisions carry the rest.
+
+\paragraph{An empty window is still a panel.} A year in which nothing was
+recorded is evidence, and dropping its panel does not merely omit it: it closes
+the gap, so the panels on either side become adjacent and the sheet reads as a
+continuous run of activity. Every window between the first and the last is
+drawn, and an empty one says \emph{nothing drawn} where its count would go.
+
+\paragraph{A mark goes only where its own date precision lets it go.} This is
+Section~\ref{sec:locational-precision} applied to the other axis, and it is the
+same refusal. UCDP GED grades how well an event's \emph{date} is known on its
+own scale, and the convention here carries four steps: a day, a week, a month,
+a year. A row dated \emph{month of March 2023} has not said which day. Binning
+it into a March panel is honest; binning it into a week panel is choosing one
+of five weeks on the reader's behalf.
+
+So a mark is not treated as a point in time. It is the interval its own
+\texttt{time\_precision} admits, and it is placed only where that whole
+interval fits inside a single window. What fits nowhere is not drawn, and the
+sheet states the count and the reason --- \emph{Not placed: 8 dated only to a
+year, which no single quarter panel contains} --- in the same breath the loader
+uses for a coordinate known only to the country. The rule generalises without
+special cases: a date given as \emph{week of 28 March} reaches into April, so a
+sheet cut by month places it in neither, which is correct and would have needed
+a hand-written exception under any scheme that treated dates as points.
+
+\paragraph{One sheet, one raster.} Nine panels built from one config define the
+same clip paths and the same filters nine times. Duplicate identifiers are
+invalid, and what a renderer does with them --- first definition wins --- is a
+convention rather than a guarantee: every panel would be clipped by the first
+panel's clip path, which is right exactly as long as the panels happen to stay
+the same size. Each panel's identifiers are therefore renamed as it is placed.
+The terrain raster is the opposite problem: it is identical by construction,
+and it is both the most expensive thing on the plate to compute and the largest
+thing in the file. It is computed once per sheet and the remaining panels carry
+a single reference to it, which is what keeps a nine-panel sheet of a mountain
+region a file somebody can open.
+
 \subsection{Provenance at the mark}
 
 Liveuamap \cite{liveuamap} attaches a source to each event rather than to
