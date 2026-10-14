@@ -258,3 +258,62 @@ the vocabulary is an error naming its row, not a row skipped quietly: a
 dataset that has changed under you is worth stopping for, and treating an
 unreadable code as "exact" would upgrade an approximate mark into a confident
 one on a plate that still looks finished.
+
+## Printing a plate in a journal
+
+Journals specify physical widths, not pixels: Nature 90 mm for a single
+column and 180 for a double, Elsevier 90 / 140 / 190, Science 57 / 121 / 184.
+They also specify a floor for the type *inside* the figure — 5 to 7 pt at
+Nature and Science, 6 pt as Elsevier's minimum — and all three say to build
+the figure at the width it will print at rather than scale it afterwards.
+
+```python
+cfg["print_width"] = "90mm"
+```
+
+The root then carries `width="90mm"` and the matching height, so the file
+lands at exactly that size in InDesign or `\includegraphics`. Nothing about
+the drawing changes: the viewBox and every path are identical, byte for byte.
+
+What the key is really for is the second half:
+
+```
+RuntimeWarning: at 90 mm this plate's smallest label is 1.6 pt (below every
+major publisher's floor; Nature and Science ask 5 to 7 pt, Elsevier 6). The
+label is 10.8 units on a 1768-unit canvas; designing the same plate at
+canvas_width around 551 would print it at 5 pt.
+```
+
+That is the bundled Ukraine plate. It is designed for a screen, and at a
+journal column its labels set at a third of the smallest type any publisher
+accepts — which no rendering shows you, because a vector file scales silently.
+A warning rather than a refusal: a poster is not a journal page.
+
+`mm`, `cm`, `in` and `pt` are understood. A bare number with no unit is
+refused, because `"90"` could be millimetres or pixels and the two differ by a
+factor of three.
+
+## Who can read the plate
+
+A thematic plate is a navigable document, not a picture. Its claim polygons,
+its event marks and its legend controls are keyboard-reachable, and each one
+names itself:
+
+| Focus lands on | It announces |
+|---|---|
+| a control zone | `Russian-occupied (approx.), 15% of the mapped area` |
+| a lower-confidence zone | `SPLM-N (al-Hilu), 4% of the mapped area, claimed, unverified` |
+| an exact mark | `Avdiivka, named location, 2024-02-17` |
+| an approximate mark | `El Fasher, approximate — a place standing in for a whole region, month of 2024-06` |
+| a legend class | `Show only Ukrainian government control` |
+
+The precision wording is the marker symbology's own. A sighted reader sees a
+solid disc or a broken ring; without it in the label, a screen-reader user
+would be handed the confident reading of every approximate mark on the plate —
+the exact failure the symbology exists to prevent, reintroduced for the
+readers least able to catch it.
+
+The root is `role="graphics-document"` when there is something to reach and
+`role="img"` when the plate really is only a basemap. That distinction is not
+cosmetic: `img` makes every descendant presentational, so a perfectly named
+polygon inside one is still a polygon the screen reader has been told to skip.

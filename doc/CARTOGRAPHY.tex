@@ -1236,6 +1236,7 @@ map and tells a reader nothing about the single mark they are trying to
 check, so a marker carries its own \texttt{source}.
 
 \subsection{Reading the plate back}
+\label{sec:plate-readback}
 
 svgis \cite{svgis} writes a feature's own attribute fields into
 \texttt{data-*} attributes on the SVG elements it emits, so the drawing
@@ -1250,6 +1251,112 @@ The motivation is the same one behind keeping the worked examples'
 polygons in readable Python rather than an opaque data file: a plate of
 this kind is an argument, and an argument a reader can extract and
 recompute is stronger than one they can only look at.
+
+\subsection{The reader who cannot see it}
+\label{sec:non-visual}
+
+Section~\ref{sec:plate-readback} makes the plate queryable by a program.
+This one makes it readable by a person who is not looking at it, and the two
+are closer than they sound: both exist because a finished plate is an
+argument, and an argument only one kind of reader can reach is a weaker
+argument.
+
+The starting point was better than most and worse than it looked. The root
+carried \texttt{role="img"} with a \texttt{<title>} and a \texttt{<desc>}, so
+a screen reader announced the plate's name and a sentence of what it shows,
+which is already more than a tile-based map can offer. But every thematic
+plate also puts \texttt{tabindex="0"} on its claim polygons, its marks and its
+legend controls. Measured across the five bundled thematic plates: \textbf{85
+focusable elements, 55 of them with no accessible name.} A keyboard user
+tabbing through the Sudan plate met fourteen stops that announced nothing.
+
+The root made that worse rather than better. \texttt{img} is a role whose
+children are \emph{presentational}: the entire subtree is dropped from the
+accessibility tree, and a focusable descendant of a presentational subtree can
+be reached and is not voiced. The two faults compounded --- unnamed stops,
+inside a container that had told the assistive technology there was nothing in
+there to name.
+
+Both halves are fixed by the same principle this document keeps returning to:
+the answer follows what the plate actually contains. A plate with reachable
+claims is a \texttt{graphics-document} \parencite{graphics-aria}, whose children are
+real nodes in the tree; a plate that is only a basemap stays an \texttt{img},
+because that is what it is, and announcing it as a document would send a reader
+hunting through it for content that is not there. Each reachable thing is a
+\texttt{graphics-symbol} with a name:
+
+\begin{itemize}
+  \item a control zone says whose ground it is, what share of the plate that
+        is, and --- only when it is not the default --- the confidence tier:
+        \emph{SPLM-N (al-Hilu), 4\,\% of the mapped area, claimed,
+        unverified};
+  \item a mark says what it is, \emph{how well its position is known}, and
+        when: \emph{El Fasher, approximate --- a place standing in for a whole
+        region, month of 2024-06};
+  \item a legend class says what pressing it does, because
+        \texttt{role="button"} on a \texttt{<g>} does not take its name from
+        the text inside it the way a real button would.
+\end{itemize}
+
+The second of those carries the weight. A sighted reader sees a solid disc or
+a broken ring and gets the precision of Section~\ref{sec:locational-precision}
+for free. Leave it out of the label and a screen-reader user is handed the
+confident reading of every approximate mark on the plate --- the exact failure
+the symbology exists to prevent, reintroduced for the readers least able to
+catch it.
+
+The description also says how many features can be reached. A navigable plate
+is no use to someone who never learns it is navigable, and that fact can only
+be stated once, before the thirty tab stops begin.
+
+None of this is visible. The plates render exactly as they did, which is why
+it needed a measurement rather than a rendering to find --- and why
+\texttt{tests/test\_nothing\_is\_a\_silent\_tab\_stop.py} counts the silent
+stops on every plate rather than trusting that they are gone.
+
+\subsection{The size this figure will actually print at}
+\label{sec:print-size}
+
+A plate is designed in user units and printed in millimetres, and nothing in
+the file joins the two.
+
+Journals are specific about both ends. Nature asks for 90\,mm at a single
+column and 180 at a double, with type between 5 and 7\,pt
+\parencite{nature-figures}; Elsevier publishes 90, 140 and 190\,mm and a 6\,pt
+minimum \parencite{elsevier-artwork}; Science specifies 57, 121 and 184\,mm. All of
+them also give the same instruction about method --- build the figure at the
+width it will print at, rather than scaling it afterwards --- and that
+instruction is unfollowable here, because the user unit is arbitrary and no
+rendering reveals what it becomes on paper.
+
+Measured: the bundled Ukraine plate is 1\,768 units wide and its smallest
+label is 10.8 of them. In a 90\,mm column that label sets at
+\[
+10.8 \cdot \frac{90}{1768} \cdot \frac{72}{25.4} \approx 1.6\ \mathrm{pt},
+\]
+roughly a third of the floor any major publisher accepts. It renders without
+complaint, because a vector file always does.
+
+So \texttt{print\_width} states the physical width, and does two things with
+it. The root carries that width instead of a pixel count --- the viewBox and
+every drawn element are untouched, byte for byte, because physical size is a
+statement about the paper and not about the map --- so the file lands at
+exactly that width in a page layout or an \texttt{\textbackslash
+includegraphics}. And the plate measures its own smallest label, off the
+finished markup rather than off the type scale, and says what it will be:
+
+\begin{quote}\small
+at 90 mm this plate's smallest label is 1.6 pt (below every major publisher's
+floor; Nature and Science ask 5 to 7 pt, Elsevier 6). The label is 10.8 units
+on a 1768-unit canvas; designing the same plate at canvas\_width around 551
+would print it at 5 pt.
+\end{quote}
+
+A warning and not a refusal: a poster is not a journal page and the caller may
+have a reason. But it names the number and the canvas width that would fix it,
+because a measurement nobody can act on changes nothing. A bare number with no
+unit \emph{is} refused --- ``90'' could be millimetres or pixels, and the two
+differ by a factor of three.
 
 \subsection{Furniture against labels}
 

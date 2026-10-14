@@ -92,6 +92,13 @@ cfg.update(acled_events("sudan-2024.csv", derive_region=True))
 make_situation_map(config=cfg, out="sudan.svg")
 ```
 
+A plate is also a navigable document: its claim polygons, its event marks and
+its legend controls are keyboard-reachable and each one names itself to a
+screen reader — including **how well a mark's position is known**, so a reader
+who cannot see a broken ring is told in words what the ring means. Set
+`print_width: "90mm"` and the file lands at a journal's column width, and the
+plate says in points how small its smallest label will actually print.
+
 `ucdp_events` does the same for GED, maps its seven-step precision onto the
 three in a table written out in `scripts/_conflict.py`, and **refuses to place
 the country-level rows at all** — counting them on the plate's own method line
