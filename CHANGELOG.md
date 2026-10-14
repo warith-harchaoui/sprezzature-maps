@@ -9,6 +9,11 @@ visible. The plates look exactly as they did.
 
 ### Fixed
 
+- **The legend key drew a symbol the plate did not.** `marker_legend` rows
+  were hardcoded to precision 1, so an aggregated plate showed a solid disc
+  in its key beside marks that were all hollow broken rings — the same page
+  teaching the colour correctly and the symbol wrongly. Found by rendering an
+  aggregated plate and looking at its legend.
 - **Fifty-five focusable elements with no accessible name.** A thematic plate
   puts `tabindex="0"` on its claim polygons, its marks and its legend
   controls, which is right -- the claim is the content and a keyboard user
@@ -35,6 +40,21 @@ visible. The plates look exactly as they did.
 
 ### Added
 
+- **`aggregate`: the honest coarser map.** OCHA's data-responsibility
+  guidance, revised January 2025, is blunt that a map plotting where
+  vulnerable people are can be the thing that finds them, and that
+  coordinates resist anonymisation precisely because they identify. A dot map
+  of four thousand events over a displacement crisis is a dot map of four
+  thousand places somebody could go to. `aggregate="admin1"` draws one mark
+  per administrative unit instead of one per event — and, unlike the usual
+  version of this, the result cannot pretend to be a location: **an aggregate
+  comes out at precision 3**, *a place standing in for a whole region*, which
+  is the generator's existing wording for exactly this case. It draws as a
+  hollow broken ring, says so in its tooltip and its accessible name, and the
+  plate's method line reads *6 events aggregated to 3 admin1 units; each mark
+  is a representative point for its unit, not a location.* No new symbology
+  was needed; the old one only had to be told the truth. `admin1`/`admin2`
+  resolve to each dataset's own spelling (ACLED's `admin1`, UCDP's `adm_1`).
 - **`print_width`: what this figure measures on paper, and whether its type
   survives the trip.** Journals specify physical widths -- Nature 90 and 180
   mm, Elsevier 90/140/190, Science 57/121/184 -- and a type floor inside the

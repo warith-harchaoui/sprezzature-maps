@@ -271,8 +271,17 @@ def _radii(values: list[float], base: float, biggest: float) -> list[float]:
     return [round(base + span * math.sqrt(v / top), 2) for v in values]
 
 
-def _legend(classes: list[str], palette: Iterable[str]) -> list[dict[str, Any]]:
-    """Return one legend row per class met, in the order the vocabulary lists them."""
+def _legend(
+    classes: list[str], palette: Iterable[str], precision: int = 1
+) -> list[dict[str, Any]]:
+    """Return one legend row per class met, in the order the vocabulary lists them.
+
+    ``precision`` is the symbol the key draws, and it has to be the symbol the
+    plate draws. Aggregated marks come out at precision 3 -- hollow, broken --
+    and a key that kept showing a solid disc beside them would be teaching the
+    reader the wrong symbol on the same page it teaches them the colour. Found
+    by rendering an aggregated plate and looking at its legend.
+    """
     palette = tuple(palette)
     if len(classes) > len(palette):
         raise ValueError(
@@ -281,7 +290,7 @@ def _legend(classes: list[str], palette: Iterable[str]) -> list[dict[str, Any]]:
             "legend with nine categorical colours is a legend nobody reads."
         )
     return [
-        {"color": palette[i], "label": label, "precision": 1}
+        {"color": palette[i], "label": label, "precision": precision}
         for i, label in enumerate(classes)
     ]
 
@@ -321,6 +330,81 @@ def _window(dates: list[str]) -> str:
     return real[0] if real[0] == real[-1] else f"{real[0]} to {real[-1]}"
 
 
+#: The columns each dataset names its administrative units in.
+#:
+#: Both publish them, and both spell them differently: ACLED's ``admin1`` is
+#: UCDP's ``adm_1``. A caller who asks to aggregate by first-order unit should
+#: not have to know which file they are holding.
+_UNIT_COLUMNS: dict[str, dict[str, str]] = {
+    "ACLED": {"admin1": "admin1", "admin2": "admin2"},
+    "UCDP": {"admin1": "adm_1", "admin2": "adm_2"},
+}
+
+
+def _aggregate(
+    events: list[dict[str, Any]], unit_of: Callable[[dict[str, Any]], str]
+) -> tuple[list[dict[str, Any]], int]:
+    """Collapse one mark per event into one mark per (class, administrative unit).
+
+    The reason is not cartographic tidiness. OCHA's data-responsibility
+    guidance is blunt about it: a map that plots where vulnerable people are
+    can be the thing that finds them, and location data is hard to anonymise
+    precisely because coordinates are identifying. A dot map of four thousand
+    events over a displacement crisis is a dot map of four thousand places
+    somebody could go.
+
+    Aggregating is the usual answer, and the usual answer is usually done
+    dishonestly: the aggregate is drawn as a confident dot at a centroid, as
+    though the pile of events happened there. Here it cannot be, because the
+    mark that comes out **declares what it is**. A unit's aggregate is
+    ``precision`` 3 -- *a place standing in for a whole region* -- which is
+    the generator's existing wording for exactly this situation, so it draws
+    as a hollow broken ring and its tooltip and its accessible name both say
+    so. The symbology was already right; it only had to be told the truth.
+
+    The position is the mean of the member coordinates. That is a
+    representative point and not a centroid of the unit, and on a crescent-
+    shaped region it can fall outside the unit it represents -- which is a
+    real caveat and the reason the mark is drawn at the weakest precision
+    rather than a strong one.
+
+    Returns
+    -------
+    tuple
+        The aggregated marks, and how many units they cover.
+    """
+    buckets: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for mark in events:
+        key = (str(mark["_class"]), unit_of(mark))
+        buckets.setdefault(key, []).append(mark)
+
+    out: list[dict[str, Any]] = []
+    for (cls, unit), members in buckets.items():
+        n = len(members)
+        dates = sorted(str(m.get("date") or "") for m in members if m.get("date"))
+        window = ""
+        if dates:
+            window = dates[0] if dates[0] == dates[-1] else f"{dates[0]} to {dates[-1]}"
+        agg: dict[str, Any] = {
+            "lon": round(sum(m["lon"] for m in members) / n, 4),
+            "lat": round(sum(m["lat"] for m in members) / n, 4),
+            # Not a choice: an aggregate *is* a place standing in for a whole
+            # region, and that is what code 3 means.
+            "precision": 3,
+            "time_precision": 1,
+            "_class": cls,
+            "label": f"{unit}: {n} event{'s' if n != 1 else ''}" if unit else
+                     f"{n} event{'s' if n != 1 else ''}",
+            "color": None,
+        }
+        if window:
+            agg["date"] = window
+        if "_magnitude" in members[0]:
+            agg["_magnitude"] = sum(float(m.get("_magnitude", 0.0)) for m in members)
+        out.append(agg)
+    return out, len({unit for _, unit in buckets})
+
+
 def _common(
     rows: list[dict[str, Any]],
     *,
@@ -333,6 +417,7 @@ def _common(
     base_radius: float,
     max_radius: float,
     tooltip_from: str | None,
+    aggregate: str | None,
     derive_region: bool,
     region_pad: float,
     limit: int | None,
@@ -368,9 +453,26 @@ def _common(
             mark["_magnitude"] = _magnitude(row.get(size_by))
         if tooltip_from and row.get(tooltip_from):
             mark["label"] = str(row[tooltip_from])
+        if aggregate:
+            column = _UNIT_COLUMNS[dataset].get(aggregate, aggregate)
+            if column not in row:
+                raise ValueError(
+                    f"aggregate={aggregate!r} needs a {column!r} column and this "
+                    f"{dataset} export has none. Known shorthands: "
+                    f"{', '.join(sorted(_UNIT_COLUMNS[dataset]))}; anything else is "
+                    "taken as a column name."
+                )
+            mark["_unit"] = str(row.get(column) or "")
         events.append(mark)
         dates.append(str(mark.get("date") or ""))
 
+    units = 0
+    if aggregate:
+        # Before the radii: an aggregate's magnitude is the sum of its members,
+        # so scaling the members first would set the scale by a single event.
+        before = len(events)
+        events, units = _aggregate(events, lambda m: str(m.pop("_unit", "")))
+        aggregated = f"{before:,} events aggregated to {units:,} {aggregate} units"
     if size_by:
         # Set after the loop, not inside it: the scale is relative to the
         # largest value in this file, which is not known until the last row.
@@ -393,7 +495,7 @@ def _common(
             RuntimeWarning,
             stacklevel=3,
         )
-    legend = _legend(classes, palette)
+    legend = _legend(classes, palette, precision=3 if aggregate else 1)
     colour = {row["label"]: row["color"] for row in legend}
     for mark in events:
         mark["color"] = colour[mark.pop("_class")]
@@ -402,10 +504,21 @@ def _common(
         dropped[f"beyond the {limit:,}-event limit"] = len(events) - limit
         events = events[:limit]
 
+    method = _method_line(len(events), dropped, dataset, _window(dates))
+    if aggregate:
+        # The reader is looking at 18 marks drawn from 1,284 events and has no
+        # way to know that unless the plate says it. An aggregate that does
+        # not announce itself is a map claiming 18 things happened.
+        method = (
+            f"{aggregated}; each mark is a representative point for its unit, "
+            f"not a location. " + method.split("; ", 1)[-1]
+            if "; " in method
+            else f"{aggregated}. " + method
+        )
     fragment: dict[str, Any] = {
         "events": events,
         "marker_legend": legend,
-        "method": _method_line(len(events), dropped, dataset, _window(dates)),
+        "method": method,
     }
     if derive_region:
         if not events:
@@ -435,6 +548,7 @@ def acled_events(
     base_radius: float = 3.0,
     max_radius: float = 11.0,
     tooltip_from: str | None = None,
+    aggregate: str | None = None,
     derive_region: bool = False,
     region_pad: float = 0.6,
     limit: int | None = None,
@@ -475,6 +589,20 @@ def acled_events(
         with two hundred names on it is not a map, and the few places worth
         naming are worth naming by hand in ``labels.places``. Without it the
         tooltip falls back to the event's class.
+    aggregate : str, optional
+        Draw one mark per administrative unit instead of one per event:
+        ``"admin1"``, ``"admin2"``, or any column name. Off by default.
+
+        This is the answer to a question that is not cartographic. OCHA's
+        data-responsibility guidance is blunt that a map plotting where
+        vulnerable people are can be the thing that finds them, and that
+        coordinates resist anonymisation. Aggregating is the usual remedy and
+        is usually done dishonestly -- the pile is drawn as a confident dot at
+        a centroid. Here it cannot be: an aggregate comes out at
+        ``precision`` 3, *a place standing in for a whole region*, so it draws
+        as a hollow broken ring, says so in its tooltip and in its accessible
+        name, and the plate's method line says how many events became how many
+        marks.
     derive_region : bool, optional
         Set ``region.bbox`` from the events themselves rather than taking
         it from the caller's config.
@@ -546,6 +674,7 @@ def acled_events(
         base_radius=base_radius,
         max_radius=max_radius,
         tooltip_from=tooltip_from,
+        aggregate=aggregate,
         derive_region=derive_region,
         region_pad=region_pad,
         limit=limit,
@@ -561,6 +690,7 @@ def ucdp_events(
     base_radius: float = 3.0,
     max_radius: float = 11.0,
     tooltip_from: str | None = None,
+    aggregate: str | None = None,
     country_level: str = "drop",
     derive_region: bool = False,
     region_pad: float = 0.6,
@@ -585,6 +715,10 @@ def ucdp_events(
         A column to name each mark in its hover tooltip, e.g.
         ``"where_coordinates"``. Not drawn on the plate; see
         :func:`acled_events`.
+    aggregate : str, optional
+        One mark per administrative unit rather than per event; ``"admin1"``
+        and ``"admin2"`` resolve to UCDP's ``adm_1`` and ``adm_2``. See
+        :func:`acled_events` for why, and for what the resulting mark claims.
     country_level : {"drop", "keep"}, optional
         What to do with ``where_prec`` 6, where only the country is known
         and the coordinates are a representative point for the whole state.
@@ -676,6 +810,7 @@ def ucdp_events(
         base_radius=base_radius,
         max_radius=max_radius,
         tooltip_from=tooltip_from,
+        aggregate=aggregate,
         derive_region=derive_region,
         region_pad=region_pad,
         limit=limit,

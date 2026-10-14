@@ -251,6 +251,7 @@ cfg.update(ucdp_events("ged251.csv", size_by="best", derive_region=True))
 | `derive_region` | Take `region.bbox` from the events instead of writing one |
 | `label_from` | Print a column beside each dot (`"location"`, `"admin1"`). Off by default: two hundred events is not two hundred names |
 | `limit` | Keep at most *n*; the remainder is counted on the plate, never dropped in silence |
+| `aggregate` | One mark per administrative unit instead of one per event: `"admin1"`, `"admin2"`, or any column name. See below |
 | `vocabulary` | The classes to expect, in legend order. Fixed by default so one colour means one thing across every figure in a paper |
 
 An unreadable precision code, an unparseable coordinate or a class outside
@@ -317,3 +318,45 @@ The root is `role="graphics-document"` when there is something to reach and
 `role="img"` when the plate really is only a basemap. That distinction is not
 cosmetic: `img` makes every descendant presentational, so a perfectly named
 polygon inside one is still a polygon the screen reader has been told to skip.
+
+### Aggregating rather than pinpointing
+
+Sometimes the honest map is the coarser one. [OCHA's data-responsibility
+guidance](https://data.humdata.org/dataset/2048a947-5714-4220-905b-e662cbcd14c8/resource/8bc5b848-8ece-4f1f-a78b-18dd972bb21a/download/data-responsibility-guidelines-2025.pdf)
+is blunt that a map plotting where vulnerable people are can be the thing that
+finds them, and that coordinates resist anonymisation precisely because they
+identify. A dot map of four thousand events over a displacement crisis is a
+dot map of four thousand places somebody could go to.
+
+```python
+cfg.update(acled_events("sudan-2024.csv", aggregate="admin1", size_by="fatalities"))
+```
+
+Aggregating is the usual remedy, and it is usually done dishonestly: the pile
+is drawn as a confident dot at a centroid, as though it happened there. Here
+it cannot be. **An aggregate comes out at precision 3** — *a place standing in
+for a whole region*, the generator's existing wording for exactly this — so it
+draws as a hollow broken ring, says so in its tooltip and in its accessible
+name, and the legend key draws the same broken ring rather than teaching a
+solid disc beside marks that are not solid.
+
+The plate says what happened:
+
+```
+6 events aggregated to 3 admin1 units; each mark is a representative point
+for its unit, not a location. 2024-01-15 to 2024-03-15.
+```
+
+Each mark is named `Khartoum: 3 events`, carries the window its members span
+rather than one member's date, and — with `size_by` — is scaled by the unit's
+total, collapsed before the scale is set so that the plate's largest disc is
+the largest *unit* and not the largest single event.
+
+`admin1` and `admin2` resolve to each dataset's own spelling (ACLED's
+`admin1`, UCDP's `adm_1`); any other string is taken as a column name, and a
+column the file does not have is refused by name.
+
+One caveat, stated because it is real: the position is the mean of the member
+coordinates, which on a crescent-shaped unit can fall outside the unit it
+represents. That is part of why the mark is drawn at the weakest precision the
+symbology has rather than a confident one.
