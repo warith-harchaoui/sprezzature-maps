@@ -2,6 +2,90 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.16.0] - 2026-10-14: the same plate once per window, and a key that drew one symbol in three
+
+### Added
+
+- **`small_multiples`: one panel per window of time.** A situation plate is a
+  snapshot, and most of what research says about a conflict is a change. The
+  two usual answers both give something away. An animation asks the reader to
+  compare a frame against one they can no longer see. One plate exported per
+  window lets the extent, the projection and the symbol scale drift apart
+  between frames, with nothing on the page admitting that the panels have
+  stopped being comparable.
+
+  `small_multiples: {by: "quarter"}` cuts **one** config into one panel per
+  year, quarter, month, week or day, so there is no second config for any of
+  that to differ in. The split happens after the loader has run and before
+  anything is drawn, which is the part that is easy to get backwards:
+  `acled_events` sizes a proportional disc from the largest value *in the
+  file*, so calling it once per window would give each window its own largest
+  value and the same disc would stand for a different number in every panel.
+
+  Two rules it will not bend. **A window with nothing in it is still a
+  panel** — dropping it closes the gap, and the panels on either side then
+  read as consecutive. And **a mark is placed only where its own
+  `time_precision` allows**: a mark is not a point in time but the interval
+  its precision admits, and it goes in a window only if that whole interval
+  fits inside it. A row dated *month of March* belongs in a March panel and in
+  no week panel; a week beginning 28 March reaches into April and belongs to
+  neither month, which falls out of the rule rather than needing an exception
+  written for it. What fits nowhere is not drawn, and the sheet prints the
+  count and the reason — *Not placed: 8 dated only to a year, which no single
+  quarter panel contains* — the same answer the loaders already give to a
+  coordinate known only to the country. Past sixty panels the call is refused
+  rather than drawn.
+
+  The sheet draws the title, the key, the ruler, the north arrow and the
+  credits once. The ruler is drawn at the **panels'** scale and set beside
+  them rather than enlarged to the sheet's type: panels sit on the sheet at
+  1:1, so a bar scaled up to match the footer would have been legible and
+  wrong. Each panel's identifiers are renamed as it is placed — eight panels
+  from one config otherwise define `plate-clip` eight times, and every panel
+  would be clipped by the first one's, which is right only for as long as the
+  panels happen to stay the same size. The terrain raster is identical by
+  construction, so it is computed once per sheet and referenced thereafter:
+  the eight-panel Sudan sheet is **431 KB rather than 1.65 MB**, and on a
+  mountain region, where the raster is 2.3 MB, the difference is a file that
+  opens and one that does not.
+
+### Fixed
+
+- **The key drew one symbol out of three.** On an event plate the legend rows
+  key the *colour* — which class a mark belongs to — and they are all drawn at
+  the confident solid disc. The ring vocabulary is the other half, and it is
+  the half this generator exists for: hollow means "about here", broken means
+  "a place standing in for a whole region". Nothing on the page said so, so a
+  plate drawn from an ACLED export with mixed `geo_precision` drew three
+  different symbols and explained one — teaching the colour correctly and the
+  shape not at all, which is the same defect the aggregated plate's key had in
+  0.15.0, found the same way, by rendering one and looking at it. The key now
+  carries a row per precision code the plate actually uses; a plate whose
+  marks are all exact is unchanged to the byte.
+
+- **A legend card drew past its own edge.** The floating card was a fixed 262
+  units wide and its rows were drawn into it unmeasured, so a label wider than
+  that simply ran out of the card and, on a plate whose card floats over a
+  corner, off the plate: the first precision row inked 74 units past the
+  right-hand edge of the Ukraine plate. Caught by
+  `test_every_name_is_on_the_plate`, which has been watching for exactly this
+  since 0.13.0 and had never had a label long enough to catch. 262 is now a
+  floor rather than a constant, so every key that fits today is untouched to
+  the unit, and the north arrow reads the card's width off the card rather
+  than restating the number.
+
+- `EXAMPLES.md` documented an argument that does not exist. The options table
+  listed `label_from`, *"print a column beside each dot"* — both the name and
+  the behaviour from before 0.14.0, where it became `tooltip_from` precisely
+  because it does **not** draw on the plate.
+
+### Documentation
+
+- `doc/CARTOGRAPHY.tex` gains **The same plate, once per window of time**
+  (§5.5): why constancy across panels has to be structural rather than
+  disciplined, why the marker scale forces the split to happen after the
+  loader, and the date-precision interval rule in full.
+
 ## [0.15.0] - 2026-10-14: fifty-five silent tab stops, and a plate that could not be printed
 
 Two defects that a rendered picture cannot show, because neither of them is

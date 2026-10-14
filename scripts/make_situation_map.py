@@ -189,6 +189,15 @@ Chrome and provenance
     The legend's heading. Defaults to ``AREAS OF CONTROL`` when the plate
     has control classes and ``KEY`` when it is marks alone, so a plate drawn
     from an event export stops titling a layer it does not have.
+``small_multiples``
+    Cut the plate into one panel per window of time:
+    ``{by, from, to, columns, panel_width}``. ``by`` is ``"day"``,
+    ``"week"``, ``"month"``, ``"quarter"`` or ``"year"``. Every panel is
+    built from this one config, so the extent, the projection and the
+    marker scale are shared and the panels really are comparable; a window
+    with nothing in it is still drawn, and a mark whose own
+    ``time_precision`` is coarser than the window is not placed in any
+    panel -- the sheet prints how many and why.
 ``print_width``
     The figure's physical width, e.g. ``"90mm"`` (a journal's single column)
     or ``"190mm"`` (a double one); ``mm``, ``cm``, ``in`` and ``pt`` are
@@ -223,7 +232,7 @@ import re
 import sys
 import warnings
 from collections.abc import Iterable, Sequence
-from datetime import date
+from datetime import date, timedelta
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -2099,6 +2108,8 @@ def _reserved_boxes(cfg: dict[str, Any], vp: dict[str, Any]) -> list[tuple[float
     title block sits above the map's own content on every plate rendered so
     far.
     """
+    if cfg.get("_panel"):  # a panel has no furniture, so it owns no ground
+        return []
     ts, W, H = vp["ts"], vp["width"], vp["height"]
     boxes: list[tuple[float, float, float, float]] = []
 
@@ -2639,6 +2650,14 @@ def build_map(cfg: dict[str, Any]) -> str:
     str
         A complete standalone SVG document.
     """
+    # A sheet of small multiples is still "the situation map this config
+    # describes", so it is reached through the same call every consumer
+    # already makes -- the CLI, the Python entry point, the HTTP route and
+    # the MCP tool -- rather than through a second generator they would
+    # each have to learn about. The recursion terminates because the panel
+    # configs are built without this key.
+    if cfg.get("small_multiples"):
+        return build_small_multiples(cfg)
     bbox = validate_region(cfg.get("region"))
     proj = build_projection(bbox, cfg.get("projection", "auto"))
     width = float(cfg.get("canvas_width", 1000))
@@ -2838,10 +2857,23 @@ def build_map(cfg: dict[str, Any]) -> str:
     # near-black night one the way a lit ridge does. Hardcoding either would
     # have made the night plate black.
     if basemap.get("relief", True):
-        relief, cfg["_relief_tone"] = _relief_layer(
-            vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox,
-            hypsometric=_wants_hypsometry(cfg),
-        )
+        # The panels of one sheet are the same plate with different marks
+        # on it, so they share a terrain raster exactly. It is the most
+        # expensive thing here to compute and the largest thing in the
+        # file; computing it once per sheet instead of once per panel is
+        # also what makes the copies byte-identical, which is what lets
+        # the sheet collapse them to a single <use>.
+        shared = cfg.get("_relief_cache")
+        if shared is not None and "markup" in shared:
+            relief, cfg["_relief_tone"] = shared["markup"], shared["tone"]
+        else:
+            relief, cfg["_relief_tone"] = _relief_layer(
+                vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox,
+                hypsometric=_wants_hypsometry(cfg),
+            )
+            if shared is not None:
+                shared["markup"] = relief
+                shared["tone"] = cfg["_relief_tone"]
         layers.append(
             f'<defs><clipPath id="relief-land-clip"><path d="{land_d}"/></clipPath></defs>'
             f'<g id="relief-blend" data-layer-id="relief" '
@@ -4523,6 +4555,27 @@ _GEO_PRECISION: dict[int, str] = {
     3: "approximate — a place standing in for a whole region",
 }
 
+#: The same three codes as a key reads them, rather than as a sentence speaks
+#: them.
+#:
+#: :data:`_GEO_PRECISION` is written to be *spoken*: it lands mid-clause in a
+#: tooltip and in an accessible name -- "Battle, approximate -- a place
+#: standing in for a general area, 3 May 2024" -- where there is room for it
+#: and a reader has context. A legend row has neither. Dropped into the
+#: floating card verbatim, the longest of them inked 74 units past the right
+#: edge of the Ukraine plate: a key that ran off the page it was keying,
+#: caught by ``test_every_name_is_on_the_plate``.
+#:
+#: These are the same statements with the explanatory middle taken out, not
+#: different ones. Both halves keep the word "approximate" and keep which of
+#: the two approximations is meant, so a reader who meets the long form in a
+#: tooltip recognises the short form in the key.
+_GEO_PRECISION_KEY: dict[int, str] = {
+    1: "Named location",
+    2: "Approximate — a general area",
+    3: "Approximate — a whole region",
+}
+
 #: How a date's precision is spoken, after ACLED's ``time_precision``: 1 is
 #: the exact day, 2 is known only to the week, 3 only to the month.
 #:
@@ -5620,7 +5673,15 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 
 
 def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
-    """Return the title block, north arrow and dual-unit scale bar."""
+    """Return the title block, north arrow and dual-unit scale bar.
+
+    Empty for one panel of a sheet of small multiples: the sheet draws the
+    title, the arrow and the ruler once. Nine identical rulers do not tell
+    a reader the scale nine times, they take nine panels' worth of room to
+    say one thing.
+    """
+    if cfg.get("_panel"):
+        return '<g id="annotation-furniture"></g>'
     W = vp["width"]
     ts = vp["ts"]
     # North arrow top-right, clear of the title block top-left. When the
@@ -5631,7 +5692,10 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     legend_pos = _resolve_legend_position(cfg, ts, W)
     has_legend = bool(cfg.get("areas_of_control", {}).get("palette"))
     if legend_pos == "top-right" and has_legend:
-        arrow_x = W - (262 + 22 + 30) * ts
+        # Read off the card rather than restating its width: the 262 that used
+        # to be written here twice is now a floor the card can exceed.
+        card_w, _card_h, corner = _legend_panel_dims(cfg, ts)
+        arrow_x = W - (card_w + corner + 30 * ts)
     # The locator inset defaults to the same corner, and an arrow printed on
     # top of a small map reads as part of it.
     inset_box = _inset_box(cfg, vp)
@@ -5675,6 +5739,8 @@ def _attribution_layer(
     appends further caller-supplied credits to the same line, for callers
     who bring their own additional licensed sources.
     """
+    if cfg.get("_panel"):  # credited once on the sheet, not once per panel
+        return '<g id="attribution"></g>'
     credits: list[str] = []
     if _bbox_in_osm_admin1(bbox) and cfg.get("internal_borders", {}).get("show", True) is not False:
         credits.append("© OpenStreetMap contributors (ODbL)")
@@ -5791,6 +5857,29 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
                      "color": mk.get("color", "#c0392b"),
                      "precision": _precision_of(
                          mk.get("precision"), _GEO_PRECISION, "precision")})
+    # The rows above key the *colour* -- which class a mark belongs to -- and
+    # on an event plate they are all drawn at the confident solid disc. The
+    # ring vocabulary is the other half, and it is the half this generator
+    # exists for: hollow means "about here", broken means "a place standing in
+    # for a whole region". Nothing on the page said so. A plate could draw all
+    # three symbols and key one of them, which teaches the colour correctly
+    # and the shape not at all -- the same defect the aggregated plate had in
+    # its key, found the same way, by rendering one and looking at it.
+    #
+    # Keyed only when the plate actually draws more than the confident symbol:
+    # a plate whose marks are all exact does not need a lesson in rings it
+    # never draws. The wording is :data:`_GEO_PRECISION`'s own, so the key,
+    # the tooltip and the accessible name say the same sentence.
+    codes = sorted({
+        _precision_of(it.get("precision"), _GEO_PRECISION, "precision")
+        for layer in ("events", "forces")
+        for it in (cfg.get(layer) or [])
+    })
+    if codes != [1]:
+        for code in codes:
+            rows.append({"kind": "marker", "precision": code,
+                         "label": _GEO_PRECISION_KEY[code],
+                         "color": _pal(cfg)["chrome_sub"]})
     return rows
 
 
@@ -5933,7 +6022,16 @@ def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, fl
         return 0.0, 0.0, 22 * ts
     pad = 15 * ts
     row_h = 25 * ts
-    panel_w = 262 * ts
+    sw = 15 * ts
+    # 262 was a constant and the rows were drawn into it unmeasured, so a label
+    # wider than the card simply drew past the card -- and, on a plate whose
+    # card floats over a corner, past the plate. The floor stays 262, so every
+    # key that fits today is untouched to the unit; a wider row now widens the
+    # card instead of escaping it. Measured at the size the card actually draws
+    # it (``row_fs`` in :func:`_legend_layer` is 12.5 * ts), which is the same
+    # discipline :func:`_legend_band_dims` already applies to its columns.
+    widest = max(text_width(r["label"], 12.5 * ts) for r in rows)
+    panel_w = max(262 * ts, pad + sw + 10 * ts + widest + pad)
     foot_h = 30 * ts if cfg.get("legend_footer") else 0
     # Count only rows actually drawn below: the marker section's hairline
     # divider tucks between rows and needs no row of its own (a former +1
@@ -6001,6 +6099,8 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     of a 1000-unit plate, an occlusion at 70% of a 375-unit one. A narrow
     column does not want a smaller card, it wants the key somewhere else.
     """
+    if cfg.get("_panel"):  # the sheet keys all of its panels at once
+        return '<g id="legend"></g>'
     rows = _legend_rows(cfg, vp["ts"])
     if not rows:
         return '<g id="legend"></g>'
@@ -6129,6 +6229,543 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
 
 
 # --------------------------------------------------------------------------- #
+# Small multiples: the same plate, once per window of time                      #
+# --------------------------------------------------------------------------- #
+
+
+#: The windows a sheet can be cut into, finest first.
+_SM_STEPS: tuple[str, ...] = ("day", "week", "month", "quarter", "year")
+
+#: Three-letter month names, so a label does not depend on the host's locale.
+_SM_MONTHS: tuple[str, ...] = (
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+)
+
+#: How coarse each ``time_precision`` code is, phrased for a refusal message.
+#:
+#: The codes are :data:`_TIME_PRECISION`'s own: 1 a day, 2 a week, 3 a month,
+#: 4 a year.
+_SM_GRAIN: dict[int, str] = {1: "a day", 2: "a week", 3: "a month", 4: "a year"}
+
+#: Past this many panels, refuse rather than emit a sheet nobody can read.
+_SM_MAX_PANELS: int = 60
+
+#: How wide one panel is, in SVG units, when the config does not say.
+#:
+#: The viewport's type scale floors at 1.0 (``ts = max(1.0, width / 1000)``),
+#: so a panel narrower than this keeps full-size type on a shrinking plate and
+#: the names start colliding. 420 is the width at which the bundled plates
+#: still read.
+_SM_PANEL_WIDTH: float = 420.0
+
+#: Matches one embedded raster, so the sheet can draw the terrain once.
+_SM_IMAGE_RE = re.compile(r'<image\b[^>]*href="data:image/[^"]*"[^>]*/>')
+
+#: Matches an ``id="..."`` that is a whole attribute, not the tail of one.
+#:
+#: Without the lookbehind this also rewrites ``data-layer-id="relief"``, which
+#: is a *value* the control panel matches on, not an identifier.
+_SM_ID_RE = re.compile(r'(?<![\w-])id="([^"]+)"')
+
+
+def _sm_date(raw: Any, where: str) -> date:
+    """Return ``raw`` as a calendar date, or refuse it by name.
+
+    Parameters
+    ----------
+    raw : any
+        What the config put there.
+    where : str
+        The config path, e.g. ``events[12].date``, so a refusal names the row.
+
+    Raises
+    ------
+    ValueError
+        If ``raw`` is not an ISO date. A free-text date is refused rather
+        than guessed at: "early 2024" belongs to no window, and picking one
+        for it would invent exactly the thing a sheet of small multiples
+        exists to show.
+    """
+    if isinstance(raw, date):
+        return raw
+    text = str(raw).strip()
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        raise ValueError(
+            f"{where} is {raw!r}, which is not a date this sheet can bin. "
+            "small_multiples needs ISO dates (YYYY-MM-DD). A mark dated in "
+            "prose belongs to no window, and choosing one for it would invent "
+            "the very thing the sheet is drawn to show."
+        ) from None
+
+
+def _sm_add_months(d: date, n: int) -> date:
+    """Return the first of the month ``n`` months after ``d``'s month."""
+    index = d.year * 12 + (d.month - 1) + n
+    return date(index // 12, index % 12 + 1, 1)
+
+
+def _sm_step_start(d: date, by: str) -> date:
+    """Return the first day of the ``by`` window that contains ``d``."""
+    if by == "year":
+        return date(d.year, 1, 1)
+    if by == "quarter":
+        return date(d.year, 3 * ((d.month - 1) // 3) + 1, 1)
+    if by == "month":
+        return date(d.year, d.month, 1)
+    if by == "week":
+        # ISO weeks, so a sheet cut by week agrees with every calendar the
+        # reader has; ``weekday()`` is 0 on Monday.
+        return d - timedelta(days=d.weekday())
+    return d
+
+
+def _sm_step_next(start: date, by: str) -> date:
+    """Return the first day of the window after the one beginning at ``start``."""
+    if by == "year":
+        return date(start.year + 1, 1, 1)
+    if by == "quarter":
+        return _sm_add_months(start, 3)
+    if by == "month":
+        return _sm_add_months(start, 1)
+    if by == "week":
+        return start + timedelta(days=7)
+    return start + timedelta(days=1)
+
+
+def _sm_window_label(start: date, by: str) -> str:
+    """Return the heading one panel prints, e.g. ``"2023 Q2"``.
+
+    Examples
+    --------
+    >>> _sm_window_label(date(2023, 4, 1), "quarter")
+    '2023 Q2'
+    >>> _sm_window_label(date(2023, 4, 1), "month")
+    'Apr 2023'
+    >>> _sm_window_label(date(2023, 4, 3), "week")
+    'Week of 3 Apr 2023'
+    """
+    if by == "year":
+        return str(start.year)
+    if by == "quarter":
+        return f"{start.year} Q{(start.month - 1) // 3 + 1}"
+    if by == "month":
+        return f"{_SM_MONTHS[start.month - 1]} {start.year}"
+    if by == "week":
+        return f"Week of {start.day} {_SM_MONTHS[start.month - 1]} {start.year}"
+    return f"{start.day} {_SM_MONTHS[start.month - 1]} {start.year}"
+
+
+def _sm_mark_span(d: date, precision: int) -> tuple[date, date]:
+    """Return the first and last day a mark dated ``d`` at ``precision`` could mean.
+
+    This is the whole of the honesty argument for a sheet of small multiples,
+    and it is the time axis's version of the rule the marker symbology already
+    applies to space. A dataset that says *month of March 2023* has not said
+    which day; binning that row into a March panel is fine, and binning it
+    into a *week* panel means choosing one of five weeks on the reader's
+    behalf. So a mark is not a point in time here, it is the interval its own
+    ``time_precision`` admits, and :func:`build_small_multiples` places it only
+    where that whole interval fits inside one window.
+
+    The codes are :data:`_TIME_PRECISION`'s. Code 2 reads "week of {date}",
+    so its interval is the seven days beginning at the date given, not the
+    calendar week containing it -- that is what the wording on the plate and
+    in the tooltip has always claimed.
+    """
+    if precision <= 1:
+        return d, d
+    if precision == 2:
+        return d, d + timedelta(days=6)
+    if precision == 3:
+        return date(d.year, d.month, 1), _sm_add_months(d, 1) - timedelta(days=1)
+    return date(d.year, 1, 1), date(d.year, 12, 31)
+
+
+def _sm_namespace(markup: str, suffix: str) -> str:
+    """Return ``markup`` with every identifier it defines and uses made unique.
+
+    Nine panels built from one config define the same ``plate-clip``,
+    ``relief-clip`` and ``marker-shadow`` nine times. Duplicate identifiers are
+    invalid, and what a renderer does with them -- first definition wins -- is
+    a convention rather than a guarantee: every panel would be clipped by the
+    first panel's clip path, which is right only for as long as the panels
+    happen to be identical in size. Renaming per panel removes the question.
+    """
+    markup = _SM_ID_RE.sub(lambda m: f'id="{m.group(1)}-{suffix}"', markup)
+    markup = re.sub(r"url\(#([^)]+)\)", lambda m: f"url(#{m.group(1)}-{suffix})", markup)
+    return re.sub(r'href="#([^"]+)"', lambda m: f'href="#{m.group(1)}-{suffix}"', markup)
+
+
+def _sm_strip_root(svg: str) -> tuple[str, float, float]:
+    """Return one panel's drawable content and the ``(width, height)`` it was drawn at."""
+    box = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
+    if box is None:  # build_map always writes one; a missing one is a bug, not input
+        raise ValueError("a panel came back without a viewBox")
+    inner = svg[svg.index(">", svg.index("<svg")) + 1 : svg.rindex("</svg>")]
+    # The root's own name and description go with the root: the sheet writes
+    # its own, and nine copies of "Situation map of ..." in the accessibility
+    # tree is nine things a screen-reader user has to walk past.
+    inner = re.sub(r"<title id=\"sm-title\">.*?</title>", "", inner, flags=re.S)
+    inner = re.sub(r"<desc id=\"sm-desc\">.*?</desc>", "", inner, flags=re.S)
+    return inner, float(box.group(1)), float(box.group(2))
+
+
+def build_small_multiples(cfg: dict[str, Any]) -> str:
+    """Return one sheet holding the same plate drawn once per window of time.
+
+    A situation plate is a snapshot, and most of what a researcher wants to
+    say about a conflict is a change. The usual answers are an animation
+    (which asks the reader to hold two frames in memory and compare them from
+    memory) or one plate per window exported separately (which lets the
+    extent, the projection and the symbol scale drift apart between frames,
+    so the panels are no longer comparable and nothing on the page says so).
+    A sheet built here cannot drift: every panel is built from **one** config,
+    so the region, the projection, the basemap and the palette are the same
+    object, and the marker radii were computed by the loader over the whole
+    file before the split -- which is why the split happens here, on a loaded
+    config, rather than by calling :func:`acled_events` once per window. Doing
+    that would give each window its own largest value, and a disc in the 2016
+    panel would mean something different from the same disc in 2017 with
+    nothing on the page admitting it.
+
+    Two things this does that a plate-per-window export cannot:
+
+    **An empty window is still a panel.** A year with no events is evidence,
+    and dropping it compresses the time axis so that the gap disappears and
+    the remaining panels read as consecutive.
+
+    **A mark is placed only where its own date precision allows.** See
+    :func:`_sm_mark_span`: a row dated *month of March* is an interval, not a
+    day, and it goes in a March panel but in no week panel. What cannot be
+    placed is not drawn, and the sheet prints how many and why -- the same
+    answer :mod:`_conflict` gives to a coordinate known only to the country.
+
+    Parameters
+    ----------
+    cfg : dict
+        A situation-map config carrying a ``small_multiples`` section:
+        ``{by, from, to, columns, panel_width}``. ``by`` is one of
+        :data:`_SM_STEPS`; the rest default from the data.
+
+    Returns
+    -------
+    str
+        A complete standalone SVG document.
+    """
+    sm = dict(cfg.get("small_multiples") or {})
+    by = str(sm.get("by", "year")).lower()
+    if by not in _SM_STEPS:
+        raise ValueError(
+            f"unknown small_multiples.by {by!r}; known: {', '.join(_SM_STEPS)}"
+        )
+
+    # ── which window, if any, holds each mark ──────────────────────────────
+    layer_names = ("events", "forces")
+    marks = [
+        (name, i, it)
+        for name in layer_names
+        for i, it in enumerate(cfg.get(name) or [])
+    ]
+    spans: dict[tuple[str, int], tuple[date, date, int]] = {}
+    withheld: dict[str, int] = {}
+    for name, i, it in marks:
+        if not it.get("date"):
+            withheld["with no date"] = withheld.get("with no date", 0) + 1
+            continue
+        when = _sm_date(it["date"], f"{name}[{i}].date")
+        code = _precision_of(it.get("time_precision"), _TIME_PRECISION, "time_precision")
+        low, high = _sm_mark_span(when, code)
+        spans[(name, i)] = (low, high, code)
+
+    if sm.get("from"):
+        first = _sm_date(sm["from"], "small_multiples.from")
+    elif spans:
+        first = min(low for low, _high, _code in spans.values())
+    else:
+        raise ValueError(
+            "small_multiples has nothing to lay out: no mark on this plate "
+            "carries a date, and no `from` was given. A sheet of time windows "
+            "needs to know what time it is covering."
+        )
+    if sm.get("to"):
+        last = _sm_date(sm["to"], "small_multiples.to")
+    elif spans:
+        last = max(high for _low, high, _code in spans.values())
+    else:
+        last = first
+    if last < first:
+        raise ValueError(
+            f"small_multiples.to {last.isoformat()} is before .from {first.isoformat()}."
+        )
+
+    windows: list[tuple[date, date, str]] = []
+    cursor = _sm_step_start(first, by)
+    while cursor <= last:
+        following = _sm_step_next(cursor, by)
+        windows.append((cursor, following, _sm_window_label(cursor, by)))
+        if len(windows) > _SM_MAX_PANELS:
+            raise ValueError(
+                f"small_multiples.by={by!r} over {first.isoformat()} to "
+                f"{last.isoformat()} is more than {_SM_MAX_PANELS} panels. A sheet "
+                "that large is not one anybody reads: choose a coarser `by`, or "
+                "narrow the span with `from` and `to`."
+            )
+        cursor = following
+
+    holds: dict[tuple[str, int], int] = {}
+    for key, (low, high, code) in spans.items():
+        for index, (start, stop, _label) in enumerate(windows):
+            if low >= start and high < stop:
+                holds[key] = index
+                break
+        else:
+            if high < windows[0][0] or low >= windows[-1][1]:
+                reason = "outside the span this sheet covers"
+            else:
+                reason = (
+                    f"dated only to {_SM_GRAIN[code]}, which no single "
+                    f"{by} panel contains"
+                )
+            withheld[reason] = withheld.get(reason, 0) + 1
+
+    # ── one plate per window, all from the same config ─────────────────────
+    # The terrain is the same raster in every panel, and it is also by far the
+    # most expensive thing on the plate to compute and the largest thing in
+    # the file (2.3 MB of the Himalaya plate's 2.4). Computed once, handed to
+    # the rest through this dict, and -- because that makes the nine copies
+    # byte-identical -- collapsed to one <use> below.
+    cache: dict[str, Any] = {}
+    panel_w = float(sm.get("panel_width", _SM_PANEL_WIDTH))
+    base = {k: v for k, v in cfg.items() if k != "small_multiples"}
+    inners: list[str] = []
+    counts: list[int] = []
+    cell_w = cell_h = 0.0
+    for index in range(len(windows)):
+        panel = dict(base)
+        for name in layer_names:
+            panel[name] = [
+                it for (owner, i, it) in marks
+                if owner == name and holds.get((owner, i)) == index
+            ]
+        counts.append(sum(len(panel[name]) for name in layer_names))
+        panel["canvas_width"] = panel_w
+        # A panel is a plate without its own chrome: the sheet draws the
+        # title, the key, the ruler, the arrow and the credits once, because
+        # nine identical rulers teach a reader nothing nine times.
+        panel["title"] = ""
+        panel.pop("subtitle", None)
+        panel.pop("print_width", None)
+        panel["caption"] = "none"
+        # Explicit, not inherited: "right" grows the plate a legend column and
+        # "below" grows it a band, and a panel whose legend is empty would get
+        # the room anyway. "auto" resolves to "below" at a panel's width, so
+        # leaving it unset is the same bug by a longer route.
+        panel["legend_position"] = "bottom-right"
+        panel["inset"] = {"show": False}
+        panel["interactivity"] = "static"
+        panel["frame"] = {**(cfg.get("frame") or {}), "margin": 6}
+        panel["_panel"] = True
+        panel["_relief_cache"] = cache
+        inner, cell_w, cell_h = _sm_strip_root(build_map(panel))
+        inners.append(_sm_namespace(inner, f"p{index}"))
+
+    # One stylesheet, one raster, one page. Each panel still paints its own
+    # plate card; what goes is the page behind it, which is the sheet's.
+    for i in range(1, len(inners)):
+        inners[i] = re.sub(r"<style>.*?</style>", "", inners[i], flags=re.S)
+    for i, markup in enumerate(inners):
+        inners[i] = re.sub(
+            r'<rect width="[\d.]+" height="[\d.]+" fill="[^"]*"/>(?=<g transform="translate\()',
+            "",
+            markup,
+            count=1,
+        )
+    raster = _SM_IMAGE_RE.search(inners[0])
+    if raster is not None:
+        once = raster.group(0)
+        inners[0] = inners[0].replace(once, once.replace("<image ", '<image id="sm-relief" ', 1), 1)
+        for i in range(1, len(inners)):
+            # A no-op if the panels' rasters ever stop being identical, which
+            # is the right failure: a sheet twice the size beats a sheet
+            # showing one panel's terrain under every panel's marks.
+            inners[i] = inners[i].replace(once, '<use href="#sm-relief"/>')
+
+    return _sm_sheet(cfg, sm, windows, counts, withheld, inners, cell_w, cell_h, by, cache)
+
+
+def _sm_sheet(
+    cfg: dict[str, Any],
+    sm: dict[str, Any],
+    windows: list[tuple[date, date, str]],
+    counts: list[int],
+    withheld: dict[str, int],
+    inners: list[str],
+    cell_w: float,
+    cell_h: float,
+    by: str,
+    cache: dict[str, Any],
+) -> str:
+    """Lay the finished panels out on one sheet, with the chrome drawn once."""
+    plate = str((cfg.get("basemap") or {}).get("plate", "day")).lower()
+    if plate not in _PLATES:
+        raise ValueError(f"unknown plate {plate!r}; known: {sorted(_PLATES)}")
+    # The terrain tone travels with the plate: a legend swatch is drawn as the
+    # colour it will actually come out as once the relief has multiplied over
+    # it, and the sheet's key has to be the key to the panels' ground.
+    sheet = dict(cfg, _plate=_PLATES[plate], _relief_tone=cache.get("tone"))
+    pal = _pal(sheet)
+    frame = cfg.get("frame") or {}
+    margin = float(frame.get("margin", 22))
+    page_color = str(frame.get("page_color", pal["page"]))
+
+    panel_count = len(windows)
+    columns = int(sm.get("columns") or 0) or min(4, panel_count)
+    columns = max(1, min(columns, panel_count))
+    row_count = -(-panel_count // columns)
+    gutter = 14.0
+    grid_w = columns * cell_w + (columns - 1) * gutter
+    width = grid_w + 2 * margin
+    ts = max(1.0, width / 1000.0)
+    label_h = 20.0 * ts
+
+    chrome: list[str] = []
+    cursor_y = margin
+    title = cfg.get("title")
+    subtitle = cfg.get("subtitle")
+    if title:
+        chrome.append(
+            f'<text x="{margin:.1f}" y="{cursor_y + 22 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{22 * ts:.0f}" font-weight="700" fill="{pal["chrome_ink"]}">'
+            f"{_esc(str(title))}</text>"
+        )
+        cursor_y += 30 * ts
+    if subtitle:
+        chrome.append(
+            f'<text x="{margin:.1f}" y="{cursor_y + 12 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{12.5 * ts:.0f}" fill="{pal["chrome_sub"]}">'
+            f"{_esc(str(subtitle))}</text>"
+        )
+        cursor_y += 20 * ts
+    # The arrow is drawn whether or not the sheet is titled, and the header
+    # band keeps a floor, so a bare sheet does not put north through the
+    # first row's window headings.
+    chrome.append(north_arrow(width - margin - 14 * ts, margin + 24 * ts, ts))
+    grid_top = max(cursor_y + 10 * ts, margin + 40 * ts)
+
+    cells: list[str] = []
+    for index, markup in enumerate(inners):
+        label = windows[index][2]
+        drawn_here = counts[index]
+        column, row = index % columns, index // columns
+        x = margin + column * (cell_w + gutter)
+        y = grid_top + row * (cell_h + label_h + gutter)
+        tally = (
+            "nothing drawn" if not drawn_here
+            else f"{drawn_here:,} mark{'s' if drawn_here != 1 else ''}"
+        )
+        cells.append(
+            # A panel is an object in the graphics tree and says which window
+            # it is and how much is on it, so a reader who tabs into it is
+            # not left to infer either from marks they cannot see.
+            f'<g role="graphics-object" aria-label="{_esc(f"{label}: {tally}")}">'
+            f'<text x="{x + 6 * ts:.1f}" y="{y + 13 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{12 * ts:.1f}" font-weight="700" fill="{pal["chrome_ink"]}">'
+            f"{_esc(label)}</text>"
+            f'<text x="{x + cell_w - 6 * ts:.1f}" y="{y + 13 * ts:.1f}" text-anchor="end" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{10 * ts:.1f}" '
+            f'fill="{pal["chrome_faint"]}">{_esc(tally)}</text>'
+            f'<g transform="translate({x:.1f},{y + label_h:.1f})">{markup}</g>'
+            f"</g>"
+        )
+    foot_y = grid_top + row_count * (cell_h + label_h + gutter) - gutter
+
+    # One ruler for the sheet, sized from a panel's own viewport -- every
+    # panel has the same one, which is the point of the exercise.
+    #
+    # It is drawn in *panel* units and placed directly under the grid, aligned
+    # with the left-hand column, rather than scaled up to the sheet's type and
+    # dropped in the footer. The panels are placed on the sheet at 1:1, so a
+    # bar drawn at the panel's scale is the only one whose length is a true
+    # distance; enlarging it to match the footer's type would have made it
+    # legible and wrong. It sits next to the maps it measures instead.
+    bbox = validate_region(cfg.get("region"))
+    pad = float(cfg.get("padding", 26))
+    panel_vp = make_viewport(
+        build_projection(bbox, cfg.get("projection", "auto")),
+        bbox,
+        float(sm.get("panel_width", _SM_PANEL_WIDTH)),
+        pad,
+        float(cfg.get("simplify", DEFAULT_TOLERANCE)),
+        pad_top=pad,
+    )
+    foot_y += 20 * ts
+    chrome.append(scale_bar(margin + 6.0, foot_y, panel_vp, pal["chrome_ink"]))
+    foot_y += 30 * ts
+
+    rows = _legend_rows(sheet, ts)
+    if rows:
+        band_h, *_rest = _legend_band_dims(sheet, ts, grid_w)
+        chrome.append(
+            f'<g transform="translate({margin:.1f},{foot_y:.1f})">'
+            + _legend_band(sheet, {"width": grid_w, "height": 0.0, "ts": ts}, rows)
+            + "</g>"
+        )
+        foot_y += band_h
+
+    drawn = sum(counts)
+    total = drawn + sum(withheld.values())
+    lines = [
+        f"{panel_count} panel{'s' if panel_count != 1 else ''}, one per {by}, "
+        f"{windows[0][2]} to {windows[-1][2]}; {drawn:,} of {total:,} mark"
+        f"{'s' if total != 1 else ''} drawn.",
+        "Every panel is built from one config, so the extent, the projection and "
+        "the symbol scale are shared; a window with nothing in it is still a panel.",
+    ]
+    if withheld:
+        why = "; ".join(f"{n:,} {reason}" for reason, n in sorted(withheld.items()) if n)
+        lines.append(f"Not placed: {why}.")
+    if str(cfg.get("caption", "none")) == "full":
+        for key in ("method", "source", "as_of"):
+            if cfg.get(key):
+                lines.append(f"{key.replace('_', ' ').title()}: {cfg[key]}")
+    for line in lines:
+        foot_y += 13 * ts
+        chrome.append(
+            f'<text x="{margin:.1f}" y="{foot_y:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{9.5 * ts:.1f}" fill="{pal["chrome_sub"]}">{_esc(line)}</text>'
+        )
+
+    height = foot_y + margin
+    chrome.append(
+        _attribution_layer(sheet, {"width": width, "height": height, "ts": ts}, bbox)
+    )
+
+    a11y_title = str(title or f"Situation map, {windows[0][2]} to {windows[-1][2]}")
+    a11y_desc = " ".join(lines)
+    size = f'width="{width:.1f}" height="{height:.1f}"'
+    if cfg.get("print_width"):
+        mm_w = parse_length_mm(cfg["print_width"])
+        size = f'width="{mm_w:.4g}mm" height="{mm_w * height / width:.4g}mm"'
+    hatch = (cfg.get("areas_of_control") or {}).get("hatch_color", "#b03a3a")
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.1f} {height:.1f}" '
+        f'{size} role="graphics-document" aria-labelledby="sm-title sm-desc">'
+        f'<title id="sm-title">{_esc(a11y_title)}</title>'
+        f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
+        f"{svg_defs(hatch, _plate_patterns(sheet))}"
+        f'<rect width="{width:.1f}" height="{height:.1f}" fill="{page_color}"/>'
+        f"{''.join(cells)}{''.join(chrome)}"
+        f"</svg>"
+    )
+    if cfg.get("print_width"):
+        _warn_if_unprintable(svg, parse_length_mm(cfg["print_width"]), width)
+    return svg
+
+
+# --------------------------------------------------------------------------- #
 # CLI                                                                          #
 # --------------------------------------------------------------------------- #
 
@@ -6146,12 +6783,12 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
-    "legend_title", "print_width",
+    "legend_title", "print_width", "small_multiples",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
 _INTERNAL_KEYS: frozenset[str] = frozenset(
-    {"_config_dir", "_plate", "_relief_tone"}
+    {"_config_dir", "_panel", "_plate", "_relief_cache", "_relief_tone"}
 )
 
 
@@ -6308,6 +6945,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
         "show", "color", "edge_color", "skip", "former", "historic", "always_label",
         "label_color", "label_min_area_frac", "depth_rings",
     }),
+    "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
     "rivers": frozenset({
         "show", "width", "color", "skip", "always_label", "label_color",
         "label_min_length_frac", "label_max_scalerank",

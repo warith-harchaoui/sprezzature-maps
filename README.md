@@ -104,6 +104,29 @@ three in a table written out in `scripts/_conflict.py`, and **refuses to place
 the country-level rows at all** — counting them on the plate's own method line
 rather than dropping them in silence. See [`EXAMPLES.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/EXAMPLES.md#conflict-event-data-acled-and-ucdp-ged).
 
+### One panel per window of time
+
+A plate is a snapshot; most of what research says about a conflict is a
+change. `small_multiples` cuts the same config into one panel per year,
+quarter, month, week or day:
+
+```python
+cfg = {"title": "Recorded political violence, by quarter"}
+cfg.update(acled_events("export.csv", derive_region=True, size_by="fatalities"))
+cfg["small_multiples"] = {"by": "quarter", "columns": 4}
+make_situation_map(config=cfg, out="by-quarter.svg")
+```
+
+Every panel comes from that one config, so the extent, the projection and the
+marker scale cannot drift apart between frames the way they do when you export
+a plate per window — and the sheet draws the title, the key, the ruler and the
+credits once. Two rules it will not bend: **a window with nothing in it is
+still a panel** (dropping it closes the gap, and the neighbouring panels then
+read as consecutive), and **a mark is placed only where its own
+`time_precision` allows** — a row dated *month of March* goes in a March panel
+and in no week panel, and what fits in no single window is counted on the
+sheet rather than binned anyway.
+
 A word on how long that takes, because nothing on screen will tell you. A
 choropleth is about a second. A situation map depends on how much world is
 in the frame: the bundled Europe demo is about 10 s from a cold start, a
