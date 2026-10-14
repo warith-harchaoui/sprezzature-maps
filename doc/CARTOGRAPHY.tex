@@ -1228,6 +1228,50 @@ cogwheel, since an approximate ring's stroke scales with its radius. No
 test caught it. Rendering it and looking at it did, which is not the first
 time in this document that sentence has been true.
 
+\subsection{Aggregating without pretending}
+\label{sec:aggregate}
+
+Section~\ref{sec:conflict-data} is about refusing a precision the source never
+gave. This one is about refusing a precision the source \emph{did} give.
+
+OCHA's data-responsibility guidance is blunt about the case
+\parencite{ocha-data-responsibility}: a map that plots where vulnerable people
+are can be the thing that finds them, and location data resists anonymisation
+precisely because coordinates identify. A dot map of four thousand events over
+a displacement crisis is a dot map of four thousand places somebody could go
+to. Drawing less than the data permits is sometimes the correct cartographic
+decision, and it is one the usual tooling makes badly.
+
+Badly, because the standard remedy --- aggregate to an administrative unit ---
+is normally drawn as a confident dot at the unit's centroid, which asserts
+that the pile happened at that point. The aggregate has thrown away precision
+and gained the appearance of it.
+
+Here it cannot. An aggregate \emph{is} a place standing in for a whole region,
+and that is already code~3 of Section~\ref{sec:locational-precision}. So an
+aggregated mark is emitted at precision 3 and inherits the whole convention
+without being given a new one: the hollow broken ring, the wording in the
+tooltip, the same wording in the accessible name of
+Section~\ref{sec:non-visual}. The legend key draws the broken ring too ---
+which it did not, at first, because legend rows were hard-coded to the solid
+symbol, so the first aggregated plate taught the colour correctly and the
+symbol wrongly on the same page. That was found by rendering it and looking at
+the key.
+
+Three details carry the rest of the honesty. The mark is named for its unit
+and its count (\emph{Khartoum: 3 events}), so the reader is never counting
+marks. It spans the window its members cover rather than borrowing one
+member's date. And the plate's method line states the collapse outright:
+\emph{6 events aggregated to 3 admin1 units; each mark is a representative
+point for its unit, not a location.} An aggregate that does not announce
+itself is a map claiming three things happened.
+
+The position is the mean of the member coordinates, which is a representative
+point and not the unit's centroid; on a crescent-shaped unit it can fall
+outside the unit it stands for. That is a real limitation and it is part of
+why the mark is drawn at the weakest precision the symbology has rather than a
+confident one.
+
 \subsection{Provenance at the mark}
 
 Liveuamap \cite{liveuamap} attaches a source to each event rather than to

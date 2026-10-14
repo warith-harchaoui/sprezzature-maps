@@ -532,3 +532,132 @@ def test_a_loaded_fragment_draws(tmp_path: Path) -> None:
     # The precision the loader read is the precision the markup carries.
     assert 'data-precision="3"' in svg
     assert 'data-precision="1"' in svg
+
+
+# ── aggregating, rather than pinpointing ────────────────────────────────
+
+
+#: Twelve events over four first-order units, two of them sharing a unit.
+AGG_ROWS: list[dict[str, str]] = [
+    ACLED_ROW | {"admin1": adm, "latitude": str(la), "longitude": str(lo),
+                 "fatalities": str(f), "event_date": d}
+    for adm, la, lo, f, d in [
+        ("Khartoum", 15.60, 32.53, 40, "2024-01-15"),
+        ("Khartoum", 15.72, 32.41, 12, "2024-02-15"),
+        ("Khartoum", 15.48, 32.64, 8, "2024-03-15"),
+        ("North Darfur", 13.63, 24.90, 120, "2024-01-20"),
+        ("North Darfur", 13.40, 25.15, 30, "2024-04-20"),
+        ("Kassala", 15.45, 36.40, 2, "2024-05-01"),
+    ]
+]
+
+
+def test_aggregating_draws_one_mark_per_unit() -> None:
+    frag = cf.acled_events(AGG_ROWS, aggregate="admin1")
+    assert len(AGG_ROWS) == 6
+    assert len(frag["events"]) == 3
+
+
+def test_an_aggregate_declares_itself_as_a_region_not_a_place() -> None:
+    """
+    The whole argument for this mode, in one assertion.
+
+    Aggregating to protect people is normal practice; drawing the result as a
+    confident dot at a centroid is normal practice too, and it quietly
+    asserts that the pile happened at that point. Code 3 is the generator's
+    existing wording for *a place standing in for a whole region*, so the
+    mark comes out as a hollow broken ring and says what it is in its
+    tooltip and in its accessible name. No new symbology was needed; the old
+    one only had to be told the truth.
+    """
+    frag = cf.acled_events(AGG_ROWS, aggregate="admin1")
+    assert {m["precision"] for m in frag["events"]} == {3}
+
+
+def test_the_legend_draws_the_symbol_the_plate_draws() -> None:
+    """
+    Found by rendering an aggregated plate and looking at its key.
+
+    Every mark was a broken ring and the legend swatch was still a solid
+    disc: the same page teaching the colour correctly and the symbol wrongly.
+    """
+    assert {r["precision"] for r in cf.acled_events(AGG_ROWS, aggregate="admin1")["marker_legend"]} == {3}
+    assert {r["precision"] for r in cf.acled_events(AGG_ROWS)["marker_legend"]} == {1}
+
+
+def test_the_plate_says_how_many_events_became_how_many_marks() -> None:
+    """
+    A reader looking at three marks has no way to know they stand for six.
+
+    An aggregate that does not announce itself is a map claiming three things
+    happened.
+    """
+    method = cf.acled_events(AGG_ROWS, aggregate="admin1")["method"]
+    assert "6 events aggregated to 3 admin1 units" in method
+    assert "representative point for its unit, not a location" in method
+
+
+def test_the_mark_names_its_unit_and_its_count() -> None:
+    labels = {m["label"] for m in cf.acled_events(AGG_ROWS, aggregate="admin1")["events"]}
+    assert "Khartoum: 3 events" in labels
+    assert "Kassala: 1 event" in labels, "the singular is not 1 events"
+
+
+def test_an_aggregate_spans_the_window_its_members_cover() -> None:
+    """One date on a pile of events would pick one member and hide the rest."""
+    by_label = {m["label"]: m for m in cf.acled_events(AGG_ROWS, aggregate="admin1")["events"]}
+    assert by_label["Khartoum: 3 events"]["date"] == "2024-01-15 to 2024-03-15"
+    assert by_label["Kassala: 1 event"]["date"] == "2024-05-01"
+
+
+def test_magnitude_is_the_unit_total_not_one_member() -> None:
+    """
+    Scaled after the collapse, not before.
+
+    Scaling the members first and then collapsing would set the whole plate's
+    scale by the largest single event rather than the largest unit.
+    """
+    frag = cf.acled_events(AGG_ROWS, aggregate="admin1", size_by="fatalities")
+    by_label = {m["label"]: m for m in frag["events"]}
+    # North Darfur totals 150, Khartoum 60, Kassala 2: the biggest unit takes
+    # the ceiling and the rest fall back area-true from it.
+    assert by_label["North Darfur: 2 events"]["r"] == 11.0
+    assert by_label["Khartoum: 3 events"]["r"] < by_label["North Darfur: 2 events"]["r"]
+
+
+def test_the_position_is_the_mean_of_the_members() -> None:
+    frag = cf.acled_events(AGG_ROWS, aggregate="admin1")
+    khartoum = next(m for m in frag["events"] if m["label"].startswith("Khartoum"))
+    assert khartoum["lat"] == pytest.approx((15.60 + 15.72 + 15.48) / 3, abs=1e-4)
+    assert khartoum["lon"] == pytest.approx((32.53 + 32.41 + 32.64) / 3, abs=1e-4)
+
+
+def test_ucdp_spells_its_units_differently_and_the_caller_need_not_know() -> None:
+    """ACLED's ``admin1`` is UCDP's ``adm_1``; ``aggregate="admin1"`` means both."""
+    rows = [UCDP_ROW | {"adm_1": "Khartoum state"}, UCDP_ROW | {"adm_1": "Darfur"}]
+    frag = cf.ucdp_events(rows, aggregate="admin1")
+    assert len(frag["events"]) == 2
+    assert {m["precision"] for m in frag["events"]} == {3}
+
+
+def test_a_column_that_is_not_in_the_file_is_refused_by_name() -> None:
+    with pytest.raises(ValueError, match="needs a 'province' column"):
+        cf.acled_events(AGG_ROWS, aggregate="province")
+
+
+def test_classes_are_not_merged_across_units_or_units_across_classes() -> None:
+    """Aggregation groups by unit *and* class, or it invents a category."""
+    rows = [
+        ACLED_ROW | {"admin1": "Khartoum", "event_type": "Battles"},
+        ACLED_ROW | {"admin1": "Khartoum", "event_type": "Protests"},
+        ACLED_ROW | {"admin1": "Kassala", "event_type": "Battles"},
+    ]
+    frag = cf.acled_events(rows, aggregate="admin1")
+    assert len(frag["events"]) == 3
+    assert len(frag["marker_legend"]) == 2
+
+
+def test_without_the_option_nothing_is_collapsed() -> None:
+    frag = cf.acled_events(AGG_ROWS)
+    assert len(frag["events"]) == len(AGG_ROWS)
+    assert {m["precision"] for m in frag["events"]} == {1}
