@@ -187,6 +187,11 @@ Chrome and provenance
     The legend's heading. Defaults to ``AREAS OF CONTROL`` when the plate
     has control classes and ``KEY`` when it is marks alone, so a plate drawn
     from an event export stops titling a layer it does not have.
+``print_width``
+    The figure's physical width, e.g. ``"90mm"`` (a journal's single column)
+    or ``"190mm"`` (a double one); ``mm``, ``cm``, ``in`` and ``pt`` are
+    understood. The root carries it instead of a pixel count, and the plate
+    says how small its smallest label will actually print.
 ``marker_legend``
     A list of ``{color, label, precision}`` keying the point markers.
 ``caption``
@@ -212,6 +217,7 @@ import contextlib
 import importlib.util
 import json
 import math
+import re
 import sys
 import warnings
 from collections.abc import Iterable, Sequence
@@ -2189,6 +2195,173 @@ def _fmt_lat(v: float) -> str:
     return f"{abs(v):.1f}°{'S' if v < 0 else 'N'}"
 
 
+def _share_phrase(share: float) -> str:
+    """Return ``"18% of the mapped area"``, or ``"under 1%..."`` when it rounds to nothing.
+
+    Examples
+    --------
+    >>> _share_phrase(0.1842)
+    '18% of the mapped area'
+    >>> _share_phrase(0.0031)
+    'under 1% of the mapped area'
+    """
+    pct = share * 100.0
+    return (
+        "under 1% of the mapped area" if pct < 0.5 else f"{pct:.0f}% of the mapped area"
+    )
+
+
+def zone_label(category: str, confidence: str, share: float) -> str:
+    """Return what a screen reader should say when focus reaches a control zone.
+
+    The three things the zone's own ``data-*`` attributes already carry, in
+    the order a reader needs them: whose it is, how much ground that is, and
+    -- only when it is not the default -- how well the claim is held up.
+
+    Examples
+    --------
+    >>> zone_label("Russian-occupied (approx.)", "assessed", 0.1842)
+    'Russian-occupied (approx.), 18% of the mapped area'
+    >>> zone_label("SPLM-N (al-Hilu)", "claimed", 0.04)
+    'SPLM-N (al-Hilu), 4% of the mapped area, claimed, unverified'
+    """
+    parts = [category, _share_phrase(share)]
+    tier = _CONFIDENCE_TIERS.get(confidence, _CONFIDENCE_TIERS["assessed"])
+    if confidence != "assessed":
+        parts.append(str(tier["label"]))
+    return ", ".join(parts)
+
+
+def marker_label(
+    headline: str, precision: int, date: str | None, time_precision: int
+) -> str:
+    """Return what a screen reader should say when focus reaches a marker.
+
+    The same facts the hover tooltip shows a sighted reader, in one sentence
+    and without the coordinates: six decimal places read aloud are noise, and
+    the whole point of the precision code is that they were never that exact.
+
+    Examples
+    --------
+    >>> marker_label("Avdiivka", 1, "2024-02-17", 1)
+    'Avdiivka, named location, 2024-02-17'
+    >>> marker_label("El Fasher", 3, "2024-06", 3)
+    'El Fasher, approximate \u2014 a place standing in for a whole region, month of 2024-06'
+    >>> marker_label("Unnamed", 2, None, 1)
+    'Unnamed, approximate \u2014 a place standing in for a general area'
+    """
+    parts = [headline, _GEO_PRECISION[precision]]
+    if date:
+        parts.append(_TIME_PRECISION[time_precision].format(date))
+    return ", ".join(parts)
+
+
+#: Physical-length units a ``print_width`` may be written in, in millimetres.
+_PRINT_UNITS: dict[str, float] = {"mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72.0}
+
+#: The smallest type a journal will print, in points, and who says so.
+#:
+#: Nature asks for 5 to 7 pt at its 90 mm single column; Science states a 5 pt
+#: minimum and recommends 7; Elsevier recommends 6 as the minimum and 8 as the
+#: safer choice. 5 is therefore the floor below which no major publisher will
+#: take the figure, and 6 the floor below which the most common one will not.
+_TYPE_FLOOR_PT: float = 5.0
+_TYPE_SAFE_PT: float = 6.0
+
+
+def parse_length_mm(raw: Any) -> float:
+    """Return ``raw`` as millimetres, or raise naming what it accepts.
+
+    Examples
+    --------
+    >>> parse_length_mm("90mm")
+    90.0
+    >>> parse_length_mm("18.4 cm")
+    184.0
+    >>> round(parse_length_mm("7in"), 1)
+    177.8
+    >>> parse_length_mm(90)
+    90.0
+    >>> parse_length_mm("90px")
+    Traceback (most recent call last):
+      ...
+    ValueError: print_width '90px' has no unit this understands; use mm, cm, in or pt
+    """
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    text = str(raw).strip().lower().replace(" ", "")
+    for unit, factor in _PRINT_UNITS.items():
+        if text.endswith(unit):
+            try:
+                return float(text[: -len(unit)]) * factor
+            except ValueError:
+                break
+    raise ValueError(
+        f"print_width {raw!r} has no unit this understands; use mm, cm, in or pt"
+    )
+
+
+def smallest_type_pt(svg: str, print_width_mm: float) -> tuple[float, float]:
+    """Return ``(smallest font-size in user units, its size in points when printed)``.
+
+    Read off the finished markup rather than from the type scale, for the
+    reason the rest of this file keeps returning to: what the generator meant
+    to emit and what reached the file are two different claims, and only the
+    second one is printed.
+
+    Examples
+    --------
+    A 10.8-unit label on a 1768-unit canvas, printed 90 mm wide:
+
+    >>> svg = '<svg viewBox="0 0 1767.9 1000"><text font-size="10.8">x</text></svg>'
+    >>> units, pt = smallest_type_pt(svg, 90.0)
+    >>> units, round(pt, 2)
+    (10.8, 1.56)
+    """
+    sizes = [float(m) for m in re.findall(r'font-size="([\d.]+)"', svg)]
+    if not sizes:
+        return 0.0, 0.0
+    view = re.search(r'viewBox="0 0 ([\d.]+)', svg)
+    if view is None:
+        return min(sizes), 0.0
+    units = min(sizes)
+    return units, units / float(view.group(1)) * print_width_mm / 25.4 * 72.0
+
+
+def _warn_if_unprintable(svg: str, print_width_mm: float, canvas_width: float) -> None:
+    """Say, in points, how small this plate's smallest label will actually print.
+
+    A plate is designed in user units and printed in millimetres, and nothing
+    on screen connects the two. The bundled Ukraine plate is 1\u202f768 units
+    wide with 10.8-unit labels: dropped into a journal's 90 mm single column
+    that is **1.6 pt**, a third of the floor any major publisher accepts, and
+    it renders without complaint because a vector file always does.
+
+    This is a warning and not a refusal: the caller may be printing a poster,
+    or may have a reason. But it names the number and the canvas width that
+    would fix it, because "build the figure at its printed size" is advice
+    nobody can follow without being told what their current size *is*.
+    """
+    units, pt = smallest_type_pt(svg, print_width_mm)
+    if not units or pt >= _TYPE_SAFE_PT:
+        return
+    wanted = units * print_width_mm * 72.0 / (25.4 * _TYPE_FLOOR_PT)
+    verdict = (
+        "below every major publisher's floor"
+        if pt < _TYPE_FLOOR_PT
+        else "below Elsevier's 6 pt minimum"
+    )
+    warnings.warn(
+        f"at {print_width_mm:.0f} mm this plate's smallest label is {pt:.1f} pt "
+        f"({verdict}; Nature and Science ask 5 to 7 pt, Elsevier 6). The label is "
+        f"{units:.1f} units on a {canvas_width:.0f}-unit canvas; designing the same "
+        f"plate at canvas_width around {wanted:.0f} would print it at "
+        f"{_TYPE_FLOOR_PT:.0f} pt.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
 def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
     """Return the ``(title, description)`` pair the root ``<svg>`` exposes to a screen reader.
 
@@ -2234,7 +2407,7 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
     >>> title
     'Eastern front'
     >>> desc
-    'Situation map covering 22.0°E to 40.0°E, 44.0°N to 52.5°N. Areas of control in 2 classes: Ukraine, Russia (contested). The map draws the assessment it was given; it does not verify who holds what.'
+    'Situation map covering 22.0°E to 40.0°E, 44.0°N to 52.5°N. Areas of control in 2 classes: Ukraine, Russia (contested). 2 mapped features can be reached with the Tab key, each one naming what it is. The map draws the assessment it was given; it does not verify who holds what.'
 
     A plain basemap with no control layer carries no claim, so it is described
     without the caveat:
@@ -2294,6 +2467,17 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
     ]
     if provenance:
         sentences.append(f"{'. '.join(provenance)}.")
+
+    # Orientation, for the reader who cannot see that there is anything to
+    # reach. A plate whose zones and marks are keyboard-reachable is useless
+    # to someone who never learns they are: the description is the only place
+    # that fact can be stated once, before the thirty tab stops begin.
+    reachable = len(palette) + len(cfg.get("events", [])) + len(cfg.get("forces", []))
+    if reachable:
+        sentences.append(
+            f"{reachable} mapped features can be reached with the Tab key, each one "
+            "naming what it is."
+        )
 
     if palette:
         sentences.append(
@@ -2682,14 +2866,45 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'rx="{radius}" ry="{radius}"/></clipPath>'
     )
     hatch = cfg.get("areas_of_control", {}).get("hatch_color", "#b03a3a")
-    # role="img" + aria-labelledby is what the other two generators have always
-    # emitted (see _svg.svg_open); without it a screen reader announces this
-    # plate as an unlabelled graphic and the reader learns nothing at all.
+    # The root's role follows what the plate actually holds, and getting this
+    # wrong is worse than leaving it off.
+    #
+    # ``role="img"`` is right for a plate that is one picture, and it is what
+    # the other two generators emit (see ``_svg.svg_open``); without it a
+    # screen reader announces an unlabelled graphic and the reader learns
+    # nothing. But ``img`` is a role whose children are *presentational*: the
+    # accessibility tree drops everything inside. Every thematic plate this
+    # generator draws puts ``tabindex="0"`` on its claim polygons and its
+    # marks, and measured across the five bundled ones that was 85 focusable
+    # elements, 55 of them with no name at all -- keyboard stops a screen
+    # reader walks into and announces as nothing, inside an element it has
+    # been told is a single image. That combination has a name and a
+    # checkpoint of its own in the accessibility literature.
+    #
+    # So: a plate with focusable content is a ``graphics-document`` (WAI-ARIA
+    # Graphics Module), whose children are real nodes; a plate that is only a
+    # basemap stays an ``img``, because that is what it is. Where the Graphics
+    # Module is unsupported the role degrades to a generic group and the
+    # children are still announced, which is strictly better than today.
     a11y_title, a11y_desc = accessible_text(cfg)
-    return (
+    navigable = bool(cfg.get("areas_of_control", {}).get("palette")) or bool(
+        cfg.get("events") or cfg.get("forces")
+    )
+    role = "graphics-document" if navigable else "img"
+    # ``print_width`` states the figure's physical width, and the root carries
+    # it instead of a pixel count. The viewBox is untouched, so nothing about
+    # the drawing changes -- but the file now lands at exactly that width in a
+    # page layout or a LaTeX ``\includegraphics`` rather than at whatever a
+    # consumer guesses from its pixel dimensions, which is the whole of
+    # "build the figure at its printed size".
+    size = f'width="{outer_w:.1f}" height="{outer_h:.1f}"'
+    if cfg.get("print_width"):
+        mm_w = parse_length_mm(cfg["print_width"])
+        size = f'width="{mm_w:.4g}mm" height="{mm_w * outer_h / outer_w:.4g}mm"'
+    svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {outer_w:.1f} {outer_h:.1f}" '
-        f'width="{outer_w:.1f}" height="{outer_h:.1f}" '
-        f'role="img" aria-labelledby="sm-title sm-desc">'
+        f'{size} '
+        f'role="{role}" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
         f"{svg_defs(hatch, _plate_patterns(cfg))[:-7]}{clip}</defs>"
@@ -2727,6 +2942,12 @@ def build_map(cfg: dict[str, Any]) -> str:
         f"{controls_script(interactivity) if has_controls else ''}"
         f"</svg>"
     )
+    # Measured on the finished markup, once, and only when the caller has said
+    # what width they are printing at. Nothing is refused: a plate is still a
+    # plate at 2 pt, it is just not one a journal will set.
+    if cfg.get("print_width"):
+        _warn_if_unprintable(svg, parse_length_mm(cfg["print_width"]), outer_w)
+    return svg
 
 
 #: Lakes the vendored basemap draws at an extent the world no longer has.
@@ -3192,8 +3413,15 @@ def _areas_of_control_layer(
             f' data-category="{_esc(str(cat))}" data-confidence="{conf}"'
             f' data-area-share="{geom.area / total_area:.4f}"'
         )
+        # The zone is focusable, so it has to say what it is when focus
+        # lands on it. Without this it was a silent tab stop: reachable by
+        # keyboard, announced as nothing. ``graphics-symbol`` is the WAI-ARIA
+        # Graphics Module's role for "a graphic with meaning", which is what
+        # a claim polygon is.
+        label = _esc(zone_label(str(cat), conf, geom.area / total_area))
         fills.append(
-            f'<path class="hit" tabindex="0" d="{d}" fill="{color}" fill-opacity="{zone_op:.2f}" '
+            f'<path class="hit" tabindex="0" role="graphics-symbol" '
+            f'aria-label="{label}" d="{d}" fill="{color}" fill-opacity="{zone_op:.2f}" '
             f'stroke="{color}" stroke-width="{1.4 if tier["dashed"] else 0.7}" '
             f'stroke-opacity="0.95"{edge}{data}{fill_style}/>'
         )
@@ -4296,11 +4524,24 @@ def _markers_layer(
         # on the red mark at Ad-Damazin the first time this ledger ran,
         # because the ledger knew about words and not about ink.
         vp.setdefault("ink", []).append((x - r, y - r, x + r, y + r))
+        headline = it.get("label") or legend_by_color.get(color) or layer_id.capitalize()
+        # Same reasoning as the zones: a focusable mark that announces
+        # nothing is worse than one that cannot be focused at all. The label
+        # carries the precision code, because that is the thing a reader who
+        # cannot see the broken ring would otherwise never learn.
+        mark_label = _esc(
+            marker_label(
+                str(headline),
+                precision,
+                str(it["date"]) if it.get("date") else None,
+                _precision_of(it.get("time_precision"), _TIME_PRECISION, "time_precision"),
+            )
+        )
         out.append(
-            f'{halo}<circle class="hit" tabindex="0" cx="{x:.1f}" cy="{y:.1f}" '
+            f'{halo}<circle class="hit" tabindex="0" role="graphics-symbol" '
+            f'aria-label="{mark_label}" cx="{x:.1f}" cy="{y:.1f}" '
             f'r="{r:.1f}" {paint}{data} filter="url(#marker-shadow)"/>'
         )
-        headline = it.get("label") or legend_by_color.get(color) or layer_id.capitalize()
         lines = [headline, f"{it['lat']:.2f}°, {it['lon']:.2f}° · {layer_id}"]
         if precision != 1:
             note = _GEO_PRECISION[precision]
@@ -5658,8 +5899,12 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         # A class row is also the control that isolates it, when the plate
         # is interactive. Wrapped rather than attributed in place so the hit
         # target is the whole row, not the eleven-unit swatch.
+        # A class row is a button, and a button names what pressing it does.
+        # ``role="button"`` on a <g> does not compute a name from the text
+        # inside it the way a real <button> would, so the name is explicit.
         handle = (
             f' data-legend-category="{_esc(str(row["label"]))}" role="button" tabindex="0"'
+            f' aria-label="Show only {_esc(str(row["label"]))}"'
             if row["kind"] == "class"
             else ""
         )
@@ -5741,7 +5986,7 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
-    "legend_title",
+    "legend_title", "print_width",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.

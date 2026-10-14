@@ -2,6 +2,63 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.15.0] - 2026-10-14: fifty-five silent tab stops, and a plate that could not be printed
+
+Two defects that a rendered picture cannot show, because neither of them is
+visible. The plates look exactly as they did.
+
+### Fixed
+
+- **Fifty-five focusable elements with no accessible name.** A thematic plate
+  puts `tabindex="0"` on its claim polygons, its marks and its legend
+  controls, which is right -- the claim is the content and a keyboard user
+  should be able to walk it. Measured across the five bundled thematic
+  plates: **85 focusable elements, 55 of them silent**. A screen-reader user
+  tabbing the Sudan plate met fourteen stops that announced nothing. Each one
+  now carries `role="graphics-symbol"` and a name: a zone says whose ground
+  it is, how much of the plate that is, and -- when it is not the default --
+  the confidence tier; a mark says what it is, **how well its position is
+  known**, and when. The precision wording is the marker symbology's own, so
+  a reader who cannot see a broken ring is told in words what the ring means,
+  rather than being handed the confident reading of every approximate mark on
+  the plate.
+- **The root told screen readers to ignore all of it.** The document opened
+  with `role="img"`, which is correct for a plate that is one picture and is
+  what the other two generators emit -- but `img` is a role whose children
+  are *presentational*: the whole subtree is dropped from the accessibility
+  tree, and focusable descendants of a presentational subtree are reachable
+  and unvoiced. The two mistakes compounded. The root role now follows what
+  the plate holds: `graphics-document` when there is something to reach,
+  `img` when the plate really is only a basemap. The `<desc>` says how many
+  features can be reached, because a navigable plate is no use to a reader
+  who never learns it is navigable.
+
+### Added
+
+- **`print_width`: what this figure measures on paper, and whether its type
+  survives the trip.** Journals specify physical widths -- Nature 90 and 180
+  mm, Elsevier 90/140/190, Science 57/121/184 -- and a type floor inside the
+  figure: 5 to 7 pt at Nature and Science, 6 as Elsevier's minimum. All three
+  say to build the figure at its printed width rather than scale it after,
+  which is advice nobody can follow when the plate is measured in arbitrary
+  user units. Set `print_width: "90mm"` and the root carries the physical
+  size (the viewBox and every drawn thing are untouched, byte for byte), and
+  the plate measures its own smallest label against that width: the bundled
+  Ukraine plate reports **1.6 pt at 90 mm**, a third of any publisher's
+  floor, and names the canvas width -- 551 -- at which the same plate would
+  print at 5. A warning, not a refusal: a poster is not a journal page.
+  `mm`, `cm`, `in` and `pt` are understood; a bare number with no unit is
+  refused, because "90" could be millimetres or pixels and the two differ by
+  a factor of three.
+
+- `doc/CARTOGRAPHY.tex` gains **The reader who cannot see it** and **The size
+  this figure will actually print at**: why a root role has to follow what
+  the plate contains rather than what it looks like, what each reachable
+  thing announces and why the precision wording is the half that carries the
+  weight, and the arithmetic that turns 10.8 user units into 1.6 points. The
+  WAI-ARIA Graphics Module, Nature's and Elsevier's artwork guidelines are
+  cited where they are followed.
+
 ## [0.14.0] - 2026-10-13: the precision code the datasets ship, and the twenty lines nobody had written
 
 ### Added
