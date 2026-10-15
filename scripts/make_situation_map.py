@@ -323,6 +323,7 @@ except ImportError as exc:  # pragma: no cover - dependency guard
 try:
     from pyproj import Transformer
     from shapely import make_valid
+    from shapely import transform as shp_transform
     from shapely.geometry import (
         MultiPolygon,
         Point,
@@ -331,7 +332,6 @@ try:
         shape,
     )
     from shapely.ops import polylabel, unary_union
-    from shapely.ops import transform as shp_transform
 except ImportError as exc:  # pragma: no cover - dependency guard
     raise ImportError(
         "shapely>=2 and pyproj>=3.6 are required: pip install shapely pyproj"
@@ -1585,8 +1585,21 @@ def geom_to_path(geom: Any, vp: dict[str, Any]) -> str:
 
 
 def _project_geom(geom: Any, proj: Transformer) -> Any:
-    """Return ``geom`` reprojected from lon/lat into the projected CRS (metres)."""
-    return shp_transform(lambda xs, ys: proj.transform(xs, ys), geom)
+    """Return ``geom`` reprojected from lon/lat into the projected CRS (metres).
+
+    ``shapely.transform`` and not ``shapely.ops.transform``: the latter is
+    deprecated, and a deprecation a dependency already prints is a break with
+    a date on it. The two differ in argument order and in what the callable is
+    handed -- an ``(N, 2)`` array here rather than two sequences -- so this is
+    a rewrite rather than an import swap. Checked by rendering all nine
+    bundled plates either side of the change: byte for byte identical.
+    """
+
+    def project(points: Any) -> Any:
+        xs, ys = proj.transform(points[:, 0], points[:, 1])
+        return np.column_stack([xs, ys])
+
+    return shp_transform(geom, project)
 
 
 def _projected_ring_to_path(
