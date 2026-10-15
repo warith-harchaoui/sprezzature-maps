@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sprezzature-maps"
-version = "0.17.1"
+version = "0.18.0"
 description = "Hand-authored SVG world maps for the sprezzature stack: choropleth and layered areas-of-control situation maps, every line authored as SVG directly. Depends on sprezzature-figures for shared rendering primitives."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -73,6 +73,11 @@ dev = [
     "ruff>=0.6",
     "httpx>=0.27",
     "mypy>=1.11",
+    # Reads back the pages the export path writes: the page size in
+    # millimetres, and whether what is on it is drawn or photographed. The
+    # PDF path shipped raster, at the wrong physical size, because nothing
+    # ever opened its output. BSD-3-Clause, pure Python, like this package.
+    "pypdf>=4.0",
 ]
 
 [project.scripts]

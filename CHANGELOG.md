@@ -2,6 +2,96 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.18.0] - 2026-10-15: a page a journal can actually use
+
+### Added
+
+- **`--out plate.pdf` and `--out plate.eps` write a drawn page.** Every
+  journal that asks for PDF or EPS is asking for vector; what shipped was a
+  PNG in a PDF wrapper, which satisfies the extension and nothing else, and
+  which nobody can tell from the real thing until they zoom in -- by which
+  point the figure is in review.
+
+  Three converters were measured against this project's own plates, because
+  the failure modes are not visible in a thumbnail. `cairosvg` **ignores
+  `paint-order`**: a place name is one `<text>` with a fat white halo and
+  `paint-order="stroke"` to keep the halo under the glyph, so read in
+  document order the halo paints over the letters and the map comes back with
+  its **toponyms erased** -- on the same cairo build librsvg uses, so that is
+  its SVG parser, not the renderer. Headless Chromium **printed the plate's
+  interactive layer panel into the figure** and fell back to Times for part
+  of the type. `rsvg-convert` got page size, typography and layers right, so
+  it is the one the writer looks for.
+
+  That comparison is kept true by a test rather than by this paragraph: a
+  canary drawn the way a place name is drawn goes out through the configured
+  converter, comes back rasterised, and has its ink compared against the
+  rasteriser this package ships. It carries its own negative control -- the
+  same canary without `paint-order`, which comes out blank -- so it proves it
+  can fail before it claims to pass. Choosing an engine by looking at one
+  render on one machine is an anecdote, and an anecdote stays true until
+  somebody upgrades something.
+
+  It is an optional *system* package (`brew install librsvg`, `apt install
+  librsvg2-bin`), not a Python dependency. Absent, the page is still written,
+  still at the right physical size, and a warning says it is a raster and
+  names what to install. Silence there would have been the original defect
+  restored.
+
+### Fixed
+
+- **A plate built for a journal column could not be exported at all.** The
+  rasteriser refuses a root measured in millimetres -- *"SVG has an invalid
+  size"*, on a one-rectangle document as readily as on a plate -- so
+  `print_width` plus `--out plate.png` raised and wrote nothing. Two shipped
+  features that had never met, because the print-width tests read the SVG
+  string and never rasterise it. The physical size is swapped for the
+  viewBox on the way into the rasteriser and nowhere else: the `.svg` still
+  carries `width="90mm"`, which is what it is for.
+
+- **Once that was unblocked, the PDF page came out at 333 mm.** Pillow lays a
+  page out at the pixel count over the resolution it is given, and its
+  default is 72 dpi, so a plate built for a 90 mm column became a 333 mm
+  page -- not a rounding error, a different figure. The page now carries the
+  width the plate asked to print at, on the raster fallback as well as on the
+  vector path: degrading is not the same as giving up.
+
+- Nothing here had a single test. `tests/test_a_plate_leaves_in_the_format_it_was_asked_for.py`
+  is 24 of them, and CI now installs `librsvg2-bin` -- without it every test
+  of this path takes its renderer-absent branch, which is the branch that
+  already worked, and CI would be green on a feature it never ran.
+
+### Notes
+
+- An exported page is **not byte-reproducible**: the converter stamps a
+  creation date, which the plate itself deliberately does not. The drawing is
+  identical; the bytes are not.
+- An SVG **filter** is the one construct a vector exporter cannot express: it
+  rasterises the region the filter covers. On these plates that is the drop
+  shadow -- and the cost is not per plate but **per mark**, because every
+  event marker carries one. Measured on a 120-event plate at 90 mm: the
+  exported PDF held **122 embedded rasters and came to 126 KB**. A figure made
+  of bitmap patches, inside a format a journal asked for precisely because it
+  is not made of those.
+
+  So **`print_width` now turns the shadows off**. It is a plate saying out
+  loud that it is going to a page; paper has no hover state and nothing floats
+  on it, so the shadow buys nothing there and costs that. The same plate now
+  exports with no rasters at all, at 20 KB, with *more* drawing in it rather
+  than less. A plate that never declared a print width is untouched -- checked
+  by hashing all nine bundled plates either side of the change. A small-
+  multiples panel inherits the sheet's print-boundness, since the panel drops
+  `print_width` itself and would otherwise have kept eight panels of screen
+  chrome inside a figure built for a column.
+
+  One existing test had to change for this, and it is worth saying which:
+  `test_the_drawing_is_untouched_by_the_print_width` compared the two plates
+  byte for byte. Its promise -- that asking for a physical width never moves a
+  coastline or resizes a label -- still holds and is still checked byte for
+  byte. It now names the one attribute that *is* allowed to differ, and asserts
+  it differs, so the exception is a documented assertion rather than a loosened
+  comparison: if the print path ever touches the geometry, it still fails.
+
 ## [0.17.1] - 2026-10-15: a key that filled its width with whitespace
 
 ### Fixed

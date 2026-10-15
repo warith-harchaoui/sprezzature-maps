@@ -294,6 +294,49 @@ A warning rather than a refusal: a poster is not a journal page.
 refused, because `"90"` could be millimetres or pixels and the two differ by a
 factor of three.
 
+### Getting it out as vector
+
+`--out plate.pdf` and `--out plate.eps` write a **drawn** page, not a picture
+of one, and the page is exactly the size `print_width` asked for:
+
+```bash
+make-map situation_map --config region.yaml --out figure-1.pdf
+```
+
+That needs `rsvg-convert`, which ships with librsvg (`brew install librsvg`,
+`apt install librsvg2-bin`). It is an optional system package, not a Python
+dependency, and when it is missing the page is still written, still at the
+right physical size, with a warning saying it is a raster and what to install.
+Silence there would be the defect: a raster PDF satisfies the extension and
+nothing a journal wants, and nobody can tell the two apart until they zoom in,
+by which point the figure is in review.
+
+Three converters were measured against this project's own plates before one
+was picked, because the failures are not the kind you notice in a thumbnail:
+
+| | page at `90mm` | what came back |
+|---|---|---|
+| `rsvg-convert` | **90.0 mm** | correct |
+| `cairosvg` | 90.0 mm | **every place name erased** — it ignores `paint-order`, so each label's white halo paints over the letters instead of under them |
+| headless Chromium | 90.3 mm | **printed the interactive layer panel into the figure**, and fell back to Times for part of the type |
+
+`cairosvg` runs on the same cairo build librsvg does, so that is its SVG
+parser, not the renderer underneath.
+
+That table is a measurement, not a reputation, and it is kept true by a test
+rather than by this paragraph. `tests/test_a_plate_leaves_in_the_format_it_was_asked_for.py`
+exports a canary drawn exactly the way a place name is drawn, rasterises what
+comes back, and compares the ink against the renderer this package ships. A
+converter that erases labels scores zero, not ninety-five percent. The test
+carries its own negative control — the same canary with `paint-order` removed,
+which comes out blank — so it proves it can fail before it claims to pass.
+
+Two things to know about the page you get. Text comes out as outlines rather
+than as selectable text, which is what most journals ask for anyway. And the
+file is not byte-reproducible — the converter stamps a creation date, which
+the plate itself deliberately does not (see `provenance` above) — so two
+exports of one plate differ even though the drawing does not.
+
 ## Who can read the plate
 
 A thematic plate is a navigable document, not a picture. Its claim polygons,

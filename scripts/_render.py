@@ -49,8 +49,29 @@ from __future__ import annotations
 import argparse
 import inspect
 import os
+import re
 from collections.abc import Callable
 from pathlib import Path
+
+#: The root ``width``/``height`` of a plate sized for a printed page.
+#:
+#: ``print_width`` puts a physical size on the root (``width="90mm"``), which
+#: is the whole point of it: the file then lands at exactly that size in
+#: InDesign or ``\includegraphics``. The rasteriser will not read it.
+_PHYSICAL_SIZE_RE = re.compile(
+    r'\s(width|height)="\s*[\d.]+\s*(?:mm|cm|in|pt|pc|q)"', re.I
+)
+
+#: The root ``viewBox``, which carries the drawing's own coordinate system.
+_VIEWBOX_RE = re.compile(r'viewBox="\s*[\d.+-]+\s+[\d.+-]+\s+([\d.]+)\s+([\d.]+)\s*"')
+
+#: One root dimension with its unit, for reading a plate's intended print size.
+_ROOT_DIM_RE = re.compile(r'\s(width|height)="\s*([\d.]+)\s*(mm|cm|in|pt|pc)"', re.I)
+
+#: Millimetres per unit, for the units ``print_width`` accepts.
+_MM_PER_UNIT: dict[str, float] = {
+    "mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72.0, "pc": 25.4 / 6.0,
+}
 
 
 def _render_scale() -> float:
@@ -164,6 +185,120 @@ def write_svg(out: Path, svg: str, *, embed_fonts: bool = True) -> Path:
     return out
 
 
+def _size_in_pixels(svg: str) -> str:
+    """Return ``svg`` with any physical root size replaced by its viewBox size.
+
+    ``resvg_py`` refuses a document whose root is measured in millimetres --
+    *"SVG has an invalid size"*, on a one-rectangle document as readily as on
+    a plate -- so a plate built for a journal column could be written as
+    ``.svg`` and not as ``.png`` or ``.pdf``. Two shipped features that did
+    not compose, and nothing caught it because the print-width tests read the
+    SVG string and never rasterise it.
+
+    Substituted here and nowhere else: the ``.svg`` a user asks for still
+    carries the physical size, because that is what it is for. Nothing about
+    the drawing changes either way -- the viewBox is the coordinate system
+    every path is already written in, and the root size only ever said how
+    large to present it.
+
+    Examples
+    --------
+    >>> doc = '<svg viewBox="0 0 100 50" width="90mm" height="45mm"><rect/></svg>'
+    >>> _size_in_pixels(doc)
+    '<svg width="100" height="50" viewBox="0 0 100 50"><rect/></svg>'
+
+    A plate already measured in user units is handed back untouched:
+
+    >>> plain = '<svg viewBox="0 0 100 50" width="100" height="50"><rect/></svg>'
+    >>> _size_in_pixels(plain) == plain
+    True
+    """
+    if not _PHYSICAL_SIZE_RE.search(svg[: svg.find(">") + 1] or svg):
+        return svg
+    box = _VIEWBOX_RE.search(svg)
+    if not box:
+        # No coordinate system to fall back on. Handing it over unchanged
+        # gets resvg's own refusal, which names the real problem better than
+        # a guessed size would hide it.
+        return svg
+    head_end = svg.find(">") + 1
+    head = _PHYSICAL_SIZE_RE.sub("", svg[:head_end])
+    sized = head.replace(
+        "<svg", f'<svg width="{box.group(1)}" height="{box.group(2)}"', 1
+    )
+    return sized + svg[head_end:]
+
+
+def _print_width_mm(svg: str) -> float | None:
+    """Return the width in millimetres a plate was built to print at, if it says.
+
+    ``print_width`` is the only thing that puts a physical unit on the root,
+    and it exists because journals specify figures in millimetres. A PDF has
+    a page size, so it is the one output format that can carry that intent
+    rather than merely record it.
+
+    Examples
+    --------
+    >>> _print_width_mm('<svg width="90mm" height="45mm" viewBox="0 0 2 1"/>')
+    90.0
+    >>> _print_width_mm('<svg width="3.5in" height="2in" viewBox="0 0 2 1"/>')
+    88.9
+    >>> _print_width_mm('<svg width="900" height="450" viewBox="0 0 2 1"/>') is None
+    True
+    """
+    found = _ROOT_DIM_RE.search(svg[: svg.find(">") + 1] or svg)
+    if not found or found.group(1).lower() != "width":
+        return None
+    return round(float(found.group(2)) * _MM_PER_UNIT[found.group(3).lower()], 4)
+
+
+#: The external renderer that turns an SVG into a real vector page.
+#:
+#: ``rsvg-convert`` ships with librsvg, which is the one converter measured
+#: against this project's own plates that got all three of page size,
+#: typography and layer fidelity right. The two alternatives each failed
+#: visibly: ``cairosvg`` -- on the same cairo build -- drew the white halo
+#: behind every place name and not the name, so a map came out with its
+#: toponyms erased; headless Chromium printed the plate's interactive layer
+#: panel into the figure and fell back to Times for part of the type.
+_VECTOR_RENDERER = "rsvg-convert"
+
+#: Extensions a vector page can be written in, and the ``-f`` rsvg takes.
+_VECTOR_FORMATS: dict[str, str] = {".pdf": "pdf", ".eps": "eps"}
+
+
+def _vector_bytes(svg: str, fmt: str) -> bytes | None:
+    """Return ``svg`` rendered to ``fmt`` as a vector page, or ``None``.
+
+    ``None`` means the renderer is not installed, which is a normal state and
+    not an error: it is an optional system package, and the caller falls back
+    to a raster page and says so rather than failing a render over it.
+
+    The SVG goes in on stdin, so nothing is written to a temporary file --
+    the document carries its own fonts and rasters inline and has no relative
+    references for a working directory to resolve.
+    """
+    import shutil
+    import subprocess
+
+    exe = shutil.which(_VECTOR_RENDERER)
+    if not exe:
+        return None
+    try:
+        done = subprocess.run(
+            [exe, "-f", fmt],
+            input=svg.encode("utf-8"),
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        # Installed and unhappy with this document. Falling back keeps a
+        # render from dying on an optional dependency, and the caller's
+        # warning says which page the user ended up with.
+        return None
+    return done.stdout or None
+
+
 def _svg_to_png_bytes(svg: str) -> bytes:
     """Rasterise a complete SVG document to PNG bytes at :func:`_render_scale`.
 
@@ -176,7 +311,9 @@ def _svg_to_png_bytes(svg: str) -> bytes:
     import resvg_py
 
     zoom = _render_scale()
-    return resvg_py.svg_to_bytes(svg_string=svg, zoom=zoom if zoom != 1.0 else None)
+    return resvg_py.svg_to_bytes(
+        svg_string=_size_in_pixels(svg), zoom=zoom if zoom != 1.0 else None
+    )
 
 
 def _write_in_format(out: Path, svg: str) -> None:
@@ -199,23 +336,59 @@ def _write_in_format(out: Path, svg: str) -> None:
         out.write_text(_svg_to_html(svg), encoding="utf-8")
     elif suffix == ".png":
         out.write_bytes(_svg_to_png_bytes(svg))
-    elif suffix in (".pdf", ".jpg", ".jpeg"):
+    elif suffix in _VECTOR_FORMATS:
+        import warnings
+
+        page = _vector_bytes(svg, _VECTOR_FORMATS[suffix])
+        if page is not None:
+            out.write_bytes(page)
+            return
+        warnings.warn(
+            f"{out.name} is a raster page: every journal that asks for "
+            f"{suffix[1:].upper()} asks for vector, and this one is a picture of "
+            f"the plate. Install {_VECTOR_RENDERER} (librsvg) and render again "
+            "for a vector page, or hand over the .svg, which is vector already.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        _raster_page(out, svg, suffix)
+    elif suffix in (".jpg", ".jpeg"):
         import io
 
         from PIL import Image
 
         image = Image.open(io.BytesIO(_svg_to_png_bytes(svg)))
-        if suffix == ".pdf":
-            image.convert("RGB").save(out, format="PDF")
-        else:
-            # JPEG has no alpha channel; flatten onto white first.
-            flat = Image.new("RGB", image.size, "#FFFFFF")
-            flat.paste(image, mask=image.split()[3] if image.mode == "RGBA" else None)
-            flat.save(out, format="JPEG", quality=92)
+        # JPEG has no alpha channel; flatten onto white first.
+        flat = Image.new("RGB", image.size, "#FFFFFF")
+        flat.paste(image, mask=image.split()[3] if image.mode == "RGBA" else None)
+        flat.save(out, format="JPEG", quality=92)
     else:
         # Unknown extension (e.g. .json): the generator only has an SVG string,
         # so write that rather than silently producing a mislabelled binary.
         out.write_text(svg, encoding="utf-8")
+
+
+def _raster_page(out: Path, svg: str, suffix: str) -> None:
+    """Write a page with the rasterised plate inside it.
+
+    The fallback when :func:`_vector_bytes` finds no renderer. It is a
+    picture of the plate rather than the plate, and the caller has already
+    said so -- but it is at least a picture at the right physical size, which
+    the version before this was not.
+    """
+    import io
+
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(_svg_to_png_bytes(svg))).convert("RGB")
+    # Pillow lays the page out at the pixel count over the resolution it is
+    # given, and its default of 72 turned a plate built for a 90 mm journal
+    # column into a 333 mm page -- the exact opposite of what asking for a
+    # print width means. Told the real resolution, the page comes out at the
+    # size the plate asked to print at.
+    wide_mm = _print_width_mm(svg)
+    extra = {"resolution": image.width / (wide_mm / 25.4)} if wide_mm else {}
+    image.save(out, format="PDF" if suffix == ".pdf" else "EPS", **extra)
 
 
 def _svg_to_html(svg: str) -> str:

@@ -2692,6 +2692,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     # Computed before any layer draws, because the label layers run first and
     # the furniture that would print over them is drawn last.
     vp["reserved"] = _reserved_boxes(cfg, vp)
+    # Carried on the viewport, as ``simplify`` already is, so every layer
+    # that draws furniture picks it up without growing an argument. The
+    # private key is how a small-multiples panel inherits it: a panel drops
+    # ``print_width`` itself, because the sheet is what has a page size.
+    vp["print"] = bool(cfg.get("print_width") or cfg.get("_print"))
     W, H = vp["width"], vp["height"]
 
     # The plate's own control panel is furniture too, and it was the one
@@ -3120,7 +3125,7 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'<rect width="{outer_w:.1f}" height="{outer_h:.1f}" fill="{page_color}"/>'
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
         f'<rect x="0" y="0" width="{plate_w:.1f}" height="{plate_h:.1f}" rx="{radius}" ry="{radius}" '
-        f'fill="{_pal(cfg)["plate"]}" filter="url(#panel-shadow)"/>'
+        f'fill="{_pal(cfg)["plate"]}"{_drop_shadow(vp, "panel-shadow")}/>'
         # ``isolation:isolate`` makes this group its own stacking context, so
         # every blended layer inside it -- the relief, the control fills --
         # composites against the plate and stops there. Without it a plate
@@ -4781,7 +4786,7 @@ def _markers_layer(
         out.append(
             f'{halo}<circle class="hit" tabindex="0" role="graphics-symbol" '
             f'aria-label="{mark_label}" cx="{x:.1f}" cy="{y:.1f}" '
-            f'r="{r:.1f}" {paint}{data} filter="url(#marker-shadow)"/>'
+            f'r="{r:.1f}" {paint}{data}{_drop_shadow(vp, "marker-shadow")}/>'
         )
         lines = [headline, f"{it['lat']:.2f}°, {it['lon']:.2f}° · {layer_id}"]
         if precision != 1:
@@ -6068,6 +6073,28 @@ def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, fl
     return panel_w, panel_h, 22 * ts
 
 
+def _drop_shadow(vp: dict[str, Any], which: str) -> str:
+    """Return the ``filter`` attribute for ``which``, or nothing on a print plate.
+
+    A drop shadow says *this card floats above the map*, which is a claim
+    about a screen. Paper has no hover state and nothing floats on it, so the
+    shadow buys nothing there -- and it is the most expensive thing on the
+    page, because an SVG filter is the one construct a vector exporter cannot
+    express: it rasterises the region the filter covers instead.
+
+    That cost is not per plate, it is **per mark**, because every event
+    marker carries one. Measured on a 120-event plate at
+    ``print_width: 90mm``: the exported PDF held 122 embedded rasters and came
+    to 126 KB. With the shadows gone it holds none, comes to 20 KB, and has
+    *more* drawing in it rather than less.
+
+    ``print_width`` is a plate saying out loud that it is going to a page, so
+    it is what turns them off. A plate that never said so is untouched, down
+    to the byte.
+    """
+    return "" if vp.get("print") else f' filter="url(#{which})"'
+
+
 def _legend_band_pack(
     rows: list[dict[str, Any]], ts: float, avail: float
 ) -> tuple[int, list[float]]:
@@ -6214,8 +6241,8 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
-        f'rx="{9 * ts:.1f}" fill="{_pal(cfg)["panel"]}" fill-opacity="0.96" '
-        f'filter="url(#panel-shadow)"/>',
+        f'rx="{9 * ts:.1f}" fill="{_pal(cfg)["panel"]}" fill-opacity="0.96"'
+        f'{_drop_shadow(vp, "panel-shadow")}/>',
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
         f'rx="{9 * ts:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
         f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
@@ -6634,6 +6661,7 @@ def build_small_multiples(cfg: dict[str, Any]) -> str:
         panel["title"] = ""
         panel.pop("subtitle", None)
         panel.pop("print_width", None)
+        panel["_print"] = bool(cfg.get("print_width"))
         panel["caption"] = "none"
         # The sheet is one figure and carries one stamp, written below from
         # this same config. Letting the panels inherit it would define
@@ -6873,7 +6901,10 @@ CONFIG_KEYS: frozenset[str] = frozenset({
 
 #: Keys the loaders set themselves; a caller never writes these.
 _INTERNAL_KEYS: frozenset[str] = frozenset(
-    {"_config_dir", "_panel", "_plate", "_relief_cache", "_relief_tone", "_source_file"}
+    {
+        "_config_dir", "_panel", "_plate", "_print", "_relief_cache",
+        "_relief_tone", "_source_file",
+    }
 )
 
 
