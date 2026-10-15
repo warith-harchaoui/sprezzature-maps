@@ -371,6 +371,13 @@ def _house_ink(svg: str) -> float:
     return _ink(bytes(resvg_py.svg_to_bytes(svg_string=svg)))
 
 
+def _fresh(tmp_path: Path, name: str) -> Path:
+    """A directory of its own, because ``_pdf_ink`` writes fixed filenames."""
+    out = tmp_path / name
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def _pdf_ink(page: bytes, tmp_path: Path) -> float:
     pdf = tmp_path / "canary.pdf"
     pdf.write_bytes(page)
@@ -408,15 +415,42 @@ def test_the_exported_page_still_carries_the_words(tmp_path: Path) -> None:
 
     The engine was chosen by looking at renders, once, on one machine --
     which is an anecdote, and an anecdote is not a mechanism. This is the
-    mechanism: export the canary, rasterise what came back, and compare the
-    ink against what the plate is known to look like. A converter that
-    erases labels scores zero, not ninety-five percent, so the band is wide
-    on purpose: what is being caught is a page that lost its words, not a
-    difference in antialiasing.
+    mechanism: export the canary, rasterise what came back, and check the
+    words are still on the page.
+
+    It asks the converter about *itself* rather than comparing it to the
+    house rasteriser, and that is the whole design. The first version did
+    compare the two (``_pdf_ink(...) == approx(_house_ink(...), rel=0.3)``)
+    and it was wrong in a way that only showed up off this laptop: the canary
+    asks for ``Helvetica, sans-serif``, macOS has Helvetica and Ubuntu does
+    not, so on CI librsvg fell back to DejaVu -- wider and heavier -- while
+    resvg resolved its own fallback. Same drawing, two font stacks, 39% more
+    ink, and a red build about fontconfig rather than about paint-order.
+
+    So the measurement is taken twice through the *same* converter, on the
+    same machine, with the same fonts: once as the canary is drawn, once with
+    ``paint-order`` removed. Whatever font either engine picks cancels out,
+    because it is on both sides of the comparison. What cannot cancel out is
+    the failure being hunted -- a halo painted over its own glyphs, which is
+    exactly what ``cairosvg`` does to these plates and why a map came back
+    from it with every toponym erased.
     """
     page = render._vector_bytes(_HALO_CANARY, "pdf")
     assert page is not None
-    assert _pdf_ink(page, tmp_path) == pytest.approx(_house_ink(_HALO_CANARY), rel=0.3)
+    legible = _pdf_ink(page, _fresh(tmp_path, "legible"))
+
+    blanked = render._vector_bytes(_HALO_CANARY.replace('paint-order="stroke" ', ""), "pdf")
+    assert blanked is not None
+    erased = _pdf_ink(blanked, _fresh(tmp_path, "erased"))
+
+    assert legible > 0.02, (
+        f"the exported page carries almost no ink ({legible:.4f}): the words did "
+        "not survive the conversion at all"
+    )
+    assert erased < legible * 0.05, (
+        f"the halo did not cover the glyphs on the exported page: {erased:.4f} "
+        f"against {legible:.4f} -- this converter ignores paint-order"
+    )
 
 
 # --------------------------------------------------------------------------- #

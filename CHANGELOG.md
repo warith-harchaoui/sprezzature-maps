@@ -2,6 +2,41 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **The export canary failed on CI for a reason that had nothing to do with
+  exporting.** It compared the ink of the converted page against the ink from
+  the rasteriser this package ships -- two different engines resolving fonts
+  independently. The canary asks for `Helvetica, sans-serif`; macOS has
+  Helvetica and Ubuntu does not, so on CI librsvg fell back to DejaVu, wider
+  and heavier, and the measurement came in 39% high against a 30% band. A red
+  build about fontconfig, wearing the costume of a red build about
+  `paint-order`.
+
+  It now measures the converter against **itself**: the canary as drawn, and
+  the canary with `paint-order` removed, both through the same converter on
+  the same machine. Whatever font gets picked is on both sides of the
+  comparison and cancels; what cannot cancel is the failure being hunted, a
+  halo painted over its own glyphs. The margin went from "39% against a 30%
+  tolerance" to legible 0.054 against erased 0.000.
+
+### Changed
+
+- **The suite runs on all cores: 15m43s to 4m06s** (2m32s on twelve), with the
+  same 511 passed and 8 skipped. Every test here redraws a plate from scratch
+  and a plate costs four to twelve seconds, so the run was one core doing the
+  same nine plates a hundred times -- then doing it twice more across the
+  matrix. `pytest-xdist` is now a dev dependency and both CI and the pre-push
+  hook pass `-n auto`.
+
+  This deselects nothing. It is the same tests, scheduled better, which is the
+  only kind of speed-up that costs no coverage -- the rule in `pyproject.toml`
+  about never defaulting to `-m 'not slow'` stands untouched. The identical
+  pass and skip counts are the evidence that nothing depended on running alone
+  or in a particular order.
+
 ## [0.18.0] - 2026-10-15: a page a journal can actually use
 
 ### Added
