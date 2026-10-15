@@ -92,6 +92,26 @@ the CLI is usually the better surface for it.
 
 ---
 
+## Asked whether a figure replays
+
+"Is this the map that CSV produces?" is not a rendering request, and there is
+no CLI or MCP tool for it. It is two Python calls on the finished file:
+
+```python
+from sprezzature_maps import plate_provenance, replay_report
+
+plate_provenance(svg)                       # {} if it was never stamped
+replay_report(svg, cfg, ["sudan-2024.csv"])["replays"]
+```
+
+A plate only carries a stamp if it was rendered with `provenance: true` in its
+config, which is **not** the default — so the honest answer to "does this
+published figure replay?" is often "it recorded nothing, and nothing can be
+said". Do not report a match for an unstamped plate; `replay_report` refuses
+one rather than letting an agent paraphrase silence as agreement.
+
+---
+
 ## One contract an agent must not break
 
 **A situation map draws exactly what you send it.** It has no view on whether

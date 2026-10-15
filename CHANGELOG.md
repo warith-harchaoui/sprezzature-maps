@@ -2,6 +2,58 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.17.0] - 2026-10-15: a plate that can prove which inputs drew it
+
+### Added
+
+- **`provenance`: the question a caption cannot settle.** A plate already
+  prints `method`, `source` and `as_of` — what it was drawn from, in prose,
+  for a reader. None of that answers what review actually asks of a published
+  figure: *is this the picture these inputs produce?* The drawing is a
+  function of three things — the code, the config, and the file a loader read
+  on the way in — and `provenance: true` fingerprints each of them into
+  `<metadata>`, so that a mismatch later says **which one moved** instead of
+  leaving a reviewer to guess.
+
+  Three decisions in that stamp are each the opposite of the obvious one.
+  **It records digests, not the inputs**: an `areas_of_control` config carries
+  coordinates and a `source` carries a path naming somebody's machine, so
+  embedding either would publish it, while a digest publishes nothing and
+  still lets anyone holding the inputs prove the match — which is the
+  direction a reviewer needs. Only basenames are kept, never a directory, for
+  the same reason. **It carries no clock**: a render time is the obvious field
+  and would destroy the property the stamp exists to record, since two renders
+  of the same inputs would then differ. **It is opt-in**, not because it costs
+  pixels — rasterised, a stamped plate is byte-identical to the unstamped one
+  — but because it carries the package version, so switching it on by default
+  would change every committed plate at every release.
+
+- **`plate_provenance(svg)` and `replay_report(svg, cfg, files)`**, the
+  reading half. `replays` is true only when everything the stamp names was
+  checked *and* matched: a stamped input nobody supplied comes back under
+  `unchecked`, because nothing in the plate can go looking for it and a plate
+  whose inputs nobody produced is **unrefuted, not reproduced**. A plate
+  carrying no stamp raises rather than reporting a match for a figure that
+  recorded nothing. A file offered that was never an input is named too — the
+  usual cause is handing over the wrong export, which is exactly what a silent
+  pass would let through.
+
+- **The conflict loaders record the export they read.** By the time
+  `build_map` sees the config, the rows are inline and the CSV is gone: the
+  config's own digest proves the plate matches the config, and can say nothing
+  about which file the config came from. `acled_events` and `ucdp_events` are
+  the only point in the chain that still know, so they leave the record under
+  a private key — **not** under `provenance`. The documented integration is
+  `cfg.update(acled_events(...))`, so a fragment writing `provenance` would
+  silently overrule a caller who had already written `provenance: false`, and
+  would make every plate drawn from a CSV change bytes at every release.
+
+### Fixed
+
+- `_unescape` undid `&amp;` first, which turned a literal `&amp;lt;` in a
+  title or description back into a `<`. It is undone last now, and `&quot;`
+  is undone at all.
+
 ## [0.16.0] - 2026-10-14: the same plate once per window, and a key that drew one symbol in three
 
 ### Added

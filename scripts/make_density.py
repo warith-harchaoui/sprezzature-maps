@@ -84,6 +84,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
+from _sidecar import provenance_metadata  # noqa: E402
 
 #: Bin count along the long axis. 120 is the measured sweet spot: the field
 #: still reads as a field, and the plate lands near 150 KB.
@@ -314,6 +315,7 @@ def build_svg(
     caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
     region: str | None = None,
     per_area: bool = False,
+    provenance: bool = False,
 ) -> str:
     """
     Render the accumulation plate.
@@ -331,6 +333,11 @@ def build_svg(
     title, subtitle, caption : str, optional
         Chrome. The caption states the provenance, and stays on the plate so
         the figure keeps saying what it is once it travels alone.
+    provenance : bool, optional
+        Stamp the *file* with the package version and a digest of this
+        call's arguments, in ``<metadata>``, drawing nothing. The caption
+        above says what the plate is, in prose, for a reader; this says it
+        in digests, for a check that it can be redrawn. Off by default.
 
     Returns
     -------
@@ -342,6 +349,12 @@ def build_svg(
     ValueError
         If `bins` is not positive, or no point falls inside `bbox`.
     """
+    # The arguments exactly as called: the digested "config" for a
+    # generator that takes keywords rather than a config dict, captured
+    # before any of them is resolved to a default below. ``locals()``
+    # rather than a hand-written dict, so the parameter added next year is
+    # in the digest without anyone remembering to put it there.
+    _call = dict(locals())
     if bins < 1:
         raise ValueError(f"bins must be positive, got {bins}")
     pts = list(points) if points is not None else demo_points()
@@ -402,6 +415,11 @@ def build_svg(
                 f"M{x:.1f} {y:.1f}h{cw + _OVERLAP:.1f}v{ch + _OVERLAP:.1f}h-{cw + _OVERLAP:.1f}z"
             )
 
+    # Computed before the list so the list stays readable, and spread
+    # rather than appended: these lines are joined with newlines, so an
+    # empty stamp would leave a blank line in every plate that did not
+    # ask for one.
+    stamp = provenance_metadata({**_call, "provenance": provenance})
     out: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{plate_h}" '
         f'viewBox="0 0 {width} {plate_h}" role="img" aria-labelledby="dens-title dens-desc" '
@@ -410,6 +428,7 @@ def build_svg(
         f'<desc id="dens-desc">{_esc(subtitle)} — {len(pts):,} points binned to '
         f'{nx} by {ny} cells. {_esc(extent_sentence(bbox))}'
         f'{" " + _esc(str(region)) + " is the mapped area." if region else ""}</desc>',
+        *([stamp] if stamp else []),
         f'<rect width="{width}" height="{plate_h}" fill="{PLATE}"/>',
     ]
     # Named groups, as the other two generators emit: a plate nobody can
@@ -574,6 +593,7 @@ def make_density(
     caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
     region: str | None = None,
     per_area: bool = False,
+    provenance: bool = False,
 ) -> Path:
     """Render an accumulation map and write the SVG to *out*.
 
@@ -604,6 +624,8 @@ def make_density(
         Chart chrome. The caption is where provenance goes, and the demo's
         says its data is synthetic *on the plate* — this form is persuasive
         enough to be believed otherwise.
+    region, per_area, provenance
+        Forwarded to :func:`build_svg`.
 
     Returns
     -------
@@ -620,6 +642,7 @@ def make_density(
         caption=caption,
         region=region,
         per_area=per_area,
+        provenance=provenance,
     )
     dest = Path(out) if out else svg_example_path(__file__, "density")
     return write_svg(dest, svg)

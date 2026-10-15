@@ -448,3 +448,87 @@ Two caveats, stated rather than hidden. The coastline is present-day, which is
 right — coastlines have not moved. The **cities are present-day too**: a 1990
 plate will still name the towns the vendored basemap knows, so a plate of a
 renamed or vanished place needs `labels.places` written by hand.
+
+## Saying which inputs drew a plate
+
+`method`, `source` and `as_of` are prose: what the plate was drawn from,
+written for a reader. They cannot settle the question review asks of a
+published figure — *is this the picture these inputs produce?* The drawing is
+a function of three things, so `provenance` fingerprints all three into
+`<metadata>`, which occupies no pixels:
+
+```python
+cfg = {"title": "Sudan: recorded political violence, 2024", "provenance": True}
+cfg.update(acled_events("sudan-2024.csv", derive_region=True))
+make_situation_map(config=cfg, out="sudan.svg")
+```
+
+```xml
+<metadata id="provenance" data-generator="sprezzature-maps"
+          data-version="0.17.0" data-config-sha256="9a1f…">
+  <provenance-input data-name="sudan-2024.csv" data-sha256="3f2a…" data-bytes="4812051"/>
+</metadata>
+```
+
+The export is in there without the config naming it. By the time
+`make_situation_map` sees that config the rows are inline and the file is
+gone; the loader is the only point in the chain that still knows which CSV it
+read, so it records one and the stamp picks it up. Anything else that fed the
+plate — a frontiers file, an elevation raster you supplied — goes in by hand:
+
+```yaml
+provenance:
+  inputs: [cshapes-2.0.geojson]     # relative to the config's own directory
+```
+
+Reading it back is the other half:
+
+```python
+from sprezzature_maps import plate_provenance, replay_report
+
+plate_provenance(svg)
+# {"generator": "sprezzature-maps", "version": "0.17.0",
+#  "config_sha256": "9a1f…", "inputs": [{"name": "sudan-2024.csv", ...}]}
+
+report = replay_report(svg, cfg, ["sudan-2024.csv"])
+report["replays"]        # True only when everything the stamp named matched
+report["differences"]    # one sentence per thing that moved, empty otherwise
+report["unchecked"]      # stamped inputs nobody supplied
+```
+
+`replays` is `True` only when everything the stamp names was checked **and**
+matched. An input nobody handed over lands in `unchecked` and makes it
+`False`: nothing in the plate can go looking for the file — it kept a basename
+and a digest, never a directory — so a caller who supplied nothing has checked
+nothing, and a plate whose inputs nobody produced is unrefuted rather than
+reproduced. A plate with no stamp at all raises, instead of reporting a match
+for a figure that recorded nothing.
+
+`choropleth` and `density` take keyword arguments rather than a config dict,
+and `provenance=True` digests the whole call, defaults included. There is no
+dict to hand `replay_report` for one of those, so the check is the other way
+round: render again with the arguments you believe were used and compare the
+two `config_sha256` values.
+
+### Three choices, each the opposite of the easy one
+
+**Digests, not the inputs.** An `areas_of_control` config carries coordinates;
+a `source` carries a path that names somebody's machine. Embedding either
+would make the file self-describing and would also publish it. A digest
+publishes nothing and still lets anyone holding the inputs prove the match,
+which is the direction a reviewer needs it to work in. Only basenames are
+kept, for the same reason.
+
+**No clock.** A render time is the obvious field and it would destroy the
+property the stamp exists to record: two renders of the same inputs would
+differ, and the reviewer comparing them would be told they do not match.
+
+**Off by default.** Not because it costs pixels — it is byte-identical once
+rasterised — but because it carries the package version, so switching it on
+for everyone would change every committed plate at every release. The conflict
+loaders do not switch it on either; they only leave the record for a config
+that asked.
+
+On a sheet of small multiples the stamp is written once, on the sheet. Eight
+panels inheriting it would list one ACLED export eight times, and a reader
+counting inputs would count eight.

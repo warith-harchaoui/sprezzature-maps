@@ -67,8 +67,11 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+      # Every module, not a hand-written list. This list and the pre-push
+      # hook's had already drifted apart by a file, which is the whole
+      # failure mode: a worked example in a docstring nobody runs.
       - name: Doctests (scripts/)
         run: |
-          for f in scripts/_geo_colors.py scripts/_relief.py scripts/_svg.py scripts/_textbox.py scripts/_render.py scripts/_interactive.py scripts/make_choropleth.py scripts/make_situation_map.py; do
+          for f in scripts/*.py; do
             python -m doctest "$f"
           done

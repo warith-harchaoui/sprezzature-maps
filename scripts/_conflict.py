@@ -65,6 +65,8 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from _sidecar import file_fingerprint
+
 #: A categorical palette for event classes, published values, ordered by
 #: how well a *prefix* of it survives colour-vision deficiency.
 #:
@@ -203,6 +205,26 @@ def _rows(source: Any) -> list[dict[str, Any]]:
     if isinstance(source, Iterable):
         return [dict(r) for r in source]
     raise TypeError(f"expected a path or an iterable of rows, got {type(source).__name__}")
+
+
+def _source_fingerprint(source: Any) -> dict[str, Any] | None:
+    """Return the input record for ``source``, or ``None`` for rows in memory.
+
+    This is the only place in the whole chain that knows the link between a
+    plate and the export it came from. By the time ``build_map`` sees the
+    config the events are inline, the file is gone, and the config's own
+    digest -- which does cover those events exactly -- can prove the plate
+    matches the config but can say nothing about which CSV the config came
+    from. So the loader records it here, under ``_source_file``, and the
+    provenance stamp picks it up if and when the config asks for one.
+
+    In-memory rows get no record. They have no bytes anyone else can re-hash,
+    and inventing a name for them would put something in a published figure
+    that cannot be checked.
+    """
+    if not isinstance(source, (str, Path)):
+        return None
+    return file_fingerprint(source)
 
 
 def _number(raw: Any, field: str, row: int) -> float:
@@ -421,6 +443,7 @@ def _common(
     derive_region: bool,
     region_pad: float,
     limit: int | None,
+    source_file: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Shared body of :func:`acled_events` and :func:`ucdp_events`.
 
@@ -520,6 +543,15 @@ def _common(
         "marker_legend": legend,
         "method": method,
     }
+    if source_file is not None:
+        # A private key, not ``provenance``, and the difference is the whole
+        # point. The documented integration is ``cfg.update(acled_events(...))``,
+        # so a fragment writing ``provenance`` would overwrite a caller who had
+        # already said no -- and switching the stamp on from here would make
+        # every plate drawn from a CSV change bytes at every release, since the
+        # stamp carries the package version. The record waits under a key the
+        # stamp reads only once the config has asked for one.
+        fragment["_source_file"] = source_file
     if derive_region:
         if not events:
             raise ValueError(
@@ -615,8 +647,12 @@ def acled_events(
     Returns
     -------
     dict
-        ``events``, ``marker_legend``, ``method``, and ``region`` when
-        ``derive_region``. Every key is one ``build_map`` already reads, so
+        ``events``, ``marker_legend``, ``method``, ``region`` when
+        ``derive_region``, and ``_source_file`` when *source* was a file on
+        disk -- its basename and digest, which is the only point in the chain
+        where the link between the plate and that file still exists. A plate
+        rendered with ``provenance`` records it; one without is unaffected.
+        Every other key is one ``build_map`` already reads, so
         ``cfg.update(acled_events(...))`` is the whole integration.
 
     Raises
@@ -641,6 +677,7 @@ def acled_events(
     vocab = list(vocabulary) if vocabulary is not None else (
         list(ACLED_EVENT_TYPES) if colour_by == "event_type" else []
     )
+    source_file = _source_fingerprint(source)
 
     def place(row: dict[str, Any], n: int) -> dict[str, Any] | str:
         mark: dict[str, Any] = {
@@ -678,6 +715,7 @@ def acled_events(
         derive_region=derive_region,
         region_pad=region_pad,
         limit=limit,
+        source_file=source_file,
     )
 
 
@@ -731,8 +769,9 @@ def ucdp_events(
     Returns
     -------
     dict
-        ``events``, ``marker_legend``, ``method``, and ``region`` when
-        ``derive_region``.
+        ``events``, ``marker_legend``, ``method``, ``region`` when
+        ``derive_region``, and ``_source_file`` when *source* was a file on
+        disk. See :func:`acled_events`.
 
     Examples
     --------
@@ -764,6 +803,7 @@ def ucdp_events(
         raise ValueError(f"country_level must be 'drop' or 'keep'; got {country_level!r}")
     rows = _rows(source)
     vocab = list(vocabulary) if vocabulary is not None else list(UCDP_VIOLENCE_TYPES.values())
+    source_file = _source_fingerprint(source)
 
     def place(row: dict[str, Any], n: int) -> dict[str, Any] | str:
         where = _code(row.get("where_prec", 1), "where_prec", n, tuple(UCDP_WHERE_PREC))
@@ -814,4 +854,5 @@ def ucdp_events(
         derive_region=derive_region,
         region_pad=region_pad,
         limit=limit,
+        source_file=source_file,
     )
