@@ -2,6 +2,46 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [0.17.1] - 2026-10-15: a key that filled its width with whitespace
+
+### Fixed
+
+- **The legend band sized every column for the longest label in the whole
+  key.** A key of three short rows and one long one laid `RSF` out in a
+  252-unit column of which it used 46, did that three times across the band,
+  and pushed the long row onto a second line the band had room for. The
+  complaint it was logged under was that the band did not fill its width; the
+  render says the opposite and is the one to believe. It filled the width with
+  whitespace, which is the version that reads as broken.
+
+  Each column is now measured on the rows it actually holds, and the widest
+  grid that fits wins, since more columns is a shallower band. On the case
+  above: four columns on one row instead of three columns on two. A single
+  column is still returned when even that does not fit -- a label longer than
+  the plate is a label to shorten, not a layout to solve, and returning no
+  columns would draw no key while the plate still looked finished.
+
+  No shipped plate moves: all nine bundled situation plates key to a floating
+  card, not a band, which was checked by hashing them either side of the
+  change rather than assumed from reading the configs.
+
+- **`shapely.ops.transform` was deprecated under us.** A newer shapely than
+  the one pinned here warns on every call, and that warning took the first
+  slot in a `pytest.warns` block whose test read `caught[0].message` -- so the
+  suite passed locally and CI failed on a dependency's release notes rather
+  than on anything the test covered. CI had been red for two releases, both
+  logged as shipped. The test now finds its warning by what it says, which
+  makes it immune to any third-party warning rather than to this one; and the
+  call moved to `shapely.transform`, which cut CI's warning count from 6628 to
+  1. Verified by rendering all nine bundled plates either side: identical byte
+  for byte.
+
+- The pre-push hook ran its doctests as `for f in ...; do ...; done || exit 1`.
+  A loop returns the status of its *last* iteration and `set -e` is suppressed
+  to the left of `||`, so a failing doctest in any file but the last passed in
+  silence. Both that list and CI's -- which had already drifted apart by a
+  file -- are now a sweep over `scripts/*.py`.
+
 ## [0.17.0] - 2026-10-15: a plate that can prove which inputs drew it
 
 ### Added

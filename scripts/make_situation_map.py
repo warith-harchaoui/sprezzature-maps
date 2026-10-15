@@ -3049,7 +3049,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     elif legend_pos == "below":
         # The band is drawn under the map, so the plate grows downwards and
         # the map's own W/H stay untouched for every layer already drawn.
-        band_h, _cols, _cw, _rh = _legend_band_dims(cfg, vp["ts"], W)
+        band_h, _cols, _offsets, _rh = _legend_band_dims(cfg, vp["ts"], W)
         plate_w, plate_h = W, H + band_h
     else:
         plate_w, plate_h = W, H
@@ -6068,10 +6068,66 @@ def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, fl
     return panel_w, panel_h, 22 * ts
 
 
+def _legend_band_pack(
+    rows: list[dict[str, Any]], ts: float, avail: float
+) -> tuple[int, list[float]]:
+    """Return ``(columns, x offset per column)`` for ``rows`` across ``avail``.
+
+    One width for every column -- the longest label's -- is what this used to
+    do, and it is why a key of three short rows and one long one took two
+    columns and left the right half of the band empty: every column was sized
+    for the longest label in the *whole key*, including the columns holding
+    none of it. Measured per column instead, the long row gets the wide column
+    and the short ones pack into more of them.
+
+    Row-major, because a key is read across before it is read down, so column
+    *j* holds rows *j*, *j+k*, *j+2k* and the widths follow from that rather
+    than from a separate decision.
+
+    The widest grid that fits wins, since more columns is a shallower band.
+    One column is returned even when it does not fit: a single label longer
+    than the plate is a label to shorten, not a layout to solve, and the
+    alternative is returning zero columns and drawing nothing.
+
+    Examples
+    --------
+    Four rows, three of them short, on a band with room for all four:
+
+    >>> rows = [{"label": lab} for lab in ("RSF", "SAF", "JEM", "Rapid Support Forces")]
+    >>> k, xs = _legend_band_pack(rows, 1.0, 1000.0)
+    >>> k, len(xs)
+    (4, 4)
+
+    The columns are not the same width as each other:
+
+    >>> len({round(b - a, 3) for a, b in zip(xs, xs[1:])}) > 1
+    True
+    """
+    sw = 15 * ts
+    gutter = 18 * ts
+    # Measured at the size the band actually draws the label (``row_fs`` is
+    # 12.0 * ts). Counting characters and multiplying by a flat advance put
+    # "SPLM-N (al-Hilu)" and "RSF" in the same column, which is how a label
+    # ends up over its neighbour's swatch.
+    wide = [sw + 10 * ts + text_width(str(r["label"]), 12.0 * ts) + gutter for r in rows]
+    for columns in range(len(rows), 0, -1):
+        widths = [0.0] * columns
+        for i, one in enumerate(wide):
+            widths[i % columns] = max(widths[i % columns], one)
+        if sum(widths) <= avail or columns == 1:
+            offsets: list[float] = []
+            cursor = 0.0
+            for width in widths:
+                offsets.append(cursor)
+                cursor += width
+            return columns, offsets
+    raise AssertionError("unreachable: the loop returns at columns == 1")
+
+
 def _legend_band_dims(
     cfg: dict[str, Any], ts: float, map_w: float
-) -> tuple[float, int, float, float]:
-    """Return ``(band_h, columns, column_w, row_h)`` for a legend below the map.
+) -> tuple[float, int, list[float], float]:
+    """Return ``(band_h, columns, column_offsets, row_h)`` for a legend below the map.
 
     The band is laid out to the width it is given rather than to a fixed card
     size: the rows pack into as many columns as fit, so a wide plate gets one
@@ -6079,22 +6135,14 @@ def _legend_band_dims(
     """
     rows = _legend_rows(cfg, ts)
     if not rows:
-        return 0.0, 0, 0.0, 0.0
+        return 0.0, 0, [], 0.0
     pad = 15 * ts
     row_h = 23 * ts
-    sw = 15 * ts
-    gutter = 18 * ts
-    # The widest row sets the column, measured at the size the band actually
-    # draws it (``row_fs`` below is 12.0 * ts). Counting characters and
-    # multiplying by a flat advance put "SPLM-N (al-Hilu)" and "Russian-
-    # occupied (approx.)" in the same column as "RSF", which is how a label
-    # ends up over its neighbour's swatch.
-    col_w = sw + 10 * ts + max(text_width(r["label"], 12.0 * ts) for r in rows) + gutter
-    columns = max(1, min(len(rows), int((map_w - 2 * pad) // col_w) if col_w else 1))
+    columns, offsets = _legend_band_pack(rows, ts, map_w - 2 * pad)
     band_rows = -(-len(rows) // columns)
     foot_h = 20 * ts if cfg.get("legend_footer") else 0.0
     band_h = pad + 20 * ts + band_rows * row_h + foot_h + pad
-    return band_h, columns, col_w, row_h
+    return band_h, columns, offsets, row_h
 
 
 def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
@@ -6225,7 +6273,7 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
     """
     W, H = vp["width"], vp["height"]
     ts = vp["ts"]
-    band_h, columns, col_w, row_h = _legend_band_dims(cfg, ts, W)
+    band_h, columns, col_x, row_h = _legend_band_dims(cfg, ts, W)
     pad = 15 * ts
     sw = 15 * ts
     row_fs = 12.0 * ts
@@ -6238,7 +6286,7 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
     ]
     top = H + pad + 20 * ts
     for i, row in enumerate(rows):
-        cx = pad + (i % columns) * col_w
+        cx = pad + col_x[i % columns]
         ry = top + (i // columns) * row_h + row_h / 2
         parts.append(_legend_mark(row, cx, ry, sw, ts))
         parts.append(
