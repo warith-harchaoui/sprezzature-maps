@@ -775,6 +775,78 @@ def test_a_below_legend_grows_the_plate_instead_of_covering_the_map() -> None:
     )
 
 
+def _band_cfg(*labels: str, width: int = 900) -> dict[str, Any]:
+    """A plate whose key is a band, with exactly the labels given."""
+    return {
+        "title": "Legend band",
+        "region": {"bbox": [29.0, 11.0, 33.5, 15.5]},
+        "canvas_width": width,
+        "basemap": {"relief": False},
+        "legend_position": "below",
+        "areas_of_control": {
+            "palette": dict.fromkeys(labels, "#c0392b")
+        },
+    }
+
+
+def _band_row_tops(svg: str) -> list[float]:
+    """The distinct baselines the band's rows sit on, top to bottom.
+
+    Filtered by the band's own row size (12.0 units at ts 1.0), which the
+    heading (11.5) and the footer (9.0) do not share, so this counts rows of
+    the key and nothing else.
+    """
+    import re
+
+    legend = svg[svg.index('<g id="legend"') :].split("</g>")[0]
+    ys = re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*font-size="12.0"', legend)
+    return sorted({float(y) for y in ys})
+
+
+def test_a_short_label_does_not_get_the_longest_label_s_column() -> None:
+    """
+    Every column used to be sized for the longest label in the whole key.
+
+    So a key of three short rows and one long one laid "RSF" out in a
+    252-unit column of which it used 46, three times over, and pushed the
+    long row onto a second line it had room for. The band did not fail to
+    fill its width -- it filled it with whitespace, which is the version that
+    reads as broken.
+    """
+    rows = [{"label": label} for label in ("RSF", "SAF", "JEM", "Rapid Support Forces")]
+    _columns, offsets = msm._legend_band_pack(rows, 1.0, 900.0)
+    widths = [b - a for a, b in zip(offsets, offsets[1:], strict=False)]
+    assert len({round(w, 3) for w in widths}) > 1, (
+        f"every column came out the same width: {widths}"
+    )
+
+
+def test_three_short_labels_and_one_long_one_are_one_row() -> None:
+    """The defect at the size it is actually seen: on the plate, not in a tuple."""
+    svg = msm.build_map(_band_cfg("RSF", "SAF", "JEM", "Rapid Support Forces (approximate)"))
+    assert len(_band_row_tops(svg)) == 1
+
+
+def test_a_key_too_wide_for_one_row_still_uses_as_many_rows_as_it_needs() -> None:
+    """Packing tighter must not become packing past the edge."""
+    labels = [f"Sudanese Armed Forces, {n}th division (approximate)" for n in range(1, 7)]
+    svg = msm.build_map(_band_cfg(*labels))
+    assert len(_band_row_tops(svg)) > 1
+
+
+def test_a_label_longer_than_the_whole_band_still_gets_a_column() -> None:
+    """
+    One column is returned even when it does not fit.
+
+    A single label longer than the plate is a label to shorten, not a layout
+    to solve; returning zero columns would draw no key at all and the plate
+    would still look finished.
+    """
+    one = [{"label": "x" * 400}]
+    columns, offsets = msm._legend_band_pack(one, 1.0, 300.0)
+    assert (columns, offsets) == (1, [0.0])
+
+
 def test_an_explicit_position_is_never_overridden_by_width() -> None:
     """``auto`` is opt-in; every plate drawn before it existed must be untouched."""
     for pos in ("bottom-right", "bottom-left", "top-left", "top-right", "right"):
