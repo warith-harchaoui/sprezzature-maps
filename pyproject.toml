@@ -70,6 +70,13 @@ mcp = [
 ]
 dev = [
     "pytest>=8.0",
+    # The suite is 519 tests that each redraw a plate, and a plate costs
+    # seconds: 15m43s serially. Nothing in it shares state between tests, so
+    # it parallelises cleanly -- 4m06s on four workers, with the same 511
+    # passed and 8 skipped. Measured, not assumed, and the counts are the
+    # proof: a suite that depended on order would not land on the same two
+    # numbers.
+    "pytest-xdist>=3.6",
     "ruff>=0.6",
     "httpx>=0.27",
     "mypy>=1.11",

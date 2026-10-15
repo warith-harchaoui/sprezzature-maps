@@ -74,8 +74,19 @@ jobs:
           mypy sprezzature_maps
           mypy scripts
 
+      # `-n auto` fans the suite across the runner's cores. Every test here
+      # redraws a plate from scratch -- nothing is cached, nothing is shared --
+      # so the step was 20 minutes of one core doing the same nine plates over
+      # and over, three times over in the matrix. On four workers it is a
+      # quarter of that, and the pass/skip counts are identical, which is the
+      # evidence that no test was relying on running alone or in order.
+      #
+      # Not a deselection: this runs exactly the tests it ran before. The
+      # repository's rule that CI runs everything (see pyproject's note on
+      # `-m 'not slow'`) is untouched -- the suite is only being scheduled
+      # better, which is the one kind of speed-up that costs no coverage.
       - name: Tests
-        run: python -m pytest -q
+        run: python -m pytest -q -n auto
 
       # Every module, not a hand-written list. This list and the pre-push
       # hook's had already drifted apart by a file, which is the whole

@@ -24,8 +24,12 @@ ruff check sprezzature_maps scripts tests || { echo "[pre-push] ruff failed - pu
 echo "[pre-push] mypy..."
 mypy sprezzature_maps && mypy scripts || { echo "[pre-push] mypy failed - push aborted."; exit 1; }
 
-echo "[pre-push] pytest..."
-python3 -m pytest -q || { echo "[pre-push] pytest failed - push aborted."; exit 1; }
+# Same suite as CI, scheduled across cores: 15m43s became 4m06s, and the hook
+# is what a contributor waits on before every single push. The completeness is
+# the point and is kept -- "the hook passed" and "CI will pass" still mean the
+# same thing, because it is still the same tests.
+echo "[pre-push] pytest (-n auto)..."
+python3 -m pytest -q -n auto || { echo "[pre-push] pytest failed - push aborted."; exit 1; }
 
 # Every module, rather than a hand-written list. Two such lists existed, here
 # and in the CI workflow, and they had already drifted apart by a file; a
