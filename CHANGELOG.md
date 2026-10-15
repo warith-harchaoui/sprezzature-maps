@@ -28,27 +28,31 @@ All notable changes to sprezzature-maps are documented here.
   never shipped.** Its `<text>` asked for `Georgia, 'Times New Roman', serif`
   and a bare `ui-monospace`, while `write_svg` spliced in Roboto and Roboto
   Mono: **427 KB of base64 in a 525 KB file, for families nothing referenced**.
-  The plate therefore rendered in whatever each machine had — which is the same
-  class of defect that turned CI red over the export canary this week.
+  The plate rendered in whatever each reader's machine happened to own — the
+  same class of defect that turned CI red over the export canary this week.
 
-  It now names the suite's three-Roboto stacks, imported from
-  `sprezzature_figures.fonts` rather than retyped, so they cannot drift from
-  the faces actually embedded: `SERIF_STACK` for the title block, `MONO_STACK`
-  for the credit line and the legend. `write_svg` takes a `faces` argument and
-  the plate asks for exactly what it names — `("serif", "mono")`, not the
-  default `("sans", "mono")`. Verified rather than assumed: rendering the
-  italic subtitle against the embedded face and against Georgia gives
-  different bytes, and the plate matches the embedded one.
+  It now titles in `SANS_STACK` and sets its credit line and legend in
+  `MONO_STACK`, both imported from `sprezzature_figures.fonts` rather than
+  retyped, so they cannot drift from the faces embedded. `write_svg` takes a
+  `faces` argument; the plate asks for `("sans", "mono")` and names exactly
+  those two. The choropleth already inherited `_svg.py`'s Roboto default and
+  the situation map already carried its own Roboto constants — density was the
+  only generator drawing in a different voice, and the only one titling in a
+  serif.
 
-  The choropleth already inherited `_svg.py`'s Roboto default and the
-  situation map already carried its own Roboto constants; density was the only
-  generator drawing in a different voice.
+  **Roboto Serif was tried first and reverted, which is the more useful half of
+  this note.** It passed here and failed on CI with `FileNotFoundError:
+  RobotoSerif-Variable.woff2`: `sprezzature-figures` deliberately leaves that
+  family out of its wheel — 12.2 MB of 18.6 MB, documented in its own
+  `pyproject.toml` — while `available_faces()` still lists `serif` among the
+  faces it offers. Locally `sprezzature_figures` resolves to a source checkout
+  that has every font; installed, it does not. A plate that names a family its
+  dependency does not ship is the original defect wearing a better typeface.
 
-  The cost is honest: Roboto Serif is a 2 MB variable font, so the demo goes
-  from 525 KB to 2.2 MB (the situation plate is already 2.0 MB). Subsetting to
-  the glyphs actually drawn is how to keep the self-contained plate and lose
-  the weight; it is not done here. The italic subtitle is a synthesised
-  oblique — embedding `serif_italic` for a true italic would add ~2 MB more.
+  `tests/test_a_plate_embeds_the_fonts_it_names.py` now checks both
+  directions: nothing named without a face behind it, nothing embedded that
+  nothing names, and — the one only CI can fail — every embedded face
+  resolving to a file that exists in the *installed* distribution.
 
 - **The situation map's font stack is deliberately not the canonical one, and
   now says so.** It declares `Roboto, 'Helvetica Neue', Arial, sans-serif`

@@ -85,7 +85,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 from _sidecar import provenance_metadata  # noqa: E402
-from sprezzature_figures.fonts import MONO_STACK, SERIF_STACK  # noqa: E402
+from sprezzature_figures.fonts import MONO_STACK, SANS_STACK  # noqa: E402
 
 #: Bin count along the long axis. 120 is the measured sweet spot: the field
 #: still reads as a field, and the plate lands near 150 KB.
@@ -116,21 +116,24 @@ SUBTLE: str = "#8f9bab"
 # lands, and naming the family is what every other generator here does.
 # Imported, not retyped: `sprezzature_figures.fonts` is where the suite keeps
 # these, and a copy here would drift from the faces actually embedded below.
-_SERIF_FONT: str = SERIF_STACK
+#
+# Sans for the title block, not serif, and the reason is worth keeping. This
+# plate titled in `Georgia, 'Times New Roman', serif` -- the only generator in
+# the package setting a serif, while the choropleth and the situation map both
+# title in Roboto sans. Pointing it at Roboto Serif was tried and reverted:
+# `sprezzature-figures` deliberately leaves that family out of its wheel
+# (12.2 MB of 18.6 MB, and no theme asks for it), so a plate naming it renders
+# from the font the reader happens to own -- which is the defect being fixed,
+# not a fix. Sans is what ships, what the sibling plates use, and what keeps
+# the demo at 525 KB instead of 2.2 MB.
+_TITLE_FONT: str = SANS_STACK
 _MONO_FONT: str = MONO_STACK
 
 #: Exactly the two families this plate names, and no others. Naming a family
 #: you did not embed is how a plate renders differently on every machine that
 #: opens it -- which is what this one did, carrying 427 KB of Roboto and Roboto
-#: Mono while every `<text>` asked for Georgia. Embedding one nobody names is
-#: the same mistake facing the other way: the default set included `sans`, and
-#: no text here is sans, so it was 290 KB of a family the plate never draws.
-#:
-#: Roboto Serif is a 2 MB variable font and that is most of the finished file.
-#: It buys a self-contained plate whose editorial title looks the same
-#: everywhere; subsetting it to the glyphs actually drawn is the way to keep
-#: that and drop the weight, and is not done here.
-_EMBED_FACES: tuple[str, ...] = ("serif", "mono")
+#: Mono while every `<text>` asked for Georgia and a bare `ui-monospace`.
+_EMBED_FACES: tuple[str, ...] = ("sans", "mono")
 
 #: Cells are drawn a fraction wider than their slot. Adjacent rectangles
 #: that merely touch leave a seam of background showing through where the
@@ -470,12 +473,12 @@ def build_svg(
 
     out.append('<g id="title-block">')
     out.append(
-        f'<text x="26" y="44" font-family="{_SERIF_FONT}" '
+        f'<text x="26" y="44" font-family="{_TITLE_FONT}" '
         f'font-size="30" fill="{INK}">{_esc(title)}</text>'
     )
     strap = f"{subtitle} · {region}" if region else subtitle
     out.append(
-        f'<text x="26" y="70" font-family="{_SERIF_FONT}" '
+        f'<text x="26" y="70" font-family="{_TITLE_FONT}" '
         f'font-size="14" font-style="italic" fill="{SUBTLE}">{_esc(strap)}</text>'
     )
     out.append("</g>")
