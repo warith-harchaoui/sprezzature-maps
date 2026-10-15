@@ -1124,6 +1124,7 @@ tooltip rather than implied, so a date known only to the month reads as
 \emph{month of March 2026} rather than as a day.
 
 \subsection{Reading a conflict dataset without upgrading it}
+\label{sec:conflict-datasets}
 \label{sec:conflict-data}
 
 Section~\ref{sec:locational-precision} describes a convention. This one
@@ -1229,6 +1230,7 @@ test caught it. Rendering it and looking at it did, which is not the first
 time in this document that sentence has been true.
 
 \subsection{Aggregating without pretending}
+\label{sec:aggregating}
 \label{sec:aggregate}
 
 Section~\ref{sec:conflict-data} is about refusing a precision the source never
@@ -1361,6 +1363,77 @@ The motivation is the same one behind keeping the worked examples'
 polygons in readable Python rather than an opaque data file: a plate of
 this kind is an argument, and an argument a reader can extract and
 recompute is stronger than one they can only look at.
+
+\subsection{Replaying the plate}
+\label{sec:replay}
+
+Section~\ref{sec:plate-readback} makes the claim on the plate recomputable.
+This one makes the \emph{plate} checkable, which is a different question and
+the one a referee asks: not \emph{what does this figure assert}, but
+\emph{is this the figure these inputs produce}.
+
+The chrome does not answer it. \texttt{method}, \texttt{source} and
+\texttt{as\_of} are prose written for a reader, and prose is not a handle:
+``ACLED, retrieved March 2024'' names a dataset that is revised weekly and a
+month that contains four revisions of it. W3C's provenance data model
+\parencite{prov-dm} defines provenance as information about the entities,
+activities and people involved in producing a thing, usable to assess its
+reliability; a caption is the first of those three and none of the rest.
+
+The drawing here is a function of exactly three things --- the code, the
+config, and the file a loader read on the way in --- which is also the list
+Sandve et al.\ arrive at from the other direction \parencite{sandve-reproducible}:
+of their ten rules, \emph{keep track of how every result was produced},
+\emph{archive the exact versions used} and \emph{store the raw data behind
+plots} are the three a published figure most often fails. So an optional
+\texttt{<metadata>} element fingerprints all three, and a mismatch later
+names \emph{which one moved} rather than leaving a referee to guess.
+
+Three decisions in that element are each the opposite of the obvious one,
+and each is forced by something this document has already argued elsewhere.
+
+\paragraph{Digests, not the inputs.} Embedding the config would make the file
+self-describing, and would also publish it. An \texttt{areas\_of\_control}
+config carries coordinates, and \S\ref{sec:aggregating} is the argument that
+coordinates in a humanitarian setting are the hazard rather than the payload
+\parencite{ocha-data-responsibility}; a \texttt{source} field carries a path that
+names somebody's machine. A digest publishes neither and still lets anyone
+holding the inputs prove the match --- which is the only direction that
+matters, since a referee arrives holding the inputs and asking about the
+figure. Only basenames are recorded, never directories, for the same reason.
+
+\paragraph{No clock.} A render timestamp is the field every such format
+carries and it would destroy the property this one exists to record: two
+renders of the same inputs would differ, and the referee comparing them would
+be told, correctly in bytes and falsely in substance, that they do not match.
+
+\paragraph{Opt-in.} Not because it costs pixels --- rasterised, a stamped
+plate is byte-identical to the unstamped one, which is checked rather than
+asserted --- but because it carries the package version, so a stamp on by
+default would change every committed plate at every release.
+
+The loaders of \S\ref{sec:conflict-datasets} are a special case worth
+stating, because the obvious implementation of it is wrong. By the time the
+generator sees the config, the rows are inline and the path is gone: the
+config's own digest covers those rows exactly, and so proves that the plate
+matches the config while saying nothing about \emph{which export the config
+came from}. The loader is the last point in the chain that knows, so it
+records the file --- and records it under a private key rather than switching
+the stamp on, since the documented integration is
+\texttt{cfg.update(acled\_events(\ldots))} and a fragment writing the stamp's
+own key would silently overrule a caller who had already declined it.
+
+Reading it back is deliberately unforgiving in one place. A report says a
+plate replays only when everything the stamp names was checked \emph{and}
+matched; an input nobody supplied is returned as unchecked, not as agreement.
+Nothing in the plate can go looking for that file --- it kept a basename and
+a digest --- so a caller who supplied nothing has checked nothing, and a
+plate whose inputs nobody produced is \emph{unrefuted}, which is not
+\emph{reproduced}. A plate carrying no stamp at all raises rather than
+reporting a match, for the same reason the symbology of
+\S\ref{sec:locational-precision} refuses to draw an unknown precision as an
+exact one: silence paraphrased as agreement is the failure this whole
+document is organised against.
 
 \subsection{The reader who cannot see it}
 \label{sec:non-visual}

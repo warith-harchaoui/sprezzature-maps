@@ -27,7 +27,19 @@ mypy sprezzature_maps && mypy scripts || { echo "[pre-push] mypy failed - push a
 echo "[pre-push] pytest..."
 python3 -m pytest -q || { echo "[pre-push] pytest failed - push aborted."; exit 1; }
 
+# Every module, rather than a hand-written list. Two such lists existed, here
+# and in the CI workflow, and they had already drifted apart by a file; a
+# module whose doctests nobody runs is a worked example nobody checks.
+#
+# The loop is written out rather than piped into `|| { ... }`: that form takes
+# the exit status of the *last* iteration, and `set -e` is suppressed on the
+# left of `||`, so a failure in any file but the last one passed silently.
 echo "[pre-push] doctests..."
-for f in scripts/_geo_colors.py scripts/_relief.py scripts/_svg.py scripts/_render.py scripts/_interactive.py scripts/make_choropleth.py scripts/make_situation_map.py; do python3 -m doctest "$f"; done || { echo "[pre-push] doctests failed - push aborted."; exit 1; }
+for f in scripts/*.py; do
+  if ! python3 -m doctest "$f"; then
+    echo "[pre-push] doctests failed in $f - push aborted."
+    exit 1
+  fi
+done
 
 echo "[pre-push] all green - pushing."

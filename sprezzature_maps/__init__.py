@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 
 # In the source tree the generators live in scripts/; once installed they
 # ship (collision-free) as the sibling package sprezzature_maps_scripts/,
@@ -143,11 +143,66 @@ def article_sidecar(svg: str) -> dict[str, Any]:
     return _load_script("_sidecar").article_sidecar(svg)
 
 
+def plate_provenance(svg: str) -> dict[str, Any]:
+    """Return the provenance stamp a finished plate carries, if any.
+
+    Parameters
+    ----------
+    svg : str
+        A finished plate.
+
+    Returns
+    -------
+    dict
+        ``generator``, ``version``, ``config_sha256`` and ``inputs``
+        (``{name, sha256, bytes}`` per file). Empty for a plate rendered
+        without ``provenance``, which is the default.
+    """
+    return _load_script("_sidecar").plate_provenance(svg)
+
+
+def replay_report(svg: str, cfg: Any, files: Any = ()) -> dict[str, Any]:
+    """Say whether a config and a set of files are what drew a plate.
+
+    The question a reviewer asks of a published figure and that no caption
+    can settle. The plate's stamp holds a digest of the code, of the config
+    and of each file a loader read; this compares them against what is in
+    front of you and names whichever one moved.
+
+    Parameters
+    ----------
+    svg : str
+        A plate carrying a provenance stamp.
+    cfg : dict
+        The config believed to have produced it.
+    files : iterable of path, optional
+        The files believed to have fed it. They have to be handed over: the
+        stamp keeps basenames and digests, never directories.
+
+    Returns
+    -------
+    dict
+        ``replays``, ``differences``, ``unchecked`` and ``provenance``.
+        ``replays`` is true only when everything the stamp names was
+        checked and matched -- a stamped input nobody supplied leaves the
+        plate unrefuted, not reproduced.
+
+    Raises
+    ------
+    ValueError
+        If the plate carries no stamp, since answering at all would mean
+        answering about nothing.
+    """
+    return _load_script("_sidecar").replay_report(svg, cfg, files)
+
+
 __all__ = [
     "acled_events",
     "article_sidecar",
     "make_choropleth",
     "make_density",
     "make_situation_map",
+    "plate_provenance",
+    "replay_report",
     "ucdp_events",
 ]

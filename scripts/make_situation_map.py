@@ -209,6 +209,15 @@ Chrome and provenance
     ``"none"`` (default) or ``"full"``, a provenance block on the plate.
 ``method``, ``source``, ``as_of``
     The three lines a ``caption: full`` prints.
+``provenance``
+    Off by default. ``true`` stamps the file (not the drawing: it goes in
+    ``<metadata>`` and occupies no pixels) with the package version and a
+    digest of this config, so a reviewer holding both can check that this
+    picture is the one they produce. An export a loader dissolved into
+    ``events`` is recorded too, without the config having to name it again.
+    A mapping may add ``inputs``, a list of any further files that fed the
+    plate. Only basenames and digests are kept, never a directory. Read
+    back with ``sprezzature_maps.plate_provenance`` / ``replay_report``.
 ``attribution``
     Extra credit lines, appended to any the generator adds itself.
 
@@ -253,6 +262,7 @@ from _relief import (
     terrain_shade_for_bbox,
 )
 from _render import svg_example_path, write_svg
+from _sidecar import provenance_metadata
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
 from _textbox import box_inside, boxes_overlap, text_box, text_width
 from _topojson import decode_arcs, stitch_ring
@@ -3078,6 +3088,11 @@ def build_map(cfg: dict[str, Any]) -> str:
         f'role="{role}" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
+        # Zero pixels, and the empty string unless the config asked, so a
+        # plate that did not opt in comes out byte-for-byte as it did
+        # before. The caption below says what the plate was drawn from, in
+        # prose, for a reader; this says it in digests, for a check.
+        f"{provenance_metadata(cfg, cfg.get('_config_dir'))}"
         f"{svg_defs(hatch, _plate_patterns(cfg))[:-7]}{clip}</defs>"
         # Hover-info bubbles for areas-of-control zones and forces/events
         # markers: same .hit/.tip convention as case-studies/financial-markets
@@ -6559,6 +6574,12 @@ def build_small_multiples(cfg: dict[str, Any]) -> str:
         panel.pop("subtitle", None)
         panel.pop("print_width", None)
         panel["caption"] = "none"
+        # The sheet is one figure and carries one stamp, written below from
+        # this same config. Letting the panels inherit it would define
+        # ``id="provenance"`` once per panel and repeat every input record,
+        # so a reader of the finished sheet would count eight ACLED exports
+        # where there is one.
+        panel["provenance"] = False
         # Explicit, not inherited: "right" grows the plate a legend column and
         # "below" grows it a band, and a panel whose legend is empty would get
         # the room anyway. "auto" resolves to "below" at a panel's width, so
@@ -6755,6 +6776,9 @@ def _sm_sheet(
         f'{size} role="graphics-document" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
+        # The sheet's stamp, from the sheet's own config -- the one that
+        # replays it. The panels were built with theirs switched off.
+        f"{provenance_metadata(cfg, cfg.get('_config_dir'))}"
         f"{svg_defs(hatch, _plate_patterns(sheet))}"
         f'<rect width="{width:.1f}" height="{height:.1f}" fill="{page_color}"/>'
         f"{''.join(cells)}{''.join(chrome)}"
@@ -6783,12 +6807,12 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
-    "legend_title", "print_width", "small_multiples",
+    "legend_title", "print_width", "small_multiples", "provenance",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
 _INTERNAL_KEYS: frozenset[str] = frozenset(
-    {"_config_dir", "_panel", "_plate", "_relief_cache", "_relief_tone"}
+    {"_config_dir", "_panel", "_plate", "_relief_cache", "_relief_tone", "_source_file"}
 )
 
 
@@ -6945,6 +6969,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
         "show", "color", "edge_color", "skip", "former", "historic", "always_label",
         "label_color", "label_min_area_frac", "depth_rings",
     }),
+    "provenance": frozenset({"inputs"}),
     "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
     "rivers": frozenset({
         "show", "width", "color", "skip", "always_label", "label_color",

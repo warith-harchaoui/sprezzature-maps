@@ -136,6 +136,47 @@ vendored atlases and importing — paid once per process, so a server renders
 its second plate faster than its first — and the rest is real geometry.
 `basemap: {relief: false}` removes the terrain cost if you do not need it.
 
+### Proving which inputs drew a plate
+
+A plate already prints `method`, `source` and `as_of` — what it was drawn
+from, in prose, for a reader. None of that answers the question review
+actually asks of a published figure: *is this the picture these inputs
+produce?* The drawing is a function of three things — the code, the config,
+and the file a loader read on the way in — so `provenance` fingerprints each
+of them into `<metadata>`, which draws no pixels:
+
+```python
+cfg = {"title": "Recorded political violence", "provenance": True}
+cfg.update(acled_events("export.csv", derive_region=True))
+make_situation_map(config=cfg, out="plate.svg")
+```
+
+```python
+from sprezzature_maps import plate_provenance, replay_report
+
+plate_provenance(svg)   # {"version", "config_sha256", "inputs": [...]}
+
+report = replay_report(svg, cfg, ["export.csv"])
+report["replays"]       # True only if everything the stamp names matched
+report["differences"]   # ["export.csv differs: 3f2a91c0d4e8 on the plate, …"]
+```
+
+Three things about that stamp are each the opposite of the obvious choice.
+**It records digests, not the inputs**: an `areas_of_control` config carries
+coordinates and a `source` carries a path that names somebody's machine, so
+embedding either would publish it, while a digest publishes nothing and still
+lets anyone holding the inputs prove the match. **It carries no clock**, since
+a render time would make two renders of the same inputs differ and so destroy
+the property the field exists to record. And **it is off by default**, because
+it carries the package version: switching it on for everyone would change
+every committed plate at every release.
+
+A stamped input nobody hands over comes back under `unchecked`, not as a
+match — the plate is then unrefuted, which is not the same as reproduced. The
+conflict loaders fill the input list for you: by the time `make_situation_map`
+sees the config the rows are inline and the CSV is gone, and the loader is the
+only point in the chain that still knows which export it was.
+
 See [`EXAMPLES.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/EXAMPLES.md) for more recipes, including the HTTP API.
 See [`doc/CARTOGRAPHY.tex`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/doc/CARTOGRAPHY.tex) for the full method
 behind every projection, colour scale, and relief (shaded-terrain)

@@ -71,6 +71,7 @@ from _relief import (  # noqa: E402
     terrain_shade_for_bbox,
 )
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
+from _sidecar import provenance_metadata  # noqa: E402
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
 from _topojson import decode_arcs, stitch_ring  # noqa: E402
@@ -583,6 +584,7 @@ def build_svg(
     cities: bool = True,
     rivers: bool = True,
     simplify: float = DEFAULT_TOLERANCE,
+    provenance: bool = False,
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -623,12 +625,27 @@ def build_svg(
         faster render in a tight test loop, since the reprojection is the
         one part of this generator that costs more than a few
         milliseconds.
+    provenance : bool, optional
+        Stamp the file -- not the drawing; it goes in ``<metadata>`` and
+        occupies no pixels -- with the package version and a digest of this
+        call's arguments, so a reviewer holding both can check that this
+        picture is the one they produce. Off by default: the stamp carries
+        the version, so switching it on by default would change every
+        committed plate at every release. Read back with
+        ``sprezzature_maps.plate_provenance`` / ``replay_report``.
 
     Returns
     -------
     str
         A complete, standalone SVG document.
     """
+    # The arguments exactly as called, captured before anything shadows them:
+    # this is the digested "config" for a generator that takes keywords
+    # rather than a config dict. ``locals()`` and not a hand-written dict,
+    # deliberately -- a hand-written one forgets the parameter added next
+    # year, and a digest that silently ignores an argument is worse than no
+    # digest, because it reports a match for two different pictures.
+    _call = dict(locals())
     _ = accessibility
     # ``None`` means "I did not bring data, show me the demo", and the
     # subtitle below says so on the plate. An **empty list** means something
@@ -833,6 +850,12 @@ def build_svg(
     parts: list[str] = []
     parts.append(svg_open(width, height, "cx-title", "cx-desc"))
     parts.append(f'<title id="cx-title">{xml_escape(title)}</title>')
+    # Appended only when there is something to append: these parts are
+    # joined with newlines, so an empty element would leave a blank line in
+    # every plate that did not ask for a stamp.
+    stamp = provenance_metadata({**_call, "provenance": provenance})
+    if stamp:
+        parts.append(stamp)
     n_with_data = len(values_by_id)
     parts.append(
         f'<desc id="cx-desc">Choropleth map, {n_with_data} countries with data ranging '
@@ -1171,6 +1194,7 @@ def make_choropleth(
     cities: bool = True,
     rivers: bool = True,
     simplify: float = DEFAULT_TOLERANCE,
+    provenance: bool = False,
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -1189,7 +1213,7 @@ def make_choropleth(
         picks demo-appropriate vs. neutral wording depending on *data*.
     width, height : int
         Canvas size in pixels.
-    mode, accessibility, diverging, relief, simplify
+    mode, accessibility, diverging, relief, simplify, provenance
         Forwarded to :func:`build_svg`.
 
     Returns
@@ -1220,6 +1244,7 @@ def make_choropleth(
         cities=cities,
         rivers=rivers,
         simplify=simplify,
+        provenance=provenance,
     )
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)
