@@ -379,6 +379,12 @@ not — "Ukrainian government control covers the largest mapped share, 81%",
 computed from what was drawn rather than asserted, and spoken as *"is
 claimed to cover"* when the largest share is only a claim.
 
+**And it has to leave as vector.** `--out figure-1.pdf` (or `.eps`) writes a
+drawn page at exactly the width `print_width` asked for, via `rsvg-convert`
+from librsvg — an optional system package. Without it you still get a page at
+the right size, plus a warning that it is a raster, because a raster PDF
+satisfies the extension and nothing a journal wants.
+
 **It has to be light enough to ship.** Geometry is thinned to the render's
 own resolution after projection (`simplify: 0` switches it off), and the
 shaded-relief raster is written as an exact indexed palette rather than

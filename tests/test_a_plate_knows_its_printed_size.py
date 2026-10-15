@@ -118,14 +118,31 @@ def test_the_drawing_is_untouched_by_the_print_width() -> None:
 
     If setting it moved a coastline or resized a label, "build at the printed
     size" would mean rebuilding the plate, which is the opposite of the point.
+    That still holds: the geometry is identical, byte for byte.
+
+    The one deliberate exception is the drop shadow, and it is spelled out here
+    rather than waived. An SVG filter is the single construct a vector exporter
+    cannot express -- it rasterises the region the filter covers -- and the cost
+    is per *mark*, not per plate, because every marker carries one. So a plate
+    that declares a print width drops the shadow: paper has no hover state and
+    nothing floats on it, so the shadow buys nothing there and costs embedded
+    bitmaps inside a format the journal asked for precisely because it has none.
+
+    Asserting the exception exactly, rather than loosening the comparison, is
+    what keeps this test a guard: if the print path ever moves a coastline, the
+    equality below still fails.
     """
     plain = msm.build_map(_plain_cfg())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         printed = msm.build_map(_plain_cfg(print_width="90mm"))
     assert ET.fromstring(plain).get("viewBox") == ET.fromstring(printed).get("viewBox")
-    # Same drawing, byte for byte, once the root tag is set aside.
-    assert plain[plain.index(">") :] == printed[printed.index(">") :]
+    # Same drawing, byte for byte, once the root tag and that one attribute
+    # are set aside. The shadow is screen chrome; everything else is the map.
+    shadow = ' filter="url(#panel-shadow)"'
+    assert shadow in plain, "the screen plate should still carry its shadow"
+    assert shadow not in printed, "a plate bound for paper should have dropped it"
+    assert plain[plain.index(">") :].replace(shadow, "") == printed[printed.index(">") :]
 
 
 def test_the_aspect_ratio_survives_the_conversion() -> None:
