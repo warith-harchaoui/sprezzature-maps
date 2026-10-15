@@ -24,6 +24,44 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Changed
 
+- **The density plate embedded two fonts it never named and drew in a third it
+  never shipped.** Its `<text>` asked for `Georgia, 'Times New Roman', serif`
+  and a bare `ui-monospace`, while `write_svg` spliced in Roboto and Roboto
+  Mono: **427 KB of base64 in a 525 KB file, for families nothing referenced**.
+  The plate therefore rendered in whatever each machine had — which is the same
+  class of defect that turned CI red over the export canary this week.
+
+  It now names the suite's three-Roboto stacks, imported from
+  `sprezzature_figures.fonts` rather than retyped, so they cannot drift from
+  the faces actually embedded: `SERIF_STACK` for the title block, `MONO_STACK`
+  for the credit line and the legend. `write_svg` takes a `faces` argument and
+  the plate asks for exactly what it names — `("serif", "mono")`, not the
+  default `("sans", "mono")`. Verified rather than assumed: rendering the
+  italic subtitle against the embedded face and against Georgia gives
+  different bytes, and the plate matches the embedded one.
+
+  The choropleth already inherited `_svg.py`'s Roboto default and the
+  situation map already carried its own Roboto constants; density was the only
+  generator drawing in a different voice.
+
+  The cost is honest: Roboto Serif is a 2 MB variable font, so the demo goes
+  from 525 KB to 2.2 MB (the situation plate is already 2.0 MB). Subsetting to
+  the glyphs actually drawn is how to keep the self-contained plate and lose
+  the weight; it is not done here. The italic subtitle is a synthesised
+  oblique — embedding `serif_italic` for a true italic would add ~2 MB more.
+
+- **The situation map's font stack is deliberately not the canonical one, and
+  now says so.** It declares `Roboto, 'Helvetica Neue', Arial, sans-serif`
+  where the rest of the suite uses `Roboto, system-ui, sans-serif`, and that is
+  load-bearing: `_textbox.ADVANCE` is the *maximum* per-character advance
+  measured across exactly the six faces that stack can reach. `system-ui`
+  resolves to faces the table never measured, so swapping it in would quietly
+  weaken every "may this label be drawn here" check. Left alone on purpose.
+
+- **The export canary is drawn the way a place name is drawn.** It asked for
+  `Helvetica, sans-serif`, a typeface this project never sets. It now names
+  the same stack the plates do.
+
 - **The pre-push suite runs on all cores: 15m43s to 2m32s**, with the same 511
   passed and 8 skipped. Every test here redraws a plate from scratch and a
   plate costs four to twelve seconds, so the run was one core doing the same

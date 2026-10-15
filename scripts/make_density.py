@@ -85,6 +85,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 from _sidecar import provenance_metadata  # noqa: E402
+from sprezzature_figures.fonts import MONO_STACK, SERIF_STACK  # noqa: E402
 
 #: Bin count along the long axis. 120 is the measured sweet spot: the field
 #: still reads as a field, and the plate lands near 150 KB.
@@ -103,6 +104,33 @@ RAMP: tuple[str, ...] = (
 PLATE: str = "#050a16"
 INK: str = "#eef2f7"
 SUBTLE: str = "#8f9bab"
+
+# The three-Roboto rule, the same one the rest of the suite follows: Roboto for
+# sans, Roboto Serif for serif, Roboto Mono for monospace, each with a system
+# fallback stack behind it. This plate was the only generator in the package
+# still naming Georgia and a bare `ui-monospace` -- the choropleth inherits
+# `_svg.py`'s Roboto default and the situation map carries its own Roboto
+# constants, so the density plate was the one drawing in a different voice.
+#
+# Fallbacks rather than an embedded font: an SVG plate is read wherever it
+# lands, and naming the family is what every other generator here does.
+# Imported, not retyped: `sprezzature_figures.fonts` is where the suite keeps
+# these, and a copy here would drift from the faces actually embedded below.
+_SERIF_FONT: str = SERIF_STACK
+_MONO_FONT: str = MONO_STACK
+
+#: Exactly the two families this plate names, and no others. Naming a family
+#: you did not embed is how a plate renders differently on every machine that
+#: opens it -- which is what this one did, carrying 427 KB of Roboto and Roboto
+#: Mono while every `<text>` asked for Georgia. Embedding one nobody names is
+#: the same mistake facing the other way: the default set included `sans`, and
+#: no text here is sans, so it was 290 KB of a family the plate never draws.
+#:
+#: Roboto Serif is a 2 MB variable font and that is most of the finished file.
+#: It buys a self-contained plate whose editorial title looks the same
+#: everywhere; subsetting it to the glyphs actually drawn is the way to keep
+#: that and drop the weight, and is not done here.
+_EMBED_FACES: tuple[str, ...] = ("serif", "mono")
 
 #: Cells are drawn a fraction wider than their slot. Adjacent rectangles
 #: that merely touch leave a seam of background showing through where the
@@ -442,12 +470,12 @@ def build_svg(
 
     out.append('<g id="title-block">')
     out.append(
-        f'<text x="26" y="44" font-family="Georgia, \'Times New Roman\', serif" '
+        f'<text x="26" y="44" font-family="{_SERIF_FONT}" '
         f'font-size="30" fill="{INK}">{_esc(title)}</text>'
     )
     strap = f"{subtitle} · {region}" if region else subtitle
     out.append(
-        f'<text x="26" y="70" font-family="Georgia, \'Times New Roman\', serif" '
+        f'<text x="26" y="70" font-family="{_SERIF_FONT}" '
         f'font-size="14" font-style="italic" fill="{SUBTLE}">{_esc(strap)}</text>'
     )
     out.append("</g>")
@@ -457,7 +485,7 @@ def build_svg(
     out.append("</g>")
     out.append('<g id="caption">')
     out.append(
-        f'<text x="26" y="{plate_h - 22:.0f}" font-family="ui-monospace, monospace" '
+        f'<text x="26" y="{plate_h - 22:.0f}" font-family="{_MONO_FONT}" '
         f'font-size="9" fill="{SUBTLE}" letter-spacing="0.6">{_esc(caption)}</text>'
     )
     out.append("</g>")
@@ -566,7 +594,7 @@ def _ramp_legend(x: float, y: float, peak: str, unit: str) -> list[str]:
             f'fill="{colour}"/>'
         )
     parts.append(
-        f'<text x="{x:.0f}" y="{y + 2:.0f}" font-family="ui-monospace, monospace" '
+        f'<text x="{x:.0f}" y="{y + 2:.0f}" font-family="{_MONO_FONT}" '
         f'font-size="9" fill="{SUBTLE}">fewer → more (peak {peak} per {unit})</text>'
     )
     return parts
@@ -645,7 +673,7 @@ def make_density(
         provenance=provenance,
     )
     dest = Path(out) if out else svg_example_path(__file__, "density")
-    return write_svg(dest, svg)
+    return write_svg(dest, svg, faces=_EMBED_FACES)
 
 
 def main() -> None:

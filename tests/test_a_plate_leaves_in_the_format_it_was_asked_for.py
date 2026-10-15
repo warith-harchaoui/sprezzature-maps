@@ -345,10 +345,10 @@ _HALO_CANARY = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" '
     'width="400" height="120">'
     '<rect width="400" height="120" fill="#f7f3e3"/>'
-    '<text x="200" y="50" text-anchor="middle" font-family="Helvetica, sans-serif" '
+    '<text x="200" y="50" text-anchor="middle" font-family="Roboto, \'Helvetica Neue\', Arial, sans-serif" '
     'font-size="26" font-weight="600" fill="#1a1a1a" paint-order="stroke" '
     'stroke="#ffffff" stroke-width="7.3">AL-UBAYYID</text>'
-    '<text x="200" y="95" text-anchor="middle" font-family="Helvetica, sans-serif" '
+    '<text x="200" y="95" text-anchor="middle" font-family="Roboto, \'Helvetica Neue\', Arial, sans-serif" '
     'font-size="26" font-weight="600" fill="#1a1a1a" paint-order="stroke" '
     'stroke="#ffffff" stroke-width="7.3">WHITE NILE</text>'
     "</svg>"
@@ -422,10 +422,16 @@ def test_the_exported_page_still_carries_the_words(tmp_path: Path) -> None:
     house rasteriser, and that is the whole design. The first version did
     compare the two (``_pdf_ink(...) == approx(_house_ink(...), rel=0.3)``)
     and it was wrong in a way that only showed up off this laptop: the canary
-    asks for ``Helvetica, sans-serif``, macOS has Helvetica and Ubuntu does
+    asked for ``Helvetica, sans-serif``, macOS has Helvetica and Ubuntu does
     not, so on CI librsvg fell back to DejaVu -- wider and heavier -- while
     resvg resolved its own fallback. Same drawing, two font stacks, 39% more
     ink, and a red build about fontconfig rather than about paint-order.
+
+    The canary now names the stack a place name actually uses
+    (``make_situation_map._DEFAULT_FONT``) rather than a typeface this project
+    never draws with. That does not fix the cross-platform problem on its own
+    -- Roboto is no likelier to exist on a runner than Helvetica -- but a
+    canary should be drawn the way the thing it stands for is drawn.
 
     So the measurement is taken twice through the *same* converter, on the
     same machine, with the same fonts: once as the canary is drawn, once with

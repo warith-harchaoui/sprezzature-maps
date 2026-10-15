@@ -131,7 +131,13 @@ def svg_example_path(script_file: str, figure_id: str) -> Path:
     )
 
 
-def write_svg(out: Path, svg: str, *, embed_fonts: bool = True) -> Path:
+def write_svg(
+    out: Path,
+    svg: str,
+    *,
+    embed_fonts: bool = True,
+    faces: tuple[str, ...] | None = None,
+) -> Path:
     """Write ``svg`` to ``out`` (creating parents) and echo ``wrote <out>``.
 
     This is the identical three-line tail every generator carried: ensure the
@@ -159,6 +165,11 @@ def write_svg(out: Path, svg: str, *, embed_fonts: bool = True) -> Path:
         Splice in the embedded font block if the document doesn't already
         have one (default ``True``). Pass ``False`` to skip (e.g. a caller
         writing a non-SVG file that happens to reuse this helper).
+    faces : tuple of str, optional
+        Which font faces to embed, from ``sprezzature_figures.fonts``'s
+        ``available_faces()``. Defaults to that module's ``DEFAULT_SVG_FACES``
+        (``sans`` + ``mono``). Pass the full set when the plate draws serif
+        text, so the family it names is the family it carries.
 
     Returns
     -------
@@ -173,9 +184,15 @@ def write_svg(out: Path, svg: str, *, embed_fonts: bool = True) -> Path:
     if embed_fonts and "@font-face" not in svg and svg.lstrip().startswith("<svg"):
         from sprezzature_figures.fonts import DEFAULT_SVG_FACES, svg_font_defs
 
-        if DEFAULT_SVG_FACES:
+        # The default pair is sans + mono. A plate that sets a *serif* in its
+        # text has to say so, or it embeds two families it never names and
+        # draws in a third one it never shipped -- which is exactly what the
+        # density plate did: 427 KB of Roboto and Roboto Mono base64 in a
+        # 525 KB file, while every `<text>` asked for Georgia.
+        wanted = faces if faces is not None else DEFAULT_SVG_FACES
+        if wanted:
             insert_at = svg.index(">") + 1
-            svg = svg[:insert_at] + svg_font_defs(DEFAULT_SVG_FACES) + svg[insert_at:]
+            svg = svg[:insert_at] + svg_font_defs(tuple(wanted)) + svg[insert_at:]
     # ``parents=True`` mirrors the inline ``mkdir(parents=True, exist_ok=True)``
     # so a fresh checkout (no assets/ yet) still succeeds.
     out.parent.mkdir(parents=True, exist_ok=True)
