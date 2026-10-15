@@ -24,10 +24,15 @@ ruff check sprezzature_maps scripts tests || { echo "[pre-push] ruff failed - pu
 echo "[pre-push] mypy..."
 mypy sprezzature_maps && mypy scripts || { echo "[pre-push] mypy failed - push aborted."; exit 1; }
 
-# Same suite as CI, scheduled across cores: 15m43s became 4m06s, and the hook
-# is what a contributor waits on before every single push. The completeness is
-# the point and is kept -- "the hook passed" and "CI will pass" still mean the
-# same thing, because it is still the same tests.
+# Same suite as CI, scheduled across cores: 15m43s became 2m32s here, and the
+# hook is what a contributor waits on before every single push. Completeness is
+# kept -- "the hook passed" and "CI will pass" still mean the same thing,
+# because it is still the same tests, only scheduled differently.
+#
+# CI itself runs this serially and must: one worker needs ~9.5 GB (see the
+# comment in .github/workflows/ci.yml) and a runner has 16 GB, so `-n auto`
+# there was OOM-killed. A laptop has the memory for it; a runner does not.
+# If this line ever OOMs on a smaller machine, drop to `-n 2` or remove it.
 echo "[pre-push] pytest (-n auto)..."
 python3 -m pytest -q -n auto || { echo "[pre-push] pytest failed - push aborted."; exit 1; }
 

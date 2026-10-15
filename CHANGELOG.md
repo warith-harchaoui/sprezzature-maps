@@ -24,18 +24,31 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Changed
 
-- **The suite runs on all cores: 15m43s to 4m06s** (2m32s on twelve), with the
-  same 511 passed and 8 skipped. Every test here redraws a plate from scratch
-  and a plate costs four to twelve seconds, so the run was one core doing the
-  same nine plates a hundred times -- then doing it twice more across the
-  matrix. `pytest-xdist` is now a dev dependency and both CI and the pre-push
-  hook pass `-n auto`.
+- **The pre-push suite runs on all cores: 15m43s to 2m32s**, with the same 511
+  passed and 8 skipped. Every test here redraws a plate from scratch and a
+  plate costs four to twelve seconds, so the run was one core doing the same
+  nine plates a hundred times. `pytest-xdist` is now a dev dependency and the
+  hook passes `-n auto`.
 
-  This deselects nothing. It is the same tests, scheduled better, which is the
-  only kind of speed-up that costs no coverage -- the rule in `pyproject.toml`
-  about never defaulting to `-m 'not slow'` stands untouched. The identical
-  pass and skip counts are the evidence that nothing depended on running alone
-  or in a particular order.
+  This deselects nothing. Same tests, scheduled better -- the only kind of
+  speed-up that costs no coverage, and the rule in `pyproject.toml` about
+  never defaulting to `-m 'not slow'` stands untouched. The identical pass and
+  skip counts are the evidence that nothing depended on running alone or in
+  order.
+
+- **CI stays serial, and the reason is worth writing down so nobody retries
+  it.** `-n auto` was put in CI first and the runner killed the job at 27%
+  with exit code 143 -- SIGTERM, the OOM killer. Measured afterwards instead
+  of guessed: a single process peaks at about **9.5 GB** within its first four
+  renders and then stays flat. Not a leak, a working set -- the vectorised
+  inverse Equal Earth projection runs Newton-Raphson over the whole pixel grid
+  at once, with the elevation rasters alongside it.
+
+  A standard runner has 16 GB. One worker fits with room; two would want
+  ~19 GB. There is no worker count between "serial" and "over the limit", so
+  parallel CI is not a knob to tune here -- it is blocked on that 9.5 GB. The
+  way to unlock it is to chunk that projection, which would make the serial
+  run cheaper too.
 
 ## [0.18.0] - 2026-10-15: a page a journal can actually use
 
