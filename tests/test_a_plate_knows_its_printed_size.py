@@ -183,8 +183,16 @@ def test_the_warning_names_the_canvas_width_that_would_fix_it() -> None:
     cfg["print_width"] = "90mm"
     with pytest.warns(RuntimeWarning) as caught:
         msm.build_map(cfg)
-    message = str(caught[0].message)
-    assert "canvas_width around" in message
+    # Selected, not indexed. `caught[0]` assumed this test's warning was the
+    # only one the render raised, and it is not the render's business how many
+    # it raises: a newer shapely than the one installed here deprecates
+    # `shapely.ops.transform` and takes that slot, so the suite passed locally
+    # and failed in CI over a dependency's release notes rather than over
+    # print widths. One test, one warning, found by what it says.
+    raised = [str(warning.message) for warning in caught]
+    wanted = [line for line in raised if "canvas_width around" in line]
+    assert wanted, f"no print-width warning among {raised}"
+    message = wanted[0]
     wanted = float(re.search(r"canvas_width around (\d+)", message).group(1))
     # Re-derive it: at that canvas the same label really does reach the floor.
     units = float(re.search(r"label is\s+([\d.]+) units", message).group(1))
