@@ -74,19 +74,24 @@ jobs:
           mypy sprezzature_maps
           mypy scripts
 
-      # `-n auto` fans the suite across the runner's cores. Every test here
-      # redraws a plate from scratch -- nothing is cached, nothing is shared --
-      # so the step was 20 minutes of one core doing the same nine plates over
-      # and over, three times over in the matrix. On four workers it is a
-      # quarter of that, and the pass/skip counts are identical, which is the
-      # evidence that no test was relying on running alone or in order.
+      # Serial, and it has to be. `-n auto` was tried here and the runner
+      # killed the job at 27% with exit code 143 -- SIGTERM, the OOM killer.
       #
-      # Not a deselection: this runs exactly the tests it ran before. The
-      # repository's rule that CI runs everything (see pyproject's note on
-      # `-m 'not slow'`) is untouched -- the suite is only being scheduled
-      # better, which is the one kind of speed-up that costs no coverage.
+      # Measured afterwards rather than guessed: one process peaks at about
+      # **9.5 GB** within its first four renders and then stays flat. It is
+      # not a leak, it is the working set -- the vectorised inverse Equal
+      # Earth projection solves Newton-Raphson over the whole pixel grid at
+      # once, and the elevation rasters sit alongside it. A standard runner
+      # has 16 GB, so one worker fits with room and *two* would need ~19 GB.
+      # There is no worker count between "serial" and "over the limit".
+      #
+      # So this is not a knob to retry. Parallelism here is blocked on that
+      # 9.5 GB, and the way to unlock it is to chunk that projection -- which
+      # would make the serial run faster too. The pre-push hook does pass
+      # `-n auto`, because a developer machine has the memory a runner does
+      # not; same tests either way.
       - name: Tests
-        run: python -m pytest -q -n auto
+        run: python -m pytest -q
 
       # Every module, not a hand-written list. This list and the pre-push
       # hook's had already drifted apart by a file, which is the whole
