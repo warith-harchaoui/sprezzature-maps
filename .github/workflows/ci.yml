@@ -74,22 +74,38 @@ jobs:
           mypy sprezzature_maps
           mypy scripts
 
-      # Serial, and it has to be. `-n auto` was tried here and the runner
-      # killed the job at 27% with exit code 143 -- SIGTERM, the OOM killer.
+      # Serial, and it still has to be. `-n auto` was tried here once and the
+      # runner killed the job at 27% with exit code 143 -- SIGTERM, the OOM
+      # killer.
       #
-      # Measured afterwards rather than guessed: one process peaks at about
-      # **9.5 GB** within its first four renders and then stays flat. It is
-      # not a leak, it is the working set -- the vectorised inverse Equal
-      # Earth projection solves Newton-Raphson over the whole pixel grid at
-      # once, and the elevation rasters sit alongside it. A standard runner
-      # has 16 GB, so one worker fits with room and *two* would need ~19 GB.
-      # There is no worker count between "serial" and "over the limit".
+      # Re-measured on 2026-10-16 with `ru_maxrss`, per process, because the
+      # earlier figures mixed two different instruments and were not
+      # comparable:
       #
-      # So this is not a knob to retry. Parallelism here is blocked on that
-      # 9.5 GB, and the way to unlock it is to chunk that projection -- which
-      # would make the serial run faster too. The pre-push hook does pass
-      # `-n auto`, because a developer machine has the memory a runner does
-      # not; same tests either way.
+      #   whole suite, serial ............... 8.12 GB
+      #   each worker under `-n 4` .......... 7.5 - 7.9 GB
+      #   one himalaya render, alone ........ 3.95 GB
+      #
+      # The per-worker figure is not caused by parallelism: a lone process
+      # reaches the same place. It is a floor made of two parts, resident
+      # caches (the elevation pyramid is 2.24 GB if every tier is touched,
+      # plus the geo tables) and a transient render peak of about 4 GB on top
+      # of them. A standard runner has 16 GB, so one process fits with room
+      # and *two* would ask for about 16 -- there is still no worker count
+      # between "serial" and "over the limit".
+      #
+      # What did change is the time. The plate cache in `tests/_plates.py`
+      # draws each distinct situation map once per run and shares it across
+      # workers on disk, which took the serial suite from 982 s to 540 s
+      # locally -- the same tests, with the redundant redraws removed rather
+      # than spread over more cores.
+      #
+      # Going parallel here is still blocked, and the lever is the ~8 GB
+      # floor rather than any single call: capping the resident tier cache
+      # and chunking the big render buffers would do it. Worth knowing before
+      # anyone retries this knob. The pre-push hook does pass `-n auto`,
+      # because a developer machine has the memory a runner does not; same
+      # tests either way.
       - name: Tests
         run: python -m pytest -q
 

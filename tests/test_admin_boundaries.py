@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import re
 
+from _plates import plate  # noqa: E402
+
 from sprezzature_maps import _load_script
 
 m = _load_script("make_situation_map")
@@ -132,7 +134,7 @@ def test_internal_and_admin2_borders_render_real_paths() -> None:
         "internal_borders": {"show": True},
         "admin2_borders": {"show": True},
     }
-    svg = m.build_map(cfg)
+    svg = plate(cfg)
     assert '<g id="internal-borders"' in svg
     assert '<g id="admin2-borders"' in svg
     internal = svg.split('<g id="internal-borders"', 1)[1].split("</g>", 1)[0]
@@ -150,5 +152,5 @@ def test_admin2_borders_hidden_above_zoom_gate() -> None:
         "canvas_width": 400,
         "admin2_borders": {"show": True},
     }
-    svg = m.build_map(cfg)
+    svg = plate(cfg)
     assert re.search(r'<g id="admin2-borders"[^>]*></g>', svg)

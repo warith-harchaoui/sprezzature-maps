@@ -39,6 +39,12 @@ SCRIPTS = REPO / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from _plates import plate  # noqa: E402
+
 SVG = "{http://www.w3.org/2000/svg}"
 
 
@@ -64,8 +70,20 @@ def _builders() -> dict[str, Any]:
 #: ``img`` is the one this generator used to emit on every plate. The rest are
 #: here so that "fixing" this by swapping in another leaf role fails loudly
 #: rather than reintroducing the same defect under a different name.
-PRESENTATIONAL_PARENTS = frozenset({"img", "button", "checkbox", "math", "progressbar",
-                                    "scrollbar", "separator", "slider", "switch", "tab"})
+PRESENTATIONAL_PARENTS = frozenset(
+    {
+        "img",
+        "button",
+        "checkbox",
+        "math",
+        "progressbar",
+        "scrollbar",
+        "separator",
+        "slider",
+        "switch",
+        "tab",
+    }
+)
 
 
 def _focusables(svg: str) -> list[dict[str, str]]:
@@ -90,8 +108,7 @@ def _root_role(svg: str) -> str:
     return ET.fromstring(svg).get("role") or ""
 
 
-THEMATIC = sorted(n for n in _builders() if n in
-                  {"ukraine", "syria", "libya", "sudan", "drc"})
+THEMATIC = sorted(n for n in _builders() if n in {"ukraine", "syria", "libya", "sudan", "drc"})
 REFERENCE = sorted(n for n in _builders() if n not in set(THEMATIC))
 
 
@@ -104,7 +121,7 @@ def test_no_focusable_element_is_silent(name: str) -> None:
     identify, so an unnamed one is worse than an unreachable one -- it costs
     them a keystroke and gives them nothing back.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     silent = [f for f in _focusables(svg) if not (f["label"] or f["labelledby"])]
     assert not silent, (
         f"{name}: {len(silent)} focusable element(s) with no accessible name: "
@@ -122,7 +139,7 @@ def test_a_plate_with_reachable_content_does_not_hide_it(name: str) -> None:
     ``role="img"`` is still a polygon the screen reader has been told to
     ignore.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     assert _focusables(svg), f"{name} is in the thematic list but has nothing to reach"
     role = _root_role(svg)
     assert role not in PRESENTATIONAL_PARENTS, (
@@ -141,7 +158,7 @@ def test_a_plate_that_is_only_a_picture_says_so(name: str) -> None:
     document invites a reader to go looking through it for content that is not
     there.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     assert not _focusables(svg), f"{name} has focusable content and should be a document"
     assert _root_role(svg) == "img"
 
@@ -149,7 +166,7 @@ def test_a_plate_that_is_only_a_picture_says_so(name: str) -> None:
 @pytest.mark.parametrize("name", THEMATIC)
 def test_the_root_is_still_labelled(name: str) -> None:
     """Changing the role must not have cost the title and description."""
-    root = ET.fromstring(msm.build_map(_builders()[name]()))
+    root = ET.fromstring(plate(_builders()[name]()))
     assert root.get("aria-labelledby") == "sm-title sm-desc"
     ids = {el.get("id") for el in root.iter() if el.tag in (f"{SVG}title", f"{SVG}desc")}
     assert {"sm-title", "sm-desc"} <= ids
@@ -164,7 +181,7 @@ def test_a_claim_names_the_claim(name: str) -> None:
     reader who cannot see the fill learns whose ground it is and how much of
     the plate it covers, which is the entire content of the layer.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     zones = [f for f in _focusables(svg) if f["role"] == "graphics-symbol" and f["category"]]
     assert zones, f"{name}: no named control zone found"
     for z in zones:
@@ -186,12 +203,8 @@ def test_a_mark_announces_its_precision(name: str) -> None:
     approximate mark on the plate -- the exact failure the marker symbology
     exists to prevent, reintroduced for the readers least able to catch it.
     """
-    svg = msm.build_map(_builders()[name]())
-    marks = [
-        f
-        for f in _focusables(svg)
-        if f["role"] == "graphics-symbol" and not f["category"]
-    ]
+    svg = plate(_builders()[name]())
+    marks = [f for f in _focusables(svg) if f["role"] == "graphics-symbol" and not f["category"]]
     assert marks, f"{name}: no named marker found"
     wordings = set(msm._GEO_PRECISION.values())
     for m in marks:
@@ -215,7 +228,7 @@ def test_the_description_says_there_is_something_to_reach(name: str) -> None:
 
 def test_a_legend_control_names_what_pressing_it_does() -> None:
     """``role="button"`` on a <g> does not take its name from the text inside it."""
-    svg = msm.build_map(_builders()["ukraine"]())
+    svg = plate(_builders()["ukraine"]())
     buttons = [f for f in _focusables(svg) if f["role"] == "button"]
     assert buttons, "the Ukraine plate draws an interactive legend"
     for b in buttons:
@@ -230,7 +243,7 @@ def test_the_measurement_would_notice_a_regression() -> None:
     Without this, a parse that quietly matched nothing would make every test
     above pass on a plate full of silent stops.
     """
-    svg = msm.build_map(_builders()["ukraine"]())
+    svg = plate(_builders()["ukraine"]())
     assert len(_focusables(svg)) > 10, "the parse found suspiciously little to check"
     broken = svg.replace(' aria-label="Ukrainian government control', ' data-x="', 1)
     silent = [f for f in _focusables(broken) if not (f["label"] or f["labelledby"])]

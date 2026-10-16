@@ -38,6 +38,12 @@ SCRIPTS = REPO / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from _plates import plate  # noqa: E402
+
 
 def _load(name: str) -> Any:
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
@@ -80,8 +86,16 @@ def _plain_cfg(**extra: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize(
     ("raw", "mm"),
-    [("90mm", 90.0), ("9cm", 90.0), ("18.4 cm", 184.0), ("1in", 25.4), ("72pt", 25.4),
-     ("90MM", 90.0), (90, 90.0), (90.0, 90.0)],
+    [
+        ("90mm", 90.0),
+        ("9cm", 90.0),
+        ("18.4 cm", 184.0),
+        ("1in", 25.4),
+        ("72pt", 25.4),
+        ("90MM", 90.0),
+        (90, 90.0),
+        (90.0, 90.0),
+    ],
 )
 def test_a_length_is_read_in_the_unit_it_is_written_in(raw: Any, mm: float) -> None:
     assert msm.parse_length_mm(raw) == pytest.approx(mm)
@@ -157,7 +171,7 @@ def test_the_aspect_ratio_survives_the_conversion() -> None:
 
 def test_without_the_key_nothing_changes() -> None:
     """Every config written before this existed keeps its pixel dimensions."""
-    root = ET.fromstring(msm.build_map(_plain_cfg()))
+    root = ET.fromstring(plate(_plain_cfg()))
     assert not (root.get("width") or "").endswith("mm")
     assert re.fullmatch(r"[\d.]+", root.get("width") or "")
 

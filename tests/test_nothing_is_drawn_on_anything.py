@@ -73,6 +73,7 @@ from sprezzature_maps import _load_script
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
+from _plates import plate  # noqa: E402
 from _textbox import boxes_overlap, text_box  # noqa: E402
 
 msm = _load_script("make_situation_map")
@@ -174,9 +175,12 @@ def _compose(m: tuple[float, ...], n: tuple[float, ...]) -> tuple[float, ...]:
     a, b, c, d, e, f = m
     a2, b2, c2, d2, e2, f2 = n
     return (
-        a * a2 + c * b2, b * a2 + d * b2,
-        a * c2 + c * d2, b * c2 + d * d2,
-        a * e2 + c * f2 + e, b * e2 + d * f2 + f,
+        a * a2 + c * b2,
+        b * a2 + d * b2,
+        a * c2 + c * d2,
+        b * c2 + d * d2,
+        a * e2 + c * f2 + e,
+        b * e2 + d * f2 + f,
     )
 
 
@@ -262,9 +266,7 @@ def _is_hidden(el: ET.Element) -> bool:
     return "tip" in (el.get("class") or "").split()
 
 
-def _measure(
-    el: ET.Element, ctm: tuple[float, ...], layer: str, body: str
-) -> dict[str, Any]:
+def _measure(el: ET.Element, ctm: tuple[float, ...], layer: str, body: str) -> dict[str, Any]:
     """Measure one ``<text>`` element into a record.
 
     A rotated run becomes the upright box that contains it -- the same
@@ -324,7 +326,7 @@ def test_no_two_names_share_the_same_paper(name: str) -> None:
     inside ``TRIPOLI`` on Libya, and so on. Not one of them was visible to
     a test that counted elements.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     runs = _text_boxes(svg)
     assert len(runs) > 10, f"{name}: only {len(runs)} labels — is the plate drawing at all?"
 
@@ -354,7 +356,7 @@ def test_every_name_is_on_the_plate(name: str) -> None:
     reader could ever find them. The generator now refuses the config; this
     checks the other direction, that nothing else walks off the page.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     root = ET.fromstring(svg)
     width, height = _number(root.get("width")), _number(root.get("height"))
     strays = [
@@ -391,7 +393,7 @@ def test_every_name_that_points_at_ground_is_on_the_drawn_map(name: str) -> None
     legend, scale bar, north arrow, source line and control panel are drawn
     outside the clip deliberately.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     drawn = _drawn_map(svg)
     assert drawn is not None, f"{name}: no region clip in the markup"
     strays = [
@@ -414,7 +416,7 @@ def test_the_drawn_map_is_read_back_from_the_markup() -> None:
     map group stopped being translated -- would make the test above pass by
     having nothing to fail against.
     """
-    svg = msm.build_map(_builders()["ukraine"]())
+    svg = plate(_builders()["ukraine"]())
     drawn = _drawn_map(svg)
     root = ET.fromstring(svg)
     width, height = _number(root.get("width")), _number(root.get("height"))
@@ -427,7 +429,7 @@ def test_the_drawn_map_is_read_back_from_the_markup() -> None:
 def test_a_name_in_the_margin_is_caught() -> None:
     """The measurement fails on a label it is handed in the margin, not just in principle."""
     cfg = _builders()["ukraine"]()
-    drawn = _drawn_map(msm.build_map(cfg))
+    drawn = _drawn_map(plate(cfg))
     west, south, east, north = drawn.bounds
     assert not drawn.contains(_as_poly((west - 40.0, south + 10.0, west - 5.0, south + 24.0)))
     mid_x, mid_y = (west + east) / 2, (south + north) / 2
@@ -453,7 +455,7 @@ def test_a_hand_placed_label_outside_the_region_is_refused() -> None:
     }
     msm.validate_config(cfg)
     with pytest.raises(ValueError, match="outside the"):
-        msm.build_map(cfg)
+        plate(cfg)
 
 
 def test_the_measurement_can_see_a_collision_it_is_given() -> None:

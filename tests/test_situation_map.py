@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 
 import pytest
+from _plates import plate  # noqa: E402
 
 # ── vendored assets ───────────────────────────────────────────────────────
 
@@ -148,9 +149,8 @@ def test_unknown_plate_is_refused() -> None:
     """A typo must not silently render the default."""
     import pytest
 
-    module = _msm()
     with pytest.raises(ValueError, match="unknown plate"):
-        module.build_map({"region": {"bbox": [0, 0, 1, 1]}, "basemap": {"plate": "dusk"}})
+        plate({"region": {"bbox": [0, 0, 1, 1]}, "basemap": {"plate": "dusk"}})
 
 
 def test_a_named_plate_overrides_config_colours_audibly() -> None:
@@ -201,12 +201,13 @@ def test_unknown_river_width_is_refused() -> None:
     """A typo must not silently fall back to the default."""
     import pytest
 
-    module = _msm()
     with pytest.raises(ValueError, match="unknown rivers.width"):
-        module.build_map({
-            "region": {"bbox": [30, 44, 40, 52]},
-            "rivers": {"width": "hydraulic"},
-        })
+        plate(
+            {
+                "region": {"bbox": [30, 44, 40, 52]},
+                "rivers": {"width": "hydraulic"},
+            }
+        )
 
 
 def test_the_name_does_not_overclaim() -> None:
