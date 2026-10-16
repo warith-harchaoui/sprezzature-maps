@@ -32,6 +32,12 @@ SCRIPTS = REPO / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from _plates import plate  # noqa: E402
+
 
 def _load(name: str) -> Any:
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
@@ -122,12 +128,12 @@ def test_acled_geo_precision_reaches_the_marker_unchanged(code: int) -> None:
 @pytest.mark.parametrize(
     ("where_prec", "precision", "radius_km"),
     [
-        (1, 1, None),   # exact location known and coded
-        (2, 2, 25),     # within ca. 25 km of a known point -- the radius is drawn
-        (3, 2, None),   # an adm-2 centroid standing in for the division
-        (4, 3, None),   # an adm-1 centroid standing in for the region
-        (5, 3, None),   # a linear feature or a fuzzy polygon
-        (7, 3, None),   # international waters or airspace
+        (1, 1, None),  # exact location known and coded
+        (2, 2, 25),  # within ca. 25 km of a known point -- the radius is drawn
+        (3, 2, None),  # an adm-2 centroid standing in for the division
+        (4, 3, None),  # an adm-1 centroid standing in for the region
+        (5, 3, None),  # a linear feature or a fuzzy polygon
+        (7, 3, None),  # international waters or airspace
     ],
 )
 def test_ucdp_where_prec_maps_onto_the_three_step_scale(
@@ -287,9 +293,7 @@ def test_the_method_line_carries_the_count_and_the_window() -> None:
         ACLED_ROW | {"event_date": "2024-01-03"},
         ACLED_ROW | {"event_date": "2024-12-29"},
     ]
-    assert cf.acled_events(rows)["method"] == (
-        "2 ACLED events drawn; 2024-01-03 to 2024-12-29."
-    )
+    assert cf.acled_events(rows)["method"] == ("2 ACLED events drawn; 2024-01-03 to 2024-12-29.")
 
 
 def test_a_limit_is_reported_rather_than_applied_in_silence() -> None:
@@ -335,8 +339,12 @@ def test_sizing_by_fatalities_is_area_true() -> None:
         ACLED_ROW | {"fatalities": "25"},
         ACLED_ROW | {"fatalities": "100"},
     ]
-    r = [e["r"] for e in cf.acled_events(rows, size_by="fatalities",
-                                         base_radius=4.0, max_radius=12.0)["events"]]
+    r = [
+        e["r"]
+        for e in cf.acled_events(rows, size_by="fatalities", base_radius=4.0, max_radius=12.0)[
+            "events"
+        ]
+    ]
     assert r == [4.0, 8.0, 12.0]
 
 
@@ -478,8 +486,9 @@ def test_equalising_contrast_would_cost_more_than_it_buys() -> None:
         lightness, chroma, hue = gc._oklab_to_oklch(gc._linear_to_oklab(gc._hex_to_linear(hex_)))
         for step in range(60):
             cand = gc._linear_to_hex(
-                gc._oklab_to_linear(gc._oklch_to_oklab((max(0.0, lightness - step * 0.01),
-                                                        chroma, hue)))
+                gc._oklab_to_linear(
+                    gc._oklch_to_oklab((max(0.0, lightness - step * 0.01), chroma, hue))
+                )
             )
             if gc.wcag_contrast_ratio(cand, land) >= 3.0:
                 return cand
@@ -517,8 +526,14 @@ def test_a_loaded_fragment_draws(tmp_path: Path) -> None:
     """
     rows = [
         ACLED_ROW | {"longitude": "32.5", "latitude": "15.6", "event_type": "Battles"},
-        ACLED_ROW | {"longitude": "33.1", "latitude": "14.9", "event_type": "Protests",
-                     "geo_precision": "3", "time_precision": "3"},
+        ACLED_ROW
+        | {
+            "longitude": "33.1",
+            "latitude": "14.9",
+            "event_type": "Protests",
+            "geo_precision": "3",
+            "time_precision": "3",
+        },
     ]
     cfg: dict[str, Any] = {
         "title": "Sudan: recorded political violence",
@@ -527,7 +542,7 @@ def test_a_loaded_fragment_draws(tmp_path: Path) -> None:
     }
     cfg.update(cf.acled_events(rows, derive_region=True, size_by="fatalities"))
     msm.validate_config(cfg)
-    svg = msm.build_map(cfg)
+    svg = plate(cfg)
     assert svg.startswith("<svg") or "<svg" in svg[:400]
     # The precision the loader read is the precision the markup carries.
     assert 'data-precision="3"' in svg
@@ -539,8 +554,14 @@ def test_a_loaded_fragment_draws(tmp_path: Path) -> None:
 
 #: Twelve events over four first-order units, two of them sharing a unit.
 AGG_ROWS: list[dict[str, str]] = [
-    ACLED_ROW | {"admin1": adm, "latitude": str(la), "longitude": str(lo),
-                 "fatalities": str(f), "event_date": d}
+    ACLED_ROW
+    | {
+        "admin1": adm,
+        "latitude": str(la),
+        "longitude": str(lo),
+        "fatalities": str(f),
+        "event_date": d,
+    }
     for adm, la, lo, f, d in [
         ("Khartoum", 15.60, 32.53, 40, "2024-01-15"),
         ("Khartoum", 15.72, 32.41, 12, "2024-02-15"),
@@ -581,7 +602,9 @@ def test_the_legend_draws_the_symbol_the_plate_draws() -> None:
     Every mark was a broken ring and the legend swatch was still a solid
     disc: the same page teaching the colour correctly and the symbol wrongly.
     """
-    assert {r["precision"] for r in cf.acled_events(AGG_ROWS, aggregate="admin1")["marker_legend"]} == {3}
+    assert {
+        r["precision"] for r in cf.acled_events(AGG_ROWS, aggregate="admin1")["marker_legend"]
+    } == {3}
     assert {r["precision"] for r in cf.acled_events(AGG_ROWS)["marker_legend"]} == {1}
 
 

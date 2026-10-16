@@ -2,6 +2,56 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- **The test suite draws each plate once instead of once per assertion: 982 s
+  to 540 s serially, same 528 tests.** The 0.18.0 notes had already named the
+  waste -- "one core doing the same nine plates a hundred times" -- and solved
+  it by *scheduling* better, with `pytest -n auto`. This removes the work
+  instead of spreading it.
+
+  `tests/_plates.py` holds a cache keyed on **config equality**, not on a name
+  or a hash. A hash was the obvious choice and is wrong here: five of the nine
+  configs do not survive a strict JSON round-trip, so the serialisation is
+  lossy, and a lossy key can hand a test the wrong plate. Plain `==` on the
+  dicts is exact and costs nothing next to a three-second render.
+
+  It is shared **across xdist workers** through `.pytest_cache/`, because a
+  per-process cache halved the serial run and left the parallel one untouched
+  -- four workers simply drew the nine plates four times. The disk key carries
+  a digest of every file under `scripts/`, so any edit to the generator
+  invalidates every entry: a plate is a function of its config *and the code
+  that drew it*, which is the thesis of
+  `test_a_plate_can_prove_what_drew_it.py` and would otherwise be the exact
+  way this cache went wrong.
+
+  Ten tests keep rendering for real, each for a stated reason: six compare two
+  renders against each other, and four listen for a warning the render emits
+  on its way -- a cache hit emits nothing, which is how that whole category
+  was discovered ("DID NOT WARN"). `test_a_plate_can_prove_what_drew_it.py` is
+  exempt wholesale. `tests/test_the_plate_cache_actually_saves_work.py` holds
+  that list in both directions and measures that an identical config really is
+  handed back rather than redrawn.
+
+- **CI stays serial, and the numbers behind that are now comparable.** The
+  earlier memory figures mixed `ru_maxrss` with macOS's `peak memory
+  footprint`; re-measured with one instrument:
+
+  | | peak |
+  |---|---|
+  | whole suite, serial | 8.12 GB |
+  | each worker under `-n 4` | 7.5–7.9 GB |
+  | one himalaya render, alone | 3.95 GB |
+
+  The per-worker figure is **not** caused by parallelism -- a lone process
+  reaches the same place. It is resident caches (2.24 GB of elevation pyramid
+  if every tier is touched, plus the geo tables) with a ~4 GB transient render
+  peak on top. Two workers would ask for about 16 GB on a 16 GB runner, so the
+  wall the 0.18.0 notes described is still there; what moved is the time, not
+  the memory.
+
 ## 0.19.0 (2026-10-16): the GUI stops asking Google for its typefaces
 
 ### Fixed

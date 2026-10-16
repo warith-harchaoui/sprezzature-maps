@@ -27,6 +27,7 @@ msm = _load_script("make_situation_map")
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
+from _plates import plate  # noqa: E402
 from _textbox import text_width  # noqa: E402
 
 #: A small, fast region with land, a coast and a neighbour to label.
@@ -42,7 +43,7 @@ def _plate(**overrides: Any) -> str:
     }
     cfg.update(overrides)
     msm.validate_config(cfg)
-    return msm.build_map(cfg)
+    return plate(cfg)
 
 
 # ── the accessible root ───────────────────────────────────────────────────
@@ -160,9 +161,7 @@ def test_a_hand_placed_name_suppresses_its_automatic_twin() -> None:
     on the name, not the place — Natural Earth calls El Obeid "Al-Ubayyid".
     """
     plain = _plate()
-    labelled = _plate(
-        labels={"places": [{"lon": -3.7038, "lat": 40.4168, "text": "Madrid"}]}
-    )
+    labelled = _plate(labels={"places": [{"lon": -3.7038, "lat": 40.4168, "text": "Madrid"}]})
     cities_plain = plain[plain.index('<g id="cities"') :].split("</g>")[0]
     cities_labelled = labelled[labelled.index('<g id="cities"') :].split("</g>")[0]
     assert "Madrid" in cities_plain, "precondition: the automatic layer draws Madrid"
@@ -282,9 +281,7 @@ def test_an_arrow_is_a_tapered_shaft_and_a_separate_head() -> None:
     A stroke is one width for its whole length, so the shaft has to be a filled
     outline; the head is separate so it keeps a point however the shaft curves.
     """
-    svg = _plate(
-        arrows=[{"line": [[-8.0, 40.0], [-5.0, 40.5], [-2.0, 41.0]], "label": "Push"}]
-    )
+    svg = _plate(arrows=[{"line": [[-8.0, 40.0], [-5.0, 40.5], [-2.0, 41.0]], "label": "Push"}])
     group = svg[svg.index('<g id="arrows"') :].split("</g>")[0]
     # casing (2) + fill (2) for shaft and head.
     assert group.count("<path") == 4
@@ -334,7 +331,7 @@ def test_a_shared_border_is_drawn_once_not_once_per_neighbour() -> None:
         "frontiers": {"label_neighbours": False},
     }
     msm.validate_config(cfg)
-    svg = msm.build_map(cfg)
+    svg = plate(cfg)
     group = svg[svg.index('<g id="frontiers"') :].split("</g>")[0]
     paths = re.findall(r'<path d="([^"]+)"', group)
     # One union'd polyline -- mapshaper's ``-innerlines`` -- not one per country.
@@ -377,9 +374,7 @@ def test_control_zones_are_clipped_to_the_region_before_drawing() -> None:
                 "properties": {"actor": "Everyone"},
                 "geometry": {
                     "type": "Polygon",
-                    "coordinates": [
-                        [[-179, -85], [179, -85], [179, 85], [-179, 85], [-179, -85]]
-                    ],
+                    "coordinates": [[[-179, -85], [179, -85], [179, 85], [-179, 85], [-179, -85]]],
                 },
             }
         ],
@@ -500,7 +495,7 @@ def test_a_claimed_zone_is_not_painted_the_colour_of_held_ground() -> None:
     assert 'fill-opacity="0.00"' in zone, "a claimed zone must carry no solid fill"
     assert "stroke-dasharray" in zone, "and must be outlined as provisional"
     # It is still *drawn*, via its texture, or the claim would simply vanish.
-    assert f'url(#{msm._pattern_id("dots", "#d98880")})' in group
+    assert f"url(#{msm._pattern_id('dots', '#d98880')})" in group
 
 
 def test_a_reported_zone_stays_the_same_class_only_less_certain() -> None:
@@ -514,7 +509,7 @@ def test_a_reported_zone_stays_the_same_class_only_less_certain() -> None:
     zone = [p for p in group.split("<path ") if 'class="hit"' in p][0]
     assert 'fill="#d98880"' in zone, "the class colour must survive"
     assert 'fill-opacity="0.00"' not in zone, "reported ground is still drawn as ground"
-    assert f'url(#{msm._pattern_id("hatches", "#d98880")})' in group
+    assert f"url(#{msm._pattern_id('hatches', '#d98880')})" in group
 
 
 def test_an_unknown_confidence_is_refused_rather_than_rounded_to_assessed() -> None:
@@ -589,17 +584,13 @@ def test_an_approximate_event_loses_its_solid_centre() -> None:
     it cannot support, where a disc of made-up radius would.
     """
     exact = _plate(events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6}])
-    approx = _plate(
-        events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6, "precision": 2}]
-    )
+    approx = _plate(events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6, "precision": 2}])
     assert 'fill="#c0392b"' in exact.split('<g id="events"')[1].split("</g>")[0]
     ring = approx.split('<g id="events"')[1].split("</g>")[0]
     assert 'fill="#ffffff"' in ring and 'stroke="#c0392b"' in ring
     # And precision 3 -- a whole region pinned to its capital -- breaks the
     # ring as well as hollowing it: one step further from "a place".
-    region = _plate(
-        events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6, "precision": 3}]
-    )
+    region = _plate(events=[{"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 6, "precision": 3}])
     assert "stroke-dasharray" in region.split('<g id="events"')[1].split("</g>")[0]
 
 
@@ -618,19 +609,14 @@ def test_a_stated_uncertainty_radius_is_drawn_to_the_map_scale() -> None:
         "canvas_width": 520,
         "basemap": {"relief": False},
         "events": [
-            {"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 5,
-             "precision": 2, "radius_km": 40}
+            {"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 5, "precision": 2, "radius_km": 40}
         ],
     }
     msm.validate_config(cfg)
-    svg = msm.build_map(cfg)
+    svg = plate(cfg)
     group = svg[svg.index('<g id="events"') :]
-    drawn = float(
-        re.search(r'r="([\d.]+)" fill="#c0392b"\s+fill-opacity="0.12"', group).group(1)
-    )
-    vp = msm.make_viewport(
-        msm.build_projection(list(bbox), "auto"), list(bbox), 520.0, 26.0
-    )
+    drawn = float(re.search(r'r="([\d.]+)" fill="#c0392b"\s+fill-opacity="0.12"', group).group(1))
+    vp = msm.make_viewport(msm.build_projection(list(bbox), "auto"), list(bbox), 520.0, 26.0)
     assert drawn * vp["m_per_unit"] / 1000 == pytest.approx(40.0, rel=0.01)
 
 
@@ -646,8 +632,14 @@ def test_a_dates_precision_is_spoken_not_implied() -> None:
     """A date known only to the month should not be read as a day."""
     svg = _plate(
         events=[
-            {"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 5,
-             "date": "March 2026", "time_precision": 3}
+            {
+                "lon": -4.0,
+                "lat": 40.0,
+                "color": "#c0392b",
+                "r": 5,
+                "date": "March 2026",
+                "time_precision": 3,
+            }
         ]
     )
     assert "month of March 2026" in svg
@@ -679,8 +671,7 @@ def test_the_assessment_can_be_read_back_out_of_the_finished_svg() -> None:
 def test_a_marker_carries_its_own_coordinates_and_precision() -> None:
     svg = _plate(
         events=[
-            {"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 5,
-             "precision": 2, "radius_km": 25}
+            {"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 5, "precision": 2, "radius_km": 25}
         ]
     )
     assert 'data-precision="2"' in svg
@@ -696,8 +687,13 @@ def test_a_marker_can_cite_its_own_source() -> None:
     """
     svg = _plate(
         events=[
-            {"lon": -4.0, "lat": 40.0, "color": "#c0392b", "r": 5,
-             "source": "Reuters, 3 March 2026"}
+            {
+                "lon": -4.0,
+                "lat": 40.0,
+                "color": "#c0392b",
+                "r": 5,
+                "source": "Reuters, 3 March 2026",
+            }
         ]
     )
     assert "Source: Reuters, 3 March 2026" in svg
@@ -755,10 +751,10 @@ def test_auto_moves_the_key_off_the_map_once_it_stops_being_a_minority() -> None
     """
     narrow = _legend_cfg(375, legend_position="auto")
     assert msm._resolve_legend_position(narrow, 1.0, 375.0) == "below"
-    svg = msm.build_map(narrow)
+    svg = plate(narrow)
     legend = svg[svg.index('<g id="legend"') :].split("</g>")[0]
     # A band, not a card: no panel rect, no drop shadow over the map.
-    assert "filter=\"url(#panel-shadow)\"" not in legend
+    assert 'filter="url(#panel-shadow)"' not in legend
     assert "AREAS OF CONTROL" in legend
 
 
@@ -767,7 +763,7 @@ def test_a_below_legend_grows_the_plate_instead_of_covering_the_map() -> None:
     import re
 
     def plate_height(cfg: dict[str, Any]) -> float:
-        svg = msm.build_map(cfg)
+        svg = plate(cfg)
         return float(re.search(r'viewBox="0 0 [\d.]+ ([\d.]+)"', svg).group(1))
 
     assert plate_height(_legend_cfg(375, legend_position="below")) > plate_height(
@@ -783,9 +779,7 @@ def _band_cfg(*labels: str, width: int = 900) -> dict[str, Any]:
         "canvas_width": width,
         "basemap": {"relief": False},
         "legend_position": "below",
-        "areas_of_control": {
-            "palette": dict.fromkeys(labels, "#c0392b")
-        },
+        "areas_of_control": {"palette": dict.fromkeys(labels, "#c0392b")},
     }
 
 
@@ -816,21 +810,19 @@ def test_a_short_label_does_not_get_the_longest_label_s_column() -> None:
     rows = [{"label": label} for label in ("RSF", "SAF", "JEM", "Rapid Support Forces")]
     _columns, offsets = msm._legend_band_pack(rows, 1.0, 900.0)
     widths = [b - a for a, b in zip(offsets, offsets[1:], strict=False)]
-    assert len({round(w, 3) for w in widths}) > 1, (
-        f"every column came out the same width: {widths}"
-    )
+    assert len({round(w, 3) for w in widths}) > 1, f"every column came out the same width: {widths}"
 
 
 def test_three_short_labels_and_one_long_one_are_one_row() -> None:
     """The defect at the size it is actually seen: on the plate, not in a tuple."""
-    svg = msm.build_map(_band_cfg("RSF", "SAF", "JEM", "Rapid Support Forces (approximate)"))
+    svg = plate(_band_cfg("RSF", "SAF", "JEM", "Rapid Support Forces (approximate)"))
     assert len(_band_row_tops(svg)) == 1
 
 
 def test_a_key_too_wide_for_one_row_still_uses_as_many_rows_as_it_needs() -> None:
     """Packing tighter must not become packing past the edge."""
     labels = [f"Sudanese Armed Forces, {n}th division (approximate)" for n in range(1, 7)]
-    svg = msm.build_map(_band_cfg(*labels))
+    svg = plate(_band_cfg(*labels))
     assert len(_band_row_tops(svg)) > 1
 
 
@@ -850,7 +842,9 @@ def test_a_label_longer_than_the_whole_band_still_gets_a_column() -> None:
 def test_an_explicit_position_is_never_overridden_by_width() -> None:
     """``auto`` is opt-in; every plate drawn before it existed must be untouched."""
     for pos in ("bottom-right", "bottom-left", "top-left", "top-right", "right"):
-        assert msm._resolve_legend_position(_legend_cfg(375, legend_position=pos), 1.0, 375.0) == pos
+        assert (
+            msm._resolve_legend_position(_legend_cfg(375, legend_position=pos), 1.0, 375.0) == pos
+        )
     # And the default, with no key set at all.
     assert msm._resolve_legend_position(_legend_cfg(375), 1.0, 375.0) == "bottom-right"
 
@@ -869,8 +863,10 @@ def test_the_scale_bar_is_long_enough_to_carry_its_own_labels() -> None:
         vp = msm.make_viewport(msm.build_projection(bbox, "auto"), bbox, float(width), 26.0)
         svg = msm.scale_bar(0.0, 0.0, vp)
         labels = re.findall(r'text-anchor="end">([^<]+)</text>', svg)
-        lengths = [float(x) + float(w) for x, w in
-                   re.findall(r'<rect x="([-\d.]+)"[^>]*width="([\d.]+)"', svg)]
+        lengths = [
+            float(x) + float(w)
+            for x, w in re.findall(r'<rect x="([-\d.]+)"[^>]*width="([\d.]+)"', svg)
+        ]
         assert len(labels) == 2 and len(lengths) == 4
         for label, length in zip(labels, (lengths[1], lengths[3]), strict=True):
             # Measured, not counted. A flat advance per character said
@@ -935,9 +931,14 @@ def test_the_relief_raster_is_re_encoded_without_changing_a_pixel() -> None:
     field = np.linspace(0, 1, 64 * 64).reshape(64, 64)
     field = (field + rng.normal(0, 0.01, field.shape)).clip(0, 1)
     level = (field * 180).astype(np.uint8)
-    rgba = np.dstack([level, (level * 0.9).astype(np.uint8),
-                      (level * 0.8).astype(np.uint8),
-                      np.full(level.shape, 140, dtype=np.uint8)])
+    rgba = np.dstack(
+        [
+            level,
+            (level * 0.9).astype(np.uint8),
+            (level * 0.8).astype(np.uint8),
+            np.full(level.shape, 140, dtype=np.uint8),
+        ]
+    )
     uri = relief.rgba_to_data_uri(rgba)
     raw = base64.b64decode(uri.split(",", 1)[1])
     decoded = Image.open(io.BytesIO(raw))
@@ -979,16 +980,18 @@ def test_an_annotation_circles_its_subject_rather_than_pointing_at_it() -> None:
 
     svg = _plate(
         annotations=[
-            {"at": [-4.0, 40.0], "text": "The plateau emptied first.",
-             "circle_km": 50, "color": "#2f5d92"}
+            {
+                "at": [-4.0, 40.0],
+                "text": "The plateau emptied first.",
+                "circle_km": 50,
+                "color": "#2f5d92",
+            }
         ]
     )
     group = svg[svg.index('<g id="annotations"') :].split("</g>")[0]
     assert "marker-end" not in group and "polygon" not in group, "a ring, not an arrowhead"
     ring = float(re.search(r'<circle[^>]*r="([\d.]+)" fill="none"', group).group(1))
-    vp = msm.make_viewport(
-        msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 520.0, 26.0
-    )
+    vp = msm.make_viewport(msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 520.0, 26.0)
     assert ring * vp["m_per_unit"] / 1000 == pytest.approx(50.0, rel=0.01)
     # The note takes the colour it was given, so it sits back onto the map.
     assert group.count("#2f5d92") >= 2
@@ -1007,9 +1010,11 @@ def test_an_annotation_stays_legible_over_whatever_it_lands_on() -> None:
 def test_a_long_note_wraps_instead_of_running_off_the_plate() -> None:
     svg = _plate(
         annotations=[
-            {"at": [-4.0, 40.0],
-             "text": "A note long enough that it cannot possibly fit on one line "
-                     "of a plate this size without being wrapped first."}
+            {
+                "at": [-4.0, 40.0],
+                "text": "A note long enough that it cannot possibly fit on one line "
+                "of a plate this size without being wrapped first.",
+            }
         ]
     )
     group = svg[svg.index('<g id="annotations"') :].split("</g>")[0]
@@ -1068,14 +1073,18 @@ def test_a_claim_is_not_spoken_as_a_holding() -> None:
     big_claim = {
         "type": "Feature",
         "properties": {"actor": "Red", "confidence": "claimed"},
-        "geometry": {"type": "Polygon", "coordinates": [
-            [[-9.0, 37.0], [-1.0, 37.0], [-1.0, 43.0], [-9.0, 43.0], [-9.0, 37.0]]]},
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[-9.0, 37.0], [-1.0, 37.0], [-1.0, 43.0], [-9.0, 43.0], [-9.0, 37.0]]],
+        },
     }
     small = {
         "type": "Feature",
         "properties": {"actor": "Blue"},
-        "geometry": {"type": "Polygon", "coordinates": [
-            [[0.0, 41.0], [1.0, 41.0], [1.0, 42.0], [0.0, 42.0], [0.0, 41.0]]]},
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[0.0, 41.0], [1.0, 41.0], [1.0, 42.0], [0.0, 42.0], [0.0, 41.0]]],
+        },
     }
     card = article_sidecar(_control(big_claim, small))
     assert "Red is claimed to cover the largest mapped share" in card["alt"]
@@ -1102,9 +1111,7 @@ def test_a_label_yields_to_the_scale_bar_instead_of_being_struck_through() -> No
     it is not a name; a name that is simply absent costs the reader one
     place out of thirty.
     """
-    vp = msm.make_viewport(
-        msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 520.0, 26.0
-    )
+    vp = msm.make_viewport(msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 520.0, 26.0)
     bar_x, bar_y = msm._scale_bar_origin({}, vp)
     assert msm._label_fits(bar_x + 10, bar_y, "LISBOA", size=10, tracking=2, vp=vp)
     vp["reserved"] = msm._reserved_boxes({}, vp)
@@ -1120,9 +1127,7 @@ def test_the_reserved_box_tracks_the_bar_when_the_bar_moves() -> None:
     the bar prints over a name somewhere else.
     """
     cfg = _legend_cfg(1000, legend_position="bottom-left")
-    vp = msm.make_viewport(
-        msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 1000.0, 26.0
-    )
+    vp = msm.make_viewport(msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 1000.0, 26.0)
     bar_x, _bar_y = msm._scale_bar_origin(cfg, vp)
     assert bar_x > vp["width"] / 2, "precondition: a bottom-left card moves the bar right"
     reserved = msm._reserved_boxes(cfg, vp)
@@ -1169,9 +1174,7 @@ def test_the_inset_shows_the_region_inside_a_wider_context() -> None:
     # Everything stays inside the inset's own frame.
     box = msm._inset_box(
         _with_inset(),
-        msm.make_viewport(
-            msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 520.0, 26.0
-        ),
+        msm.make_viewport(msm.build_projection(list(_IBERIA), "auto"), list(_IBERIA), 520.0, 26.0),
     )
     width, height = box[2] - box[0], box[3] - box[1]
     assert max(x for x, _y in coords) <= width + 1
@@ -1225,9 +1228,7 @@ def test_a_lake_that_shrank_is_not_drawn_as_the_lake_it_was() -> None:
 def test_the_vendored_extent_can_still_be_drawn_on_request() -> None:
     """The correction is a default, not a decision taken away from the caller."""
     nw_iran = {"bbox": [43.5, 35.5, 48.5, 39.5]}
-    as_vendored = _plate(
-        region=nw_iran, basemap={"relief": False}, lakes={"historic": []}
-    )
+    as_vendored = _plate(region=nw_iran, basemap={"relief": False}, lakes={"historic": []})
     assert "(historic extent)" not in as_vendored
     assert "Lake Urmia" in as_vendored
 
@@ -1235,9 +1236,7 @@ def test_the_vendored_extent_can_still_be_drawn_on_request() -> None:
 def test_former_still_wins_over_historic() -> None:
     """A body that is gone is gone; the two treatments must not compound."""
     nw_iran = {"bbox": [43.5, 35.5, 48.5, 39.5]}
-    svg = _plate(
-        region=nw_iran, basemap={"relief": False}, lakes={"former": ["Lake Urmia"]}
-    )
+    svg = _plate(region=nw_iran, basemap={"relief": False}, lakes={"former": ["Lake Urmia"]})
     assert "Lake Urmia (former)" in svg
     assert "(historic extent)" not in svg
 
@@ -1288,7 +1287,7 @@ def test_a_region_crossing_the_antimeridian_is_refused_not_inverted() -> None:
     with pytest.raises(ValueError, match="antimeridian"):
         msm.validate_region({"bbox": [177.0, -19.0, -178.0, -16.0]})
     with pytest.raises(ValueError, match="antimeridian"):
-        msm.build_map({"region": {"bbox": [168.0, 64.0, -168.0, 67.0]}})
+        plate({"region": {"bbox": [168.0, 64.0, -168.0, 67.0]}})
 
 
 def test_a_swapped_pair_is_named_rather_than_quietly_normalised() -> None:
@@ -1317,7 +1316,7 @@ def test_a_degenerate_or_impossible_bbox_gets_a_sentence_not_a_stack_trace() -> 
 def test_build_map_validates_too_so_the_inner_entry_point_agrees() -> None:
     """``build_map({})`` used to raise a bare ``KeyError: 'region'``."""
     with pytest.raises(ValueError, match="region"):
-        msm.build_map({})
+        plate({})
 
 
 def test_a_polar_plate_can_be_drawn_at_all() -> None:
@@ -1450,8 +1449,13 @@ def _sea_and_zone() -> str:
                         "geometry": {
                             "type": "Polygon",
                             "coordinates": [
-                                [[32.0, 44.5], [36.0, 44.5], [36.0, 49.5],
-                                 [32.0, 49.5], [32.0, 44.5]]
+                                [
+                                    [32.0, 44.5],
+                                    [36.0, 44.5],
+                                    [36.0, 49.5],
+                                    [32.0, 49.5],
+                                    [32.0, 44.5],
+                                ]
                             ],
                         },
                     }
@@ -1499,8 +1503,13 @@ def test_over_water_is_the_opt_out_for_a_maritime_claim() -> None:
                         "geometry": {
                             "type": "Polygon",
                             "coordinates": [
-                                [[32.0, 44.5], [36.0, 44.5], [36.0, 49.5],
-                                 [32.0, 49.5], [32.0, 44.5]]
+                                [
+                                    [32.0, 44.5],
+                                    [36.0, 44.5],
+                                    [36.0, 49.5],
+                                    [32.0, 49.5],
+                                    [32.0, 44.5],
+                                ]
                             ],
                         },
                     }
@@ -1584,8 +1593,8 @@ def test_the_natural_layers_draw_from_the_model() -> None:
     import re
 
     svg = _plate(region={"bbox": [28.0, -4.0, 31.0, 0.5]}, basemap={"relief": False})
-    cue = f'{msm.COMPOSITING["depth_cue"]:.2f}'
-    fact = f'{msm.COMPOSITING["fact_line"]:.2f}'
+    cue = f"{msm.COMPOSITING['depth_cue']:.2f}"
+    fact = f"{msm.COMPOSITING['fact_line']:.2f}"
     lakes = svg[svg.index('<g id="lakes"') :].split("</g>")[0]
     assert f'stroke-opacity="{cue}"' in lakes, "the lake shelf is a depth cue"
     assert f'stroke-opacity="{fact}"' in lakes, "its shoreline is a fact"
@@ -1622,7 +1631,7 @@ def test_every_class_in_the_legend_is_actually_drawn(name: str) -> None:
     if not palette:
         pytest.skip(f"{name} draws no control zones")
     msm.validate_config(cfg)
-    svg = msm.build_map(cfg)
+    svg = plate(cfg)
     group = svg[svg.index('<g id="areas-of-control"') :].split('<g id="frontiers"')[0]
     for label, colour in palette.items():
         drawn = len(re.findall(rf'<path[^>]*fill="{re.escape(colour)}"', group))
@@ -1638,7 +1647,9 @@ def test_every_class_in_the_legend_is_actually_drawn(name: str) -> None:
 
 def _panel_box(svg: str) -> tuple[float, float, float, float] | None:
     """Return the control panel's screen box, or ``None`` if it has none."""
-    opening = re.search(r'<g id="plate-controls"[^>]*transform="translate\(([\d.]+),([\d.]+)\)"', svg)
+    opening = re.search(
+        r'<g id="plate-controls"[^>]*transform="translate\(([\d.]+),([\d.]+)\)"', svg
+    )
     if not opening:
         return None
     x, y = float(opening.group(1)), float(opening.group(2))
@@ -1680,7 +1691,7 @@ def test_the_control_panel_never_lands_on_the_legend(name: str) -> None:
     This is the property, not the count -- the panel's box and the legend's
     box must not intersect, on every plate that draws both.
     """
-    svg = msm.build_map(_builders()[name]())
+    svg = plate(_builders()[name]())
     panel, legend = _panel_box(svg), _legend_band_box(svg)
     if panel is None or legend is None:
         pytest.skip(f"{name} draws no {'panel' if panel is None else 'legend band'}")
@@ -1716,7 +1727,7 @@ def test_a_territory_label_actually_reaches_the_page() -> None:
         "labels": {"territories": [{"lon": 84.0, "lat": 32.5, "text": "Tibetan Plateau"}]},
     }
     msm.validate_config(cfg)
-    svg = msm.build_map(cfg)
+    svg = plate(cfg)
     assert "TIBETAN PLATEAU" in svg, (
         "labels.territories is accepted by the validator but drew nothing"
     )

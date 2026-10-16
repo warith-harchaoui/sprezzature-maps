@@ -37,6 +37,12 @@ SCRIPTS = REPO / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from _plates import plate  # noqa: E402
+
 
 def _load(name: str) -> Any:
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
@@ -54,15 +60,23 @@ def _box(w: float, s: float, e: float, n: float) -> dict[str, Any]:
     return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
 
 
-def _feature(name: str, start: tuple[int, int, int], end: tuple[int, int, int],
-             bounds: tuple[float, float, float, float]) -> dict[str, Any]:
+def _feature(
+    name: str,
+    start: tuple[int, int, int],
+    end: tuple[int, int, int],
+    bounds: tuple[float, float, float, float],
+) -> dict[str, Any]:
     """One CShapes-shaped feature: a name, a validity window, a shape."""
     return {
         "type": "Feature",
         "properties": {
             "cntry_name": name,
-            "gwsyear": start[0], "gwsmonth": start[1], "gwsday": start[2],
-            "gweyear": end[0], "gwemonth": end[1], "gweday": end[2],
+            "gwsyear": start[0],
+            "gwsmonth": start[1],
+            "gwsday": start[2],
+            "gweyear": end[0],
+            "gwemonth": end[1],
+            "gweday": end[2],
         },
         "geometry": _box(*bounds),
     }
@@ -116,7 +130,7 @@ def test_an_unreadable_date_is_refused(bad: str) -> None:
     ("when", "expected"),
     [
         ("1990-06-30", {"Yugoslavia"}),
-        ("1991-06-24", {"Yugoslavia"}),   # the day before
+        ("1991-06-24", {"Yugoslavia"}),  # the day before
         ("1991-06-25", {"Yugoslavia", "Croatia", "Serbia"}),  # both ends inclusive
         ("1991-06-26", {"Croatia", "Serbia"}),
         ("1995-06-30", {"Croatia", "Serbia"}),
@@ -151,16 +165,21 @@ def test_the_error_says_which_properties_it_looked_for() -> None:
 
 def test_a_feature_with_no_window_is_always_valid() -> None:
     """A source that does not date its polygons is a present-day source."""
-    undated = [{"type": "Feature", "properties": {"cntry_name": "Ruritania"},
-                "geometry": _box(0, 0, 1, 1)}]
+    undated = [
+        {"type": "Feature", "properties": {"cntry_name": "Ruritania"}, "geometry": _box(0, 0, 1, 1)}
+    ]
     assert msm.countries_as_of(undated, date(1850, 1, 1))[0][0] == "Ruritania"
 
 
 def test_another_source_can_name_its_fields() -> None:
     """CShapes' names are a default, not a requirement."""
-    other = [{"type": "Feature",
-              "properties": {"label": "Ruritania", "from_y": 1900, "to_y": 1950},
-              "geometry": _box(0, 0, 1, 1)}]
+    other = [
+        {
+            "type": "Feature",
+            "properties": {"label": "Ruritania", "from_y": 1900, "to_y": 1950},
+            "geometry": _box(0, 0, 1, 1),
+        }
+    ]
     fields = {"name": ("label",), "start": ("from_y", "x", "x"), "end": ("to_y", "x", "x")}
     assert msm.countries_as_of(other, date(1920, 1, 1), fields)[0][0] == "Ruritania"
     with pytest.raises(ValueError):
@@ -201,7 +220,7 @@ def test_the_same_plate_without_a_source_is_present_day(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, "1990-06-30")
     cfg["frontiers"].pop("source")
     cfg["frontiers"].pop("as_of")
-    svg = msm.build_map(cfg)
+    svg = plate(cfg)
     assert "YUGOSLAVIA" not in svg.upper()
     assert "CROATIA" in svg.upper()  # the basemap's own, present-day
 
@@ -216,7 +235,7 @@ def test_a_source_without_a_date_is_refused(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path, "1990-06-30")
     cfg["frontiers"].pop("as_of")
     with pytest.raises(ValueError, match="frontiers.source needs frontiers.as_of"):
-        msm.build_map(cfg)
+        plate(cfg)
 
 
 def test_the_new_keys_are_accepted_by_the_validator(tmp_path: Path) -> None:

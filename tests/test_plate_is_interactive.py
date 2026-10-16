@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _plates import plate  # noqa: E402
 
 from sprezzature_maps import _load_script
 
@@ -46,9 +47,7 @@ def _band(west: float, east: float, actor: str, confidence: str) -> dict[str, An
         "properties": {"actor": actor, "confidence": confidence},
         "geometry": {
             "type": "Polygon",
-            "coordinates": [
-                [[west, 44.5], [east, 44.5], [east, 52.5], [west, 52.5], [west, 44.5]]
-            ],
+            "coordinates": [[[west, 44.5], [east, 44.5], [east, 52.5], [west, 52.5], [west, 44.5]]],
         },
     }
 
@@ -75,7 +74,7 @@ def _plate(**overrides: Any) -> str:
     }
     cfg.update(overrides)
     msm.validate_config(cfg)
-    return msm.build_map(cfg)
+    return plate(cfg)
 
 
 # ── the static half ───────────────────────────────────────────────────────
@@ -110,7 +109,7 @@ def test_a_plate_with_no_thematic_layer_gets_no_panel() -> None:
         "basemap": {"relief": False},
     }
     msm.validate_config(cfg)
-    assert "plate-controls" not in msm.build_map(cfg)
+    assert "plate-controls" not in plate(cfg)
 
 
 def test_the_confidence_filter_offers_the_floor_it_filters_to() -> None:
@@ -198,9 +197,15 @@ def _drive(svg: str, tmp_path: Path) -> dict[str, Any]:
     (tmp_path / "controls.js").write_text(script.group(1), encoding="utf-8")
     (tmp_path / "harness.js").write_text(_HARNESS, encoding="utf-8")
     result = subprocess.run(
-        ["node", str(tmp_path / "harness.js"), str(tmp_path / "dom.json"),
-         str(tmp_path / "controls.js")],
-        capture_output=True, text=True, check=False,
+        [
+            "node",
+            str(tmp_path / "harness.js"),
+            str(tmp_path / "dom.json"),
+            str(tmp_path / "controls.js"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
@@ -220,7 +225,7 @@ def test_the_confidence_ladder_actually_filters(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs Node to run the plate's script")
 def test_a_layer_switch_moves_every_group_it_owns(tmp_path: Path) -> None:
-    """"Water" is one switch and three drawn groups; a reader thinks in the switch."""
+    """ "Water" is one switch and three drawn groups; a reader thinks in the switch."""
     driven = _drive(_plate(), tmp_path)
     assert driven["layers"]["water"] == ["none", "none", "none"]
     assert driven["layers"]["waterBack"] == "", "a switch must toggle, not latch"

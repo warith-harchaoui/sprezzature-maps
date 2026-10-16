@@ -59,6 +59,12 @@ SCRIPTS = REPO / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from _plates import plate  # noqa: E402
+
 
 def _load(name: str) -> Any:
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
@@ -75,9 +81,7 @@ msm = _load("make_situation_map")
 #: True when the optional vector renderer is installed here.
 HAS_RSVG = shutil.which(render._VECTOR_RENDERER) is not None
 
-needs_rsvg = pytest.mark.skipif(
-    not HAS_RSVG, reason=f"{render._VECTOR_RENDERER} is not installed"
-)
+needs_rsvg = pytest.mark.skipif(not HAS_RSVG, reason=f"{render._VECTOR_RENDERER} is not installed")
 
 needs_poppler = pytest.mark.skipif(
     shutil.which("pdftoppm") is None, reason="poppler's pdftoppm is not installed"
@@ -171,7 +175,7 @@ def test_the_raster_is_sized_by_the_drawing_and_not_by_the_millimetres(
 ) -> None:
     """A plate is the same picture whether or not it declares a print size."""
     png = pytest.importorskip("PIL.Image")
-    plain = _write(str(msm.build_map(_cfg_plain())), tmp_path / "a.png")
+    plain = _write(str(plate(_cfg_plain())), tmp_path / "a.png")
     sized = _write(_plate(print_width="90mm"), tmp_path / "b.png")
     assert png.open(plain).size == png.open(sized).size
 
@@ -208,7 +212,7 @@ def test_a_plate_with_no_print_width_keeps_the_page_it_always_had(
     tmp_path: Path,
 ) -> None:
     """Nothing changes for a plate that never claimed to be going to a page."""
-    out = _write(str(msm.build_map(_cfg_plain())), tmp_path / "plate.pdf")
+    out = _write(str(plate(_cfg_plain())), tmp_path / "plate.pdf")
     assert _page_mm(out)[0] > 200.0
 
 
@@ -255,9 +259,7 @@ def test_without_the_renderer_the_page_says_it_is_a_raster(
     assert out.stat().st_size > 0
 
 
-def test_the_warning_names_what_to_install(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_warning_names_what_to_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A complaint nobody can act on changes nothing."""
     real = shutil.which
     monkeypatch.setattr(
@@ -299,10 +301,8 @@ def test_the_fallback_page_is_still_the_right_size(
 
 
 @pytest.mark.parametrize("suffix", [".png", ".jpg", ".jpeg", ".html", ".svg", ".txt"])
-def test_every_other_extension_still_writes_what_it_always_did(
-    tmp_path: Path, suffix: str
-) -> None:
-    out = _write(str(msm.build_map(_cfg_plain())), tmp_path / f"plate{suffix}")
+def test_every_other_extension_still_writes_what_it_always_did(tmp_path: Path, suffix: str) -> None:
+    out = _write(str(plate(_cfg_plain())), tmp_path / f"plate{suffix}")
     assert out.stat().st_size > 0
 
 
@@ -310,7 +310,7 @@ def test_an_unknown_extension_writes_the_svg_rather_than_guessing(
     tmp_path: Path,
 ) -> None:
     """A mislabelled binary is worse than a correctly-labelled surprise."""
-    out = _write(str(msm.build_map(_cfg_plain())), tmp_path / "plate.json")
+    out = _write(str(plate(_cfg_plain())), tmp_path / "plate.json")
     assert out.read_text(encoding="utf-8").startswith("<svg")
 
 
@@ -322,9 +322,7 @@ def test_an_unknown_extension_writes_the_svg_rather_than_guessing(
         ('<svg viewBox="0 0 100 50" width="100" height="50"/>', "100"),
     ],
 )
-def test_a_physical_root_is_swapped_for_the_coordinate_system(
-    root: str, expected: str
-) -> None:
+def test_a_physical_root_is_swapped_for_the_coordinate_system(root: str, expected: str) -> None:
     out = render._size_in_pixels(root)
     assert re.search(r'width="([\d.]+)"', out).group(1) == expected  # type: ignore[union-attr]
     assert "mm" not in out and "cm" not in out
@@ -466,7 +464,7 @@ def test_the_exported_page_still_carries_the_words(tmp_path: Path) -> None:
 
 def test_a_screen_plate_keeps_every_shadow_it_ever_had() -> None:
     """The default is untouched: a plate that never mentioned print is as it was."""
-    assert 'filter="url(#panel-shadow)"' in msm.build_map(_cfg_plain())
+    assert 'filter="url(#panel-shadow)"' in plate(_cfg_plain())
 
 
 def test_a_plate_bound_for_a_page_draws_no_filter_at_all() -> None:
@@ -517,10 +515,26 @@ def test_a_panel_of_a_printed_sheet_is_printed_too() -> None:
     screen chrome inside a figure built for a column.
     """
     events = [
-        {"lon": 30.0, "lat": 12.0, "color": "#c0392b", "r": 4, "label": "a",
-         "precision": 1, "date": "2023-05-02", "time_precision": 1},
-        {"lon": 31.0, "lat": 13.0, "color": "#c0392b", "r": 4, "label": "b",
-         "precision": 1, "date": "2024-05-02", "time_precision": 1},
+        {
+            "lon": 30.0,
+            "lat": 12.0,
+            "color": "#c0392b",
+            "r": 4,
+            "label": "a",
+            "precision": 1,
+            "date": "2023-05-02",
+            "time_precision": 1,
+        },
+        {
+            "lon": 31.0,
+            "lat": 13.0,
+            "color": "#c0392b",
+            "r": 4,
+            "label": "b",
+            "precision": 1,
+            "date": "2024-05-02",
+            "time_precision": 1,
+        },
     ]
     sheet = _plate(
         print_width="180mm",
