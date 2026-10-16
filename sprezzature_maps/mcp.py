@@ -73,7 +73,6 @@ except ImportError:  # pragma: no cover - dependency guard
         sys.exit(1)
 
 else:
-
     # Reuse the exact same FastAPI app -- MCP is a thin wrapper on top.
     from sprezzature_maps.api import app
 
@@ -96,7 +95,6 @@ else:
         mcp.mount_http()
     else:  # pragma: no cover - legacy fastapi-mcp
         mcp.mount()
-
 
     def main(argv: list[str] | None = None) -> None:
         """
@@ -152,6 +150,7 @@ else:
         # __init__.py's _load_script) is process-local state, so multiple
         # workers would each pay the same import cost independently rather
         uvicorn.run(app, host=args.host, port=args.port, workers=1)
+
 
 if __name__ == "__main__":  # pragma: no cover
     main()

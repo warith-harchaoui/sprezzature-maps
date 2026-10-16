@@ -64,6 +64,7 @@ from typing import Any, Literal
 try:
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import HTMLResponse, RedirectResponse, Response
+    from fastapi.staticfiles import StaticFiles
 except ImportError as exc:  # pragma: no cover - dependency guard
     raise ImportError(
         "The FastAPI HTTP surface requires the [api] extra. "
@@ -71,10 +72,11 @@ except ImportError as exc:  # pragma: no cover - dependency guard
     ) from exc
 
 from pydantic import BaseModel, Field
+from sprezzature_figures.fonts import FONTS_DIR as _FONTS_DIR
 
 from . import __version__ as _VERSION
 from . import make_choropleth, make_situation_map
-from .gui import render_gallery_html
+from .gui import FONTS_URL_PREFIX, render_gallery_html
 
 #: Maps an output format name to the Content-Type the response carries.
 #: Kept as a small local dict (rather than importing mimetypes) since this
@@ -300,6 +302,20 @@ def kinds() -> list[str]:
     return ["choropleth", "density", "situation_map"]
 
 
+# The gallery page sets three Roboto families and links them at this prefix
+# (see :func:`sprezzature_maps.gui._font_face_css`). Serving them from
+# sprezzature-figures' bundled font directory is what lets the page stay
+# self-hosted: it used to fetch the same three from fonts.googleapis.com,
+# which put a third-party request on every load of a tool that otherwise needs
+# no network at all. `html=False` and `check_dir=True` are the defaults worth
+# keeping explicit -- this mount serves font files, never an index.
+app.mount(
+    FONTS_URL_PREFIX,
+    StaticFiles(directory=str(_FONTS_DIR), html=False, check_dir=True),
+    name="fonts",
+)
+
+
 @app.get("/", include_in_schema=False)
 def gallery() -> HTMLResponse:
     """Serve the GUI gallery page at the app root.
@@ -501,7 +517,6 @@ def render_density(body: DensityRequest = DensityRequest()) -> Response:
     if body.caption is not None:
         kwargs["caption"] = body.caption
     return _render_to_response(make_density, kwargs, body.format, "density")
-
 
 
 def main() -> None:

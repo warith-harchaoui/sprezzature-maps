@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sprezzature-maps"
-version = "0.18.0"
+version = "0.19.0"
 description = "Hand-authored SVG world maps for the sprezzature stack: choropleth and layered areas-of-control situation maps, every line authored as SVG directly. Depends on sprezzature-figures for shared rendering primitives."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -32,7 +32,15 @@ dependencies = [
     # only on GitHub. PyPI rejects those outright — "Can't have direct
     # dependency" — and now that figures is published there is no reason
     # for one.
-    "sprezzature-figures>=2.0.0",
+    #
+    # The floor is 2.7.0 and it is load-bearing, not housekeeping: the
+    # gallery page serves Roboto Serif out of that package's font directory
+    # (sprezzature_maps.gui._font_face_css), and 2.6.0 was the one release
+    # that left the serif out of its wheel. Against 2.6.0 the page still
+    # renders — available_faces() drops the face and the title falls back to
+    # Georgia — which is exactly the kind of silent degradation a floor is
+    # for.
+    "sprezzature-figures>=2.7.0",
     "resvg-py>=0.3",
     "pillow>=10.0",
     "pyproj>=3.6",
