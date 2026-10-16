@@ -78,6 +78,33 @@ All notable changes to sprezzature-maps are documented here.
   skip counts are the evidence that nothing depended on running alone or in
   order.
 
+- **The elevation grid is held as int16, and the offset is undone in place:
+  peak 9.5 GB -> 6.5 GB, resident 3.61 GB -> 1.80 GB.** The loader did this::
+
+      raw = np.array(img, dtype=np.float32)     # 902M px -> 3.61 GB
+      cache[path] = raw - _ELEVATION_OFFSET_M   # a SECOND 3.61 GB
+
+  Two full-grid float32 arrays alive at once, on top of Pillow's own 1.8 GB
+  buffer. Located with `tracemalloc` rather than guessed: `_relief.py:612`,
+  3.6 GB still held at the end of a single render.
+
+  Three changes, each measured. The grid decodes straight to **int16** --
+  exact, not a tolerance: across all six tiers the real range is -430..8625 m
+  against int16's ±32767, with no NoData sentinel, and every stored value
+  round-trips. The offset is subtracted **in place** instead of into a second
+  array. And the float32 widening moved to `_elevation_window`, so it applies
+  to the crop a render asked for rather than to the whole world.
+
+  Nothing about the drawing changes, and that is checked rather than asserted:
+  the regenerated situation plate is **byte-identical** to the committed demo,
+  which was produced by the float32 loader.
+
+  `tests/test_the_elevation_grid_stays_small.py` guards it — the dtype, the
+  exactness of the offset, that a window does not widen the cache, and that a
+  window does not alias it. Unusual as a test of a *resource*, and deliberate:
+  the alternative failure is an OOM kill with no stack and no test name, which
+  is the least diagnosable red build there is.
+
 - **CI stays serial, and the reason is worth writing down so nobody retries
   it.** `-n auto` was put in CI first and the runner killed the job at 27%
   with exit code 143 -- SIGTERM, the OOM killer. Measured afterwards instead
