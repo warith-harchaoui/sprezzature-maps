@@ -22,7 +22,7 @@ ever revendored.
 
 Author
 ------
-Project maintainers.
+Warith HARCHAOUI <warith.harchaoui@gmail.com>
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO / "scripts"
@@ -136,3 +137,82 @@ def test_a_window_does_not_alias_the_shared_cache() -> None:
     assert np.array_equal(rel._elevation_grid(path), before), (
         "writing to a window changed the cached grid: the window aliases it"
     )
+
+
+def test_the_loader_never_materialises_a_whole_extra_grid() -> None:
+    """The peak is set by the *intermediates*, not by what ends up cached.
+
+    This is the half the dtype tests above cannot see. ``cache[path]`` can be
+    a perfectly lean int16 array while the code that filled it briefly held
+    three more copies of the same grid -- and the OOM killer counts the peak,
+    not the result.
+
+    It is what the whole-image path did. ``np.asarray(img).astype(np.int16)``
+    reads as one conversion; on a mode ``I;16`` PNG it is four full-size
+    buffers, because Pillow's array interface goes through ``tobytes()``:
+    Pillow's own decode buffer, a bytes object, the numpy array over it, and
+    then ``astype``'s result. Measured on the finest tier, 6.03 GB peak
+    against a 3.36 GB floor.
+
+    Rather than sample RSS -- which is process-wide, so every other test in the
+    session would be inside the measurement -- this watches what the loader
+    *asks numpy for*. Each intermediate must be a band, never the grid. The
+    assertion is in rows rather than bytes so it reads the same whichever tier
+    runs it.
+    """
+    rel = _relief()
+    tier = _small_tier()
+    rel._elevation_array_cache.pop(tier, None)
+
+    seen: list[tuple[int, ...]] = []
+    real_asarray = np.asarray
+
+    def spy(obj, *args, **kwargs):  # type: ignore[no-untyped-def]
+        result = real_asarray(obj, *args, **kwargs)
+        seen.append(getattr(result, "shape", ()))
+        return result
+
+    monkeypatched = pytest.MonkeyPatch()
+    try:
+        monkeypatched.setattr(np, "asarray", spy)
+        grid = rel._elevation_grid(tier)
+    finally:
+        monkeypatched.undo()
+        rel._elevation_array_cache.pop(tier, None)
+
+    height = grid.shape[0]
+    full_grid_intermediates = [shape for shape in seen if len(shape) == 2 and shape[0] == height]
+    assert not full_grid_intermediates, (
+        f"the loader built a whole-grid intermediate {full_grid_intermediates} for a "
+        f"{grid.shape} tier; it must move the decode across in bands of at most "
+        f"{rel._DECODE_BAND_ROWS} rows"
+    )
+    assert seen, "the loader asked numpy for nothing at all -- has the decode moved?"
+    assert max(shape[0] for shape in seen if len(shape) == 2) <= rel._DECODE_BAND_ROWS
+
+
+def test_banding_does_not_change_a_single_value() -> None:
+    """Staging the decode is a memory change and must be nothing else.
+
+    Compared against the straightforward whole-image read rather than against a
+    stored fixture, so the comparison stays honest if a tier is ever
+    revendored: both sides are computed from the same file, here, now.
+    """
+    rel = _relief()
+    tier = _small_tier()
+    rel._elevation_array_cache.pop(tier, None)
+
+    previous_limit = Image.MAX_IMAGE_PIXELS
+    Image.MAX_IMAGE_PIXELS = None
+    try:
+        with Image.open(tier) as img:
+            straightforward = np.asarray(img).astype(np.int16) - int(rel._ELEVATION_OFFSET_M)
+    finally:
+        Image.MAX_IMAGE_PIXELS = previous_limit
+
+    banded = rel._elevation_grid(tier)
+    rel._elevation_array_cache.pop(tier, None)
+
+    assert banded.dtype == straightforward.dtype
+    assert banded.shape == straightforward.shape
+    assert np.array_equal(banded, straightforward)
