@@ -481,6 +481,13 @@ _ELEVATION_OFFSET_M = 1000.0
 #: Per-tier decoded array cache, keyed by path -- a render that needs the
 #: coarse tier today and the fine tier tomorrow (different regions/sizes in
 #: the same process) shouldn't evict and re-decode either one.
+#:
+#: Held as **int16 metres**, not float32, and that is the difference between a
+#: process that fits on a CI runner and one the OOM killer takes. The finest
+#: tier is 902M pixels: 1.8 GB as int16 against 3.6 GB as float32, for data
+#: whose real range across all six tiers is -430..8625 m -- measured, and
+#: nowhere near int16's +/-32767, with no NoData sentinel to overflow it. The
+#: conversion is exact: every stored value round-trips.
 _elevation_array_cache: dict[Path, np.ndarray] = {}
 
 
@@ -595,6 +602,42 @@ def load_elevation(path: Path = ELEVATION_PNG) -> np.ndarray:
     >>> arr.dtype
     dtype('float32')
     """
+    return _elevation_grid(path).astype(np.float32)
+
+
+def _elevation_grid(path: Path = ELEVATION_PNG) -> np.ndarray:
+    """Load (and cache) one tier as int16 metres -- the storage behind every window.
+
+    Separate from :func:`load_elevation` because the two answer different
+    questions. This one is what the renderer actually uses, through
+    :func:`_elevation_window`, and it is kept as small as the data allows;
+    ``load_elevation`` keeps the documented float32 contract for anyone asking
+    for a whole tier, and pays for it at the call.
+
+    The split is a memory fix, measured rather than guessed. The old loader did
+    this::
+
+        raw = np.array(img, dtype=np.float32)     # 902M px -> 3.61 GB
+        cache[path] = raw - _ELEVATION_OFFSET_M   # a SECOND 3.61 GB
+
+    -- two full-grid float32 arrays alive at once, on top of Pillow's own
+    1.8 GB buffer, for a peak of ~9.5 GB and 3.6 GB resident forever after.
+    A standard CI runner has 16 GB, which is why ``pytest -n 2`` could not
+    exist here: two workers wanted ~19 GB and the second was killed.
+
+    Three things changed. The array is decoded straight to int16 rather than
+    float32 (half the bytes, and exact -- see ``_elevation_array_cache``); the
+    offset is subtracted **in place** rather than into a new array; and the
+    float32 widening moved to :func:`_elevation_window`, which applies it to
+    the crop a render asked for instead of to the whole world.
+
+    Returns
+    -------
+    numpy.ndarray
+        2-D int16, real elevation in metres (the vendored +1000m storage
+        offset already undone). Shared, cached, and **not** to be mutated by
+        callers -- :func:`_elevation_window` copies on the way out.
+    """
     if path not in _elevation_array_cache:
         # The finest tier is 902M pixels, well past Pillow's default
         # "decompression bomb" ceiling (~179M) -- a sane default against
@@ -606,10 +649,17 @@ def load_elevation(path: Path = ELEVATION_PNG) -> np.ndarray:
         Image.MAX_IMAGE_PIXELS = None
         try:
             with Image.open(path) as img:
-                raw = np.array(img, dtype=np.float32)
+                # Straight to int16: the stored values are uint16 and the
+                # offset makes them signed, so this is the narrowest exact
+                # type. `astype` is the one copy; Pillow's buffer is released
+                # at the end of the `with`.
+                grid = np.asarray(img).astype(np.int16)
         finally:
             Image.MAX_IMAGE_PIXELS = previous_limit
-        _elevation_array_cache[path] = raw - _ELEVATION_OFFSET_M
+        # In place: `grid - offset` would allocate a second full-size array
+        # while the first is still alive, which is the 3.6 GB this avoids.
+        grid -= int(_ELEVATION_OFFSET_M)
+        _elevation_array_cache[path] = grid
     return _elevation_array_cache[path]
 
 
@@ -650,7 +700,7 @@ def _elevation_window(
     >>> bounds[0] < -9.6  # padded west of the requested bbox
     True
     """
-    grid = load_elevation(path)
+    grid = _elevation_grid(path)
     h, w = grid.shape
     gb = _ELEVATION_BOUNDS
     res_lon = (gb["east"] - gb["west"]) / w
@@ -668,7 +718,10 @@ def _elevation_window(
     row0 = max(0, int((gb["north"] - pn) / res_lat))
     row1 = min(h, int(np.ceil((gb["north"] - ps) / res_lat)))
 
-    crop = grid[row0:row1, col0:col1]
+    # Widen to float32 here and only here: on the crop a render asked for,
+    # not on the 902M-pixel world behind it. `astype` also copies, which is
+    # what keeps the shared int16 cache safe from a caller that writes.
+    crop = grid[row0:row1, col0:col1].astype(np.float32)
     actual_bounds = (
         gb["west"] + col0 * res_lon,
         gb["north"] - row1 * res_lat,
