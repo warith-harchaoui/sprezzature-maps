@@ -68,6 +68,49 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Changed
 
+- **The elevation loader decodes in bands: peak 6.03 GB to 3.50 GB, for the
+  same 6.6 seconds and byte-identical output.** This is the third of the three
+  memory fixes the 0.18.0 notes listed, and it is not the one that was
+  planned. The plan was "crop before materialising" -- decode only the window
+  a render asks for instead of the whole world. Measuring first killed it:
+
+      before anything       0.04 GB
+      after tier decode     6.38 GB   <- all of it, here
+      after window crop     6.38 GB   <- the crop is 0.3% of the tier
+      after shading (FFT)   6.38 GB
+
+  The crop and the fractional-Laplacian shading add **nothing measurable**.
+  Cropping earlier would have saved nothing, and it would have cost
+  re-vendoring 226 MB of LFS raster as tiles, because a PNG is one zlib stream
+  with per-scanline filters and cannot be decoded from the middle --
+  `img.crop()` calls `load()` and decodes it all anyway.
+
+  The waste was in the decode itself. `np.asarray(img).astype(np.int16)` reads
+  as one conversion; on a mode `I;16` PNG it is four full-size buffers,
+  because Pillow's array interface goes through `tobytes()`: Pillow's decode
+  buffer, a bytes object, the numpy array over it, then `astype`'s result.
+  Moving the data across in 256-row bands leaves two -- the decode buffer and
+  the int16 result, 1.68 GB each, which is the floor.
+
+  Band size was picked by measurement, not taste: 3.50 GB at 128 rows, 3.62 at
+  256, 3.59 at 512, 4.57 at 8192. Run time does not move across any of them,
+  including the old whole-image path, so this is not a speed-for-memory trade.
+
+  Two guards, in `tests/test_the_elevation_grid_stays_small.py`. One watches
+  what the loader *asks numpy for* and fails if any intermediate is a whole
+  grid rather than a band -- RSS sampling would have put every other test in
+  the session inside the measurement. The other compares the banded result
+  against a straightforward whole-image read computed in the same test, so the
+  comparison stays honest if a tier is ever revendored. Verified by restoring
+  the old line: the first goes red, the second stays green, which is the
+  correct pair of answers.
+
+  **CI is left serial.** The headroom now exists -- two workers want ~7 GB
+  against a 16 GB runner where they wanted ~19 -- but CI is green and the
+  standing rule is to leave it alone once it passes. The number is recorded
+  here so the next person deciding has it.
+
+
 - **The density plate embedded two fonts it never named and drew in a third it
   never shipped.** Its `<text>` asked for `Georgia, 'Times New Roman', serif`
   and a bare `ui-monospace`, while `write_svg` spliced in Roboto and Roboto
