@@ -49,6 +49,27 @@ Author
 
 from __future__ import annotations
 
+from sprezzature_figures.fonts import (
+    MONO_STACK,
+    SANS_STACK,
+    SERIF_STACK,
+    available_faces,
+    web_font_faces_css,
+)
+
+#: Where the FastAPI app mounts sprezzature-figures' bundled font directory
+#: (see :mod:`sprezzature_maps.api`). Named here rather than in ``api.py``
+#: because the CSS below has to point at the same path the app serves, and
+#: two literals that must agree should be one literal.
+FONTS_URL_PREFIX = "/fonts"
+
+#: The three families this page sets, and the only ones it links. The suite's
+#: typography is three Roboto -- sans for interface text, serif for the page
+#: title, mono for the kind names -- so the page names exactly three faces and
+#: no more. Latin Modern and the italics ship too and are deliberately absent:
+#: linking a face nothing sets is a download nobody needs.
+_PAGE_FACES: tuple[str, ...] = ("sans", "serif", "mono")
+
 #: The tiles this gallery shows, in display order. Kept as a plain
 #: tuple-of-dicts (not a dataclass) since this is the only place the shape
 #: is used -- a dataclass here would be ceremony without a second consumer.
@@ -122,6 +143,39 @@ def _tile_html(tile: dict[str, str]) -> str:
     </article>"""
 
 
+def _font_face_css() -> str:
+    """``@font-face`` rules for this page's three families, self-hosted.
+
+    The page used to pull Roboto, Roboto Serif and Roboto Mono from
+    ``fonts.googleapis.com``. Three things were wrong with that. It put a
+    third-party request on every page load of a tool that otherwise runs
+    entirely offline -- the same posture as routing every model call through a
+    local Ollama. It made the page's typography depend on a network that may
+    not be there, falling back to whatever the reader's machine happens to own.
+    And it reached past a dependency that already had the fonts:
+    ``sprezzature-figures`` vendors all three families and exists partly to be
+    the suite's one source of them. ``web/fonts/roboto-serif/fonts.css`` on the
+    site states the rule outright -- *self-hosted; do NOT load from a
+    third-party CDN* -- and this page was the one place in the suite breaking
+    it.
+
+    The faces are filtered through :func:`~sprezzature_figures.fonts.available_faces`
+    rather than named blind, because a rule is a URL the app has to be able to
+    serve: :mod:`sprezzature_maps.api` mounts the font directory at
+    :data:`FONTS_URL_PREFIX`, so a rule for a file that is not there is a 404.
+    A browser swallows that one silently and moves to the next family in the
+    stack, which is exactly how the serif went missing for a release without
+    anyone noticing.
+
+    Returns
+    -------
+    str
+        CSS text, ready to splice into a ``<style>`` element.
+    """
+    present = set(available_faces())
+    return web_font_faces_css(FONTS_URL_PREFIX, tuple(key for key in _PAGE_FACES if key in present))
+
+
 def render_gallery_html() -> str:
     """Render the complete gallery HTML page.
 
@@ -147,9 +201,7 @@ def render_gallery_html() -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sprezzature-maps</title>
 <meta name="description" content="Hand-authored SVG world maps: choropleth and situation maps.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=Roboto+Serif:opsz,wght@8..144,600&display=swap" rel="stylesheet">
+<style>{_font_face_css()}</style>
 <style>
   :root {{
     color-scheme: light dark;
@@ -175,7 +227,7 @@ def render_gallery_html() -> str:
     margin: 0;
     background: var(--bg);
     color: var(--fg);
-    font-family: "Roboto", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: {SANS_STACK};
     line-height: 1.5;
   }}
   header {{
@@ -186,7 +238,7 @@ def render_gallery_html() -> str:
     border-bottom: 1px solid var(--border);
   }}
   header h1 {{
-    font-family: "Roboto Serif", Georgia, serif;
+    font-family: {SERIF_STACK};
     font-size: 1.4rem;
     font-weight: 600;
     margin: 0;
@@ -235,7 +287,7 @@ def render_gallery_html() -> str:
   .tile-title {{ margin: 0 0 0.4rem; font-size: 1.1rem; }}
   .tile-description {{ margin: 0 0 0.7rem; color: var(--fg-secondary); font-size: 0.92rem; }}
   .tile-kind {{
-    font-family: "Roboto Mono", ui-monospace, monospace;
+    font-family: {MONO_STACK};
     font-size: 0.78rem;
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);

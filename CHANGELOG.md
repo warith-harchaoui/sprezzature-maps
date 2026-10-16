@@ -2,9 +2,53 @@
 
 All notable changes to sprezzature-maps are documented here.
 
-## [Unreleased]
+## 0.19.0 (2026-10-16): the GUI stops asking Google for its typefaces
 
 ### Fixed
+
+- **The gallery page fetched all three Roboto families from
+  `fonts.googleapis.com` on every load.** Three tags at the top of
+  `gui.py` -- two `preconnect` hints and a stylesheet link -- in a package
+  that otherwise needs no network at all: it draws from vendored rasters, and
+  the suite routes even its model calls through a local Ollama. A reader
+  offline, or behind a filter, got the page set in whatever their machine
+  happened to own.
+
+  It also reached straight past a dependency that already had the fonts.
+  `sprezzature-figures` vendors all three families and exists in part to be
+  the suite's single source of them. And the rule is not folklore: the
+  three-Roboto rule in `sprezzature-ui`'s SKILL.md spells it out -- *"Self-host
+  always (no Google Fonts CDN, no jsDelivr GH proxy in production builds)"* --
+  and the suite's own `web/fonts/roboto-serif/fonts.css` repeats it. Checked
+  across all eight repositories: this page was the only place breaking it.
+  (`web/tools/build_figure_kits.py` does emit an `@import` from the CDN, but
+  that is a deliberate, tested choice for downloadable kit SVGs, which cannot
+  carry 400 KB of base64 per file.)
+
+  `sprezzature_maps.api` now mounts that font directory at `/fonts` and the
+  page emits its own `@font-face` rules through
+  `sprezzature_figures.fonts.web_font_faces_css`. Three families, three files,
+  no outbound request.
+
+- **The page's three font stacks were typed by hand.** They now come from
+  `sprezzature_figures.fonts` -- `SANS_STACK`, `SERIF_STACK`, `MONO_STACK` --
+  so a change there reaches this page instead of leaving it behind. The sans
+  had already drifted: the page set `"Roboto", -apple-system,
+  BlinkMacSystemFont, sans-serif` where the suite's stack is `Roboto,
+  system-ui, sans-serif`.
+
+  This is the density plate's defect in a second place. That plate embedded
+  Roboto while every one of its `<text>` elements asked for Georgia, for the
+  same reason: the names were typed on both sides and were free to disagree.
+  Note that `make_situation_map`'s stack is deliberately *not* unified -- see
+  the 0.18.0 notes; `_textbox.ADVANCE` is measured against exactly the faces
+  that stack reaches.
+
+- **`sprezzature-figures>=2.7.0`, and the floor is load-bearing.** 2.6.0 is
+  the one release that left Roboto Serif out of its wheel. Against it this
+  page still renders -- `available_faces()` drops the face, the title falls
+  back to Georgia, nothing raises -- which is precisely the silent degradation
+  a floor exists to prevent.
 
 - **The export canary failed on CI for a reason that had nothing to do with
   exporting.** It compared the ink of the converted page against the ink from
@@ -118,6 +162,20 @@ All notable changes to sprezzature-maps are documented here.
   parallel CI is not a knob to tune here -- it is blocked on that 9.5 GB. The
   way to unlock it is to chunk that projection, which would make the serial
   run cheaper too.
+
+### Added
+
+- **`tests/test_the_gallery_page_serves_its_own_fonts.py`** (5 tests) states
+  the rule as a category rather than a blocklist: nothing the browser fetches
+  on its own may come from another host. Anchor tags are stripped before
+  looking, because a link the reader chooses to click is not the same as a
+  subresource loaded whether they wanted it or not.
+
+  The half a "no CDN" check cannot cover is tested too -- every font URL the
+  page links is requested from the app and must come back 200 as `font/woff2`.
+  Removing the external tags and leaving the rules pointing at an unmounted
+  path would pass the first check and still draw the page in Georgia. Verified
+  by putting the CDN back: four of the five go red.
 
 ## [0.18.0] - 2026-10-15: a page a journal can actually use
 
