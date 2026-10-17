@@ -104,11 +104,29 @@ def build_parser() -> argparse.ArgumentParser:
     p_sit.add_argument("--config", help="YAML config; defaults to the bundled demo.")
     p_sit.add_argument("--out", help="Output SVG path.")
 
+    # The audit half, beside the three that make plates. A brick that only
+    # makes is half a brick: this asks whether what came out says enough
+    # about itself for a reader to question it.
+    p_audit = sub.add_parser(
+        "audit",
+        help="Check that a rendered plate says how it was made.",
+    )
+    p_audit.add_argument("target", help="An SVG plate, or a folder of them.")
+    p_audit.add_argument(
+        "--format", choices=["text", "json"], default="text",
+        help="Output shape (default: text).",
+    )
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.kind == "audit":
+        from sprezzature_maps.audit import main as audit_main
+
+        return audit_main([args.target, "--format", args.format])
 
     if args.kind == "choropleth":
         kwargs = {}
