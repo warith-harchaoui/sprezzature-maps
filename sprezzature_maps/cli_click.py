@@ -207,6 +207,22 @@ else:
         for kind in ("choropleth", "situation_map"):
             click.echo(kind)
 
+    @main.command("audit")
+    @click.argument("target", type=click.Path(exists=True))
+    @click.option(
+        "--format", "fmt", type=click.Choice(["text", "json"]), default="text",
+        show_default=True, help="Output shape.",
+    )
+    def audit_cmd(target: str, fmt: str) -> None:
+        """Check that a rendered plate says how it was made.
+
+        The twin of ``make-map audit``: same engine, the other parser. A
+        brick that only makes is half a brick.
+        """
+        from sprezzature_maps.audit import main as audit_main
+
+        raise SystemExit(audit_main([target, "--format", fmt]))
+
     @main.command("choropleth")
     @click.option(
         "--data",
