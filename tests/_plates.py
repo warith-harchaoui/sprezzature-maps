@@ -48,7 +48,7 @@ six such tests; they are left alone, and this note is the reason.
 
 Author
 ------
-Warith HARCHAOUI <warith.harchaoui@gmail.com>
+Warith HARCHAOUI <warithmetics@deraison.ai>
 """
 
 from __future__ import annotations

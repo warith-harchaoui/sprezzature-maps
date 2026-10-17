@@ -9,7 +9,7 @@ says it does, and that the map built on it separates what it claims to.
 
 Author
 ------
-Warith HARCHAOUI <warith.harchaoui@gmail.com>
+Warith HARCHAOUI <warithmetics@deraison.ai>
 """
 
 from __future__ import annotations
