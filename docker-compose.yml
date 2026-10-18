@@ -1,0 +1,46 @@
+# `docker compose up` is the whole onboarding. The Dockerfile beside this file
+# is a recipe; this is the way in — the port, the volume, the environment and
+# the command, declared rather than reconstructed by the next reader from a
+# `docker run` line in somebody's shell history.
+#
+#   docker compose up -d
+#   curl -s localhost:8000/health
+#   open http://localhost:8000/               # the gallery, served by the API
+#   docker compose run --rm api make-map choropleth --out /work/world.svg
+#
+# No model and no second container: the relief rasters and the boundaries ship
+# inside the image, so nothing is downloaded at run time. One service, no
+# profile, and saying so is part of the declaration.
+
+services:
+  api:
+    build: .
+    image: sprezzature-maps:local
+    ports:
+      - "8000:8000"
+    environment:
+      # Only read when the app is started through `sprezzature_maps.api:main`.
+      # The command below runs uvicorn directly, so these are here as the
+      # declared facts for anyone who switches to it — not as dead keys.
+      SPREZZATURE_MAPS_HOST: "0.0.0.0"
+      SPREZZATURE_MAPS_PORT: "8000"
+    volumes:
+      # The maps written out, and any data file fed in. Mounted rather than
+      # copied so the container never holds the only copy.
+      - ./work:/work
+    working_dir: /work
+    restart: unless-stopped
+    # One worker, deliberately. Each generator module is imported once and
+    # cached in `sys.modules`, and the relief raster is loaded with it; a
+    # second worker does not share that cache, it pays for its own copy. The
+    # symptom of getting this wrong is not an error — it is a container that
+    # quietly uses several times the memory it needs.
+    command:
+      - uvicorn
+      - sprezzature_maps.api:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
