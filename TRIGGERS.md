@@ -72,6 +72,7 @@ have a list of things that happened at coordinates, density.
 | Choropleth | `make-map choropleth --out world.svg` | `render_choropleth` |
 | Situation map | `make-map situation_map --config region.yaml --out r.svg` | `render_situation_map` |
 | Density | `make-map density --out where.svg` | `render_density` |
+| Audit a finished plate | `make-map audit plate.svg` | — |
 | Which kinds exist | `make-map --help` | `list_kinds` |
 
 A conflict export has no CLI of its own: the loaders are a Python call that
@@ -89,6 +90,38 @@ Both render tools take every field as optional: send nothing and you get the
 demo map, which is the quick way to show someone the format before committing
 real data to it. The situation map is configured by a YAML region file, so
 the CLI is usually the better surface for it.
+
+The audit is the mirror image of the loaders: no MCP tool, because the MCP
+surface is this repo's HTTP routes and those render into a response, while
+the audit reads plates already sitting on the caller's disk — which an HTTP
+renderer never sees. It is on both CLIs instead, `make-map audit` and
+`sprezzature-maps audit`.
+
+---
+
+## Asked whether a finished plate can be published
+
+"Can we publish this map?", "does it say where the numbers came from?",
+"check this before it goes out" — a plate that already exists is not a
+rendering request, and this one has a command: `make-map audit plate.svg`, or
+a folder to take the whole set at once. It is static — it reads the markup
+the generator wrote, no rendering and no network — and exits 1 on any finding.
+
+Six rules, each of them a thing a map gets wrong that a chart auditor has no
+way to ask: a classed legend that never names its method, the class breaks
+missing from the key, no-data drawn and never named so absent reads as low,
+no vintage **and** no statement that the plate is a schematic, no title, no
+accessible name. A plate announcing "synthetic illustrative values" is placed
+well enough — better than a date would place it, since stamping a vintage on
+invented data would be a fabrication — so do not "fix" a demo plate by
+dating it.
+
+What the audit does not do is judge the cartography: whether the right
+classification was chosen, whether the projection suits the latitudes,
+whether the data is any good. A clean run therefore is not an endorsement of
+the map, and reporting it as one is the failure this section exists to
+prevent. It means the reader has been given enough to argue with the plate,
+which is all anyone can check by parsing.
 
 ---
 
