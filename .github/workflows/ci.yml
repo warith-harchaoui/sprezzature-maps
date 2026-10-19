@@ -53,7 +53,7 @@ jobs:
           # repository's HEAD happened to be at the minute the job ran, so a
           # green build was not reproducible and a red one could appear with
           # no change here at all.
-          pip install -e ".[dev,cli,api,mcp]"
+          pip install -e ".[dev,cli,api,mcp]" -r requirements-dev.txt
 
       - name: Lint
         run: ruff check sprezzature_maps scripts tests
