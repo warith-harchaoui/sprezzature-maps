@@ -16,6 +16,8 @@ anyone promises to keep them fresh, but because
 the file on disk differs. Regenerate with
 `python scripts/build_demo_examples.py`.
 
+## The three demo plates
+
 ### `choropleth`
 
 <img src="assets/svg-examples/choropleth.svg" alt="Choropleth demo: a world map shaded by a synthetic global exposure index, Equal Earth projection, OKLCH blue ramp, hillshade relief." width="700">
@@ -96,6 +98,35 @@ make-map choropleth --data my-data.json --out world.svg --title "My indicator"
 # A region config.
 make-map situation_map --config my-region.yaml --out region.svg
 ```
+
+### Reading a plate back
+
+The fourth tool is the one that reads rather than draws, and it is missing
+from most of this file's examples because it is the last step rather than the
+first:
+
+```bash
+make-map audit world.svg                 # exit 1 on any finding
+make-map audit plates/ --format json     # a whole folder, machine-readable
+```
+
+Six static rules over a rendered SVG. The two that catch the most:
+
+- **the classification method has to be named.** The same numbers under
+  quantiles and under natural breaks put different countries in the dark
+  band, so a legend that shows swatches without saying how they were cut is
+  a lookup table with no key;
+- **the plate has to say when it was true, or that it is a schematic.** A map
+  with neither is read as current forever, including years after it stopped
+  being so.
+
+It runs over any SVG, not only ones this package drew — which is how the
+positioning map in [`LANDSCAPE.md`](LANDSCAPE.md) came to be dated: the rule
+fired on it, and the honest fix was to stamp the figure rather than exempt
+the file.
+
+A plate that passes is not thereby a good map. It is one a reader can argue
+with.
 
 ## HTTP API (`sprezzature-maps[api]`)
 
@@ -278,7 +309,7 @@ the drawing changes: the viewBox and every path are identical, byte for byte.
 
 What the key is really for is the second half:
 
-```
+```text
 RuntimeWarning: at 90 mm this plate's smallest label is 1.6 pt (below every
 major publisher's floor; Nature and Science ask 5 to 7 pt, Elsevier 6). The
 label is 10.8 units on a 1768-unit canvas; designing the same plate at
@@ -385,7 +416,7 @@ solid disc beside marks that are not solid.
 
 The plate says what happened:
 
-```
+```text
 6 events aggregated to 3 admin1 units; each mark is a representative point
 for its unit, not a location. 2024-01-15 to 2024-03-15.
 ```
