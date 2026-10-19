@@ -93,6 +93,10 @@ dev = [
     # PDF path shipped raster, at the wrong physical size, because nothing
     # ever opened its output. BSD-3-Clause, pure Python, like this package.
     "pypdf>=4.0",
+    # starlette 1.9.0 moved its TestClient onto httpx2. This repository's
+    # CI installs `.[dev,...]` and never reads requirements-dev.txt, so the
+    # declaration has to be where the install actually looks.
+    "httpx2>=2.0.0",
 ]
 
 [project.scripts]
