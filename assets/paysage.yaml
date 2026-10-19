@@ -1,0 +1,127 @@
+meta:
+  reference: sprezzature-maps
+  rotation_deg: -33.165
+  explained_variance_ratio:
+  - 0.5041
+  - 0.2887
+  cumulative_variance: 0.7928
+  n_approaches: 6
+  attributes:
+  - Fichier lisible sans moteur
+  - Publiable sans reprise graphique
+  - Carte de situation / zones de contrôle
+  - Données quelconques, projection quelconque
+  - Analyse spatiale
+  - Panoramique / zoom interactif
+  - Temps jusqu'à la première carte
+  lower_is_better: []
+axes:
+  axis_1:
+    name: Dynamique ↔ Précision
+    pole_left: Dynamique
+    pole_right: Précision
+    loadings:
+      Fichier lisible sans moteur: 0.544
+      Publiable sans reprise graphique: 0.1072
+      Carte de situation / zones de contrôle: 0.4145
+      Données quelconques, projection quelconque: 0.1951
+      Analyse spatiale: 0.0485
+      Panoramique / zoom interactif: -0.4927
+      Temps jusqu'à la première carte: -0.4874
+  axis_2:
+    name: Polyvalence ↔ Accessibilité
+    pole_bottom: Polyvalence
+    pole_top: Accessibilité
+    loadings:
+      Fichier lisible sans moteur: -0.0783
+      Publiable sans reprise graphique: 0.6002
+      Carte de situation / zones de contrôle: 0.4223
+      Données quelconques, projection quelconque: -0.5141
+      Analyse spatiale: -0.4098
+      Panoramique / zoom interactif: 0.0052
+      Temps jusqu'à la première carte: 0.1519
+approaches:
+- name: sprezzature-maps
+  coordinates:
+    axis_1: 1.8853
+    axis_2: 1.942
+  role: best
+  color: '#FF3B30'
+  attributes:
+    Fichier lisible sans moteur: 5.0
+    Publiable sans reprise graphique: 5.0
+    Carte de situation / zones de contrôle: 5.0
+    Données quelconques, projection quelconque: 2.0
+    Analyse spatiale: 1.0
+    Panoramique / zoom interactif: 1.0
+    Temps jusqu'à la première carte: 3.0
+- name: svgis
+  coordinates:
+    axis_1: 1.4605
+    axis_2: -1.1285
+  role: competitor
+  color: '#C26383'
+  attributes:
+    Fichier lisible sans moteur: 5.0
+    Publiable sans reprise graphique: 2.0
+    Carte de situation / zones de contrôle: 1.0
+    Données quelconques, projection quelconque: 5.0
+    Analyse spatiale: 1.0
+    Panoramique / zoom interactif: 1.0
+    Temps jusqu'à la première carte: 3.0
+- name: Vega-Lite
+  coordinates:
+    axis_1: -0.6168
+    axis_2: 0.4168
+  role: competitor
+  color: '#52DEC7'
+  attributes:
+    Fichier lisible sans moteur: 2.0
+    Publiable sans reprise graphique: 3.0
+    Carte de situation / zones de contrôle: 1.0
+    Données quelconques, projection quelconque: 3.0
+    Analyse spatiale: 1.0
+    Panoramique / zoom interactif: 2.0
+    Temps jusqu'à la première carte: 4.0
+- name: matplotlib+cartopy
+  coordinates:
+    axis_1: 1.8853
+    axis_2: -1.942
+  role: right
+  color: '#007AFF'
+  attributes:
+    Fichier lisible sans moteur: 5.0
+    Publiable sans reprise graphique: 2.0
+    Carte de situation / zones de contrôle: 2.0
+    Données quelconques, projection quelconque: 5.0
+    Analyse spatiale: 4.0
+    Panoramique / zoom interactif: 1.0
+    Temps jusqu'à la première carte: 3.0
+- name: Folium/deck.gl
+  coordinates:
+    axis_1: -1.8073
+    axis_2: 0.3332
+  role: worst
+  color: '#A52A2A'
+  attributes:
+    Fichier lisible sans moteur: 1.0
+    Publiable sans reprise graphique: 2.0
+    Carte de situation / zones de contrôle: 2.0
+    Données quelconques, projection quelconque: 2.0
+    Analyse spatiale: 2.0
+    Panoramique / zoom interactif: 5.0
+    Temps jusqu'à la première carte: 4.0
+- name: Datawrapper
+  coordinates:
+    axis_1: -1.8853
+    axis_2: 1.942
+  role: top
+  color: '#AF52DE'
+  attributes:
+    Fichier lisible sans moteur: 1.0
+    Publiable sans reprise graphique: 5.0
+    Carte de situation / zones de contrôle: 1.0
+    Données quelconques, projection quelconque: 2.0
+    Analyse spatiale: 1.0
+    Panoramique / zoom interactif: 3.0
+    Temps jusqu'à la première carte: 5.0
