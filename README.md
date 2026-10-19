@@ -69,6 +69,19 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+### Then read the plate back
+
+```bash
+make-map audit world.svg            # exit 1 on any finding
+```
+
+Six static rules over a rendered plate, because a map is read the way a text
+is: did it **name the classification method** (the same numbers in quantiles
+and in natural breaks tell two different stories), does it carry its
+**provenance**, does it hide rows it could not place, does it have a title and
+labelled breaks. A plate that passes is not thereby a good map — it is one a
+reader can argue with.
+
 ### From a conflict dataset, in one call
 
 The two datasets peace-and-conflict research runs on — [ACLED](https://acleddata.com/methodology/acled-codebook)
