@@ -72,6 +72,20 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+### Puis relire la planche
+
+```bash
+make-map audit world.svg            # sort 1 au moindre constat
+```
+
+Six règles statiques sur une planche rendue, parce qu'une carte se relit comme
+un texte : a-t-elle **nommé sa méthode de classification** (les mêmes chiffres
+en quantiles et en seuils naturels racontent deux histoires différentes),
+porte-t-elle sa **provenance**, cache-t-elle des lignes qu'elle n'a pas su
+placer, a-t-elle un titre et des bornes étiquetées ? Une planche qui passe
+n'en devient pas bonne pour autant — elle devient discutable, ce qui est le
+but.
+
 Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira.
 Un choroplèthe demande environ une seconde. Une carte de situation dépend de
 la quantité de monde dans le cadre : la démo Europe embarquée demande une
