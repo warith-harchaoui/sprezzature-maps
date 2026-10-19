@@ -77,6 +77,56 @@ your data is a shapefile in a national grid you want svgis, geopandas, or
 QGIS. It does no spatial analysis at all: it assumes the joins, buffers and
 reprojections are already done and only draws the result.
 
+### The same table, drawn
+
+![Six mapping tools positioned on two axes derived from the table above, with sprezzature-maps anchored top-right](assets/sprezzature_maps.svg)
+
+This page opens by refusing to rank these tools on one axis. A map is the
+other half of that refusal: it uses **two**, and says how much they leave out.
+
+The source is [`assets/landscape.csv`](assets/landscape.csv) — the table above
+and nothing else, with `n/a` read as a 1, since in that table it means *this
+tool does not give you that*. Regenerate with:
+
+```sh
+standpoint assets/landscape.csv --outdir assets --stem sprezzature_maps
+```
+
+…then stamp the result with the date its ratings were made. The suite
+repository has `scripts/date_the_map.py` for it; by hand it is one `<text>`
+element reading `Ratings as of October 2026`. That step is not decoration: a
+figure carrying no vintage trips this package's own `no-provenance` rule,
+which exists because a map with no date is read as current forever. The rule
+fired on this very figure the first time it was added, which is the useful way
+for it to arrive.
+
+The geometry is ordinary correlation PCA and is **deterministic**; the four
+words at the edges come from a local model and are vaguer than what is behind
+them, so here are the loadings.
+
+**Horizontal** — "output needs no runtime to view" (+0.54) and "areas-of-
+control plate" (+0.41) against "interactive pan/zoom" (−0.49) and "time to
+first map" (−0.49). A file you own versus a thing you drive, with speed on the
+side of the thing you drive. That is the same distinction this page opens
+with, arrived at from the numbers rather than asserted.
+
+**Vertical** — "publishable without restyling" (+0.60) and the plate (+0.42)
+against "arbitrary geodata in arbitrary CRS" (−0.51) and "spatial analysis"
+(−0.41). Finished-as-drawn versus analytical reach. This is the trade the
+two-star rows above are admitting to, and it is the more interesting of the
+two axes because nothing in the field scores high on both ends.
+
+**Two axes carry 79 %** of a seven-criterion table across six tools. Where the
+points land: `matplotlib+cartopy` sits diametrically opposite `Datawrapper` —
+all reach and no finish against all finish and no reach — and
+`sprezzature-maps` and `svgis` share the right-hand side, which is the earlier
+claim that svgis is the closest living relative, drawn rather than argued.
+`Folium/deck.gl` is far left, as a thing you drive should be.
+
+`standpoint` also writes a prose interpretation beside the figure; it is not
+reproduced here, because a model reading back ratings somebody wrote is not a
+finding, and this file is more useful if the judgements stay visibly mine.
+
 ## When to use what
 
 **Use `sprezzature-maps`** when the deliverable is a *figure* — something a

@@ -86,6 +86,61 @@ une projection nationale, vous voulez svgis, geopandas ou QGIS. Elle ne fait
 aucune analyse spatiale : elle suppose les jointures, les tampons et les
 reprojections déjà faits, et ne dessine que le résultat.
 
+### La même table, dessinée
+
+![Six outils cartographiques positionnés sur deux axes issus de la table ci-dessus, sprezzature-maps ancré en haut à droite](assets/paysage.svg)
+
+Cette page s'ouvre en refusant de classer ces outils sur un seul axe. Une
+carte est l'autre moitié de ce refus : elle en utilise **deux**, et elle dit
+ce qu'ils laissent de côté.
+
+La source est [`assets/paysage.csv`](assets/paysage.csv) — la table ci-dessus
+et rien d'autre, avec `s.o.` lu comme un 1, puisque dans cette table cela veut
+dire *cet outil ne vous donne pas ça*. Régénérer avec :
+
+```sh
+standpoint assets/paysage.csv --outdir assets --stem paysage
+```
+
+…puis estampiller le résultat avec la date à laquelle les notes ont été faites.
+Le dépôt de la suite a `scripts/date_the_map.py` pour ça ; à la main, c'est un
+élément `<text>` disant `Notes à jour en octobre 2026`. Cette étape n'est pas
+décorative : une figure sans millésime déclenche la règle `no-provenance` de ce
+paquet même, qui existe parce qu'une carte sans date se lit comme actuelle à
+jamais. La règle s'est déclenchée sur cette figure la première fois qu'elle a
+été ajoutée, ce qui est la bonne façon pour elle d'arriver.
+
+La géométrie est une ACP sur corrélations, et elle est **déterministe** ; les
+quatre mots des bords viennent d'un modèle local et sont plus vagues que ce
+qui les porte. Voici donc les charges.
+
+**Horizontal** — « fichier lisible sans moteur » (+0,54) et « carte de
+situation » (+0,41) contre « panoramique / zoom interactif » (−0,49) et
+« temps jusqu'à la première carte » (−0,49). Un fichier qu'on possède contre
+une chose qu'on pilote, la rapidité étant du côté de la chose qu'on pilote.
+C'est la distinction par laquelle cette page commence, atteinte cette fois par
+les chiffres plutôt qu'affirmée.
+
+**Vertical** — « publiable sans reprise graphique » (+0,60) et la carte de
+situation (+0,42) contre « données quelconques, projection quelconque »
+(−0,51) et « analyse spatiale » (−0,41). Fini-tel-quel contre portée
+analytique. C'est le marché que les lignes à deux étoiles ci-dessus
+reconnaissent, et c'est le plus intéressant des deux axes parce que personne
+dans ce champ n'est haut aux deux bouts.
+
+**Deux axes portent 79 %** d'une table de sept critères sur six outils. Où
+tombent les points : `matplotlib+cartopy` se place diamétralement à l'opposé
+de `Datawrapper` — toute la portée et aucune finition contre toute la
+finition et aucune portée — et `sprezzature-maps` partage le côté droit avec
+`svgis`, ce qui est l'affirmation précédente — svgis est le plus proche
+parent vivant — dessinée au lieu d'être argumentée. `Folium/deck.gl` est tout
+à gauche, comme il se doit pour une chose qu'on pilote.
+
+`standpoint` écrit aussi une interprétation en prose à côté de la figure ;
+elle n'est pas reprise ici, parce qu'un modèle qui relit des notes écrites par
+quelqu'un n'est pas un résultat, et que ce fichier est plus utile si les
+jugements restent visiblement les miens.
+
 ## Quand utiliser quoi
 
 **Utilisez `sprezzature-maps`** quand le livrable est une *figure* — quelque
