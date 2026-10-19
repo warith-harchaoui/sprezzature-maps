@@ -2,7 +2,24 @@
 
 All notable changes to sprezzature-maps are documented here.
 
-## [Unreleased]
+## [1.0.0] — 2026-10-19
+
+**Why the number moves, and why it took this long.**
+
+Nothing in this release makes the package stable; it has been stable for
+months. What changed is that the version stopped saying otherwise.
+
+`0.19.0` and `Development Status :: 3 - Alpha` were the last two places this
+repository claimed to be unfinished, against 541 passing tests, every surface
+of the suite's contract held, a published package, and seven siblings already
+at `1.x` and `Production/Stable`. A pre-1.0 number is a promise that the
+interface may break without warning. That promise had stopped being true, and
+leaving it in place is not caution — it is a sign pointing the wrong way, read
+by exactly the people least able to check.
+
+If something here does break compatibility later, it will do so in a `2.0.0`,
+which is the sentence a version number is for.
+
 
 ### Changed
 
