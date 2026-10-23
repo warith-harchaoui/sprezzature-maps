@@ -12,6 +12,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Cran d'arrêt, pas budget : sans lui GitHub laisse courir un job pendu
+    # six heures. Aucun des dix dépôts n'en avait.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
