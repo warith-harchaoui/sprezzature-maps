@@ -29,7 +29,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def plate(*labels: str, root_attrs: str | None = None, extra: str = "") -> str:
     """A minimal SVG carrying the given visible text."""
-    attrs = root_attrs if root_attrs is not None else ('role="img" aria-labelledby="t"')
+    attrs = root_attrs if root_attrs is not None else (
+        'role="img" aria-labelledby="t"'
+    )
     texts = "".join(f"<text>{label}</text>" for label in labels)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" {attrs}>'
@@ -57,8 +59,7 @@ def test_a_classed_legend_must_name_its_method() -> None:
     different claims about the same data.
     """
     classed = plate(
-        "Exposure, by country",
-        "as of 2024",
+        "Exposure, by country", "as of 2024",
         extra='<rect class="swatch"/><rect class="swatch"/>',
     )
     assert "method-unnamed" in {f.rule for f in audit(classed)}
@@ -67,12 +68,8 @@ def test_a_classed_legend_must_name_its_method() -> None:
 def test_naming_the_method_satisfies_it() -> None:
     """And the note the generator already prints is what satisfies it."""
     named = plate(
-        "Exposure, by country",
-        "as of 2024",
-        "4 classes, quantiles",
-        "10",
-        "20",
-        "30",
+        "Exposure, by country", "as of 2024",
+        "4 classes, quantiles", "10", "20", "30",
         extra='<rect class="swatch"/>',
     )
     assert "method-unnamed" not in {f.rule for f in audit(named)}
@@ -92,16 +89,13 @@ def test_a_classed_legend_without_breaks_is_a_key_less_table() -> None:
 def test_absent_must_not_read_as_low() -> None:
     """The commonest way a choropleth misleads."""
     hidden = plate(
-        "Exposure",
-        "as of 2024",
+        "Exposure", "as of 2024",
         extra='<path class="no-data" d="M0 0"/>',
     )
     assert "no-data-hidden" in {f.rule for f in audit(hidden)}
 
     shown = plate(
-        "Exposure",
-        "as of 2024",
-        "No data",
+        "Exposure", "as of 2024", "No data",
         extra='<path class="no-data" d="M0 0"/>',
     )
     assert "no-data-hidden" not in {f.rule for f in audit(shown)}
@@ -125,7 +119,9 @@ def test_declaring_the_data_synthetic_counts_as_provenance() -> None:
     assert "no-provenance" not in {f.rule for f in audit(demo)}
 
 
-@pytest.mark.parametrize("role", ["img", "graphics-document", "graphics-symbol"])
+@pytest.mark.parametrize(
+    "role", ["img", "graphics-document", "graphics-symbol"]
+)
 def test_both_accessible_roles_are_accepted(role: str) -> None:
     """
     `img` and `graphics-document` are both correct, and both are in use.
@@ -136,8 +132,7 @@ def test_both_accessible_roles_are_accepted(role: str) -> None:
     that to five shipped situation maps.
     """
     named = plate(
-        "Control",
-        "as of 2024",
+        "Control", "as of 2024",
         root_attrs=f'role="{role}" aria-labelledby="t"',
     )
     assert "unlabelled" not in {f.rule for f in audit(named)}
@@ -166,10 +161,7 @@ def test_the_shipped_plates_have_only_the_gap_we_know_about() -> None:
     loses its classification note or its accessible name fails immediately.
     """
     known_gap = {
-        "himalaya.svg",
-        "iberia.svg",
-        "switzerland.svg",
-        "western-europe.svg",
+        "himalaya.svg", "iberia.svg", "switzerland.svg", "western-europe.svg",
     }
     unexpected: list[str] = []
     plates = sorted((ROOT / "assets").rglob("*.svg"))

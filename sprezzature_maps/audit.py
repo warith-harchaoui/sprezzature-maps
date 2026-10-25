@@ -79,8 +79,7 @@ _DATE_RE = re.compile(r"\b(?:as of|à jour|situation)\b|\b(?:19|20)\d{2}\b", re.
 #: fabrication, not an improvement.
 _SYNTHETIC_RE = re.compile(
     r"\b(?:synthetic|illustrative|schematic|demo|sample|example|"
-    r"synthétique|illustratif|fictif)\b",
-    re.I,
+    r"synthétique|illustratif|fictif)\b", re.I
 )
 
 #: Discrete class swatches, as the classed legend draws them.
@@ -135,21 +134,18 @@ def audit(svg: str) -> list[Finding]:
         and "<title" in text
     )
     if not named:
-        findings.append(
-            Finding(
-                "unlabelled",
-                'the root carries no role="img" with an accessible name, so a '
-                'screen reader announces "graphic" and stops there',
-            )
-        )
+        findings.append(Finding(
+            "unlabelled",
+            'the root carries no role="img" with an accessible name, so a '
+            'screen reader announces "graphic" and stops there',
+        ))
 
     if not labels:
-        findings.append(
-            Finding(
-                "untitled",
-                "the plate has no visible text at all, so nobody can attribute or caption it",
-            )
-        )
+        findings.append(Finding(
+            "untitled",
+            "the plate has no visible text at all, so nobody can attribute "
+            "or caption it",
+        ))
         return findings
 
     # ── classification ──────────────────────────────────────────────────
@@ -157,15 +153,13 @@ def audit(svg: str) -> list[Finding]:
     if classed:
         method = _METHOD_RE.search(text)
         if method is None:
-            findings.append(
-                Finding(
-                    "method-unnamed",
-                    "the legend shows discrete classes and never says how the "
-                    "breaks were chosen; quantile, equal interval and natural "
-                    "breaks put the same data in different colours and tell "
-                    "different stories",
-                )
-            )
+            findings.append(Finding(
+                "method-unnamed",
+                "the legend shows discrete classes and never says how the "
+                "breaks were chosen; quantile, equal interval and natural "
+                "breaks put the same data in different colours and tell "
+                "different stories",
+            ))
         else:
             # A classed legend is a lookup table, and a lookup table with no
             # key is decoration. The generator prints the boundary values
@@ -174,40 +168,36 @@ def audit(svg: str) -> list[Finding]:
             count = int(method.group(1))
             numeric = [t for t in labels if re.fullmatch(r"[-+]?[\d\s.,kKmMbB%]+", t)]
             if len(numeric) < count - 1:
-                findings.append(
-                    Finding(
-                        "breaks-missing",
-                        f"the legend shows {count} classes and prints "
-                        f"{len(numeric)} boundary value(s); the swatches are a "
-                        f"lookup table with no key",
-                    )
-                )
+                findings.append(Finding(
+                    "breaks-missing",
+                    f"the legend shows {count} classes and prints "
+                    f"{len(numeric)} boundary value(s); the swatches are a "
+                    f"lookup table with no key",
+                ))
 
     # ── absent is not low ───────────────────────────────────────────────
     has_no_data_fill = "no-data" in text or "noData" in text
-    says_no_data = any(re.search(r"\b(no data|sans donn|pas de donn)", t, re.I) for t in labels)
+    says_no_data = any(
+        re.search(r"\b(no data|sans donn|pas de donn)", t, re.I) for t in labels
+    )
     if has_no_data_fill and not says_no_data:
-        findings.append(
-            Finding(
-                "no-data-hidden",
-                "regions are drawn with the no-data fill and the legend never "
-                "names it, so absent reads as low — the commonest way a "
-                "choropleth misleads",
-            )
-        )
+        findings.append(Finding(
+            "no-data-hidden",
+            "regions are drawn with the no-data fill and the legend never "
+            "names it, so absent reads as low — the commonest way a "
+            "choropleth misleads",
+        ))
 
     # ── a reader has to be able to place the plate in time, or outside it ─
     dated = any(_DATE_RE.search(t) for t in labels)
     declared_synthetic = any(_SYNTHETIC_RE.search(t) for t in labels)
     if not dated and not declared_synthetic:
-        findings.append(
-            Finding(
-                "no-provenance",
-                "the plate says neither when it was true nor that it is a "
-                "schematic; a map with neither is read as current, forever, "
-                "including years after it stopped being so",
-            )
-        )
+        findings.append(Finding(
+            "no-provenance",
+            "the plate says neither when it was true nor that it is a "
+            "schematic; a map with neither is read as current, forever, "
+            "including years after it stopped being so",
+        ))
 
     return findings
 
@@ -243,9 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("target", type=Path, help="An SVG plate, or a folder of them.")
     parser.add_argument(
-        "--format",
-        choices=("text", "json"),
-        default="text",
+        "--format", choices=("text", "json"), default="text",
         help="Output shape (default: text).",
     )
     args = parser.parse_args(argv)
@@ -261,7 +249,9 @@ def main(argv: list[str] | None = None) -> int:
 
     report: dict[str, list[Finding]] = {}
     for plate in plates:
-        report[str(plate)] = audit(plate.read_text(encoding="utf-8", errors="replace"))
+        report[str(plate)] = audit(
+            plate.read_text(encoding="utf-8", errors="replace")
+        )
     total = sum(len(f) for f in report.values())
 
     if args.format == "json":
@@ -274,9 +264,7 @@ def main(argv: list[str] | None = None) -> int:
                     for name, found in report.items()
                 },
             },
-            sys.stdout,
-            indent=2,
-            ensure_ascii=False,
+            sys.stdout, indent=2, ensure_ascii=False,
         )
         sys.stdout.write("\n")
     else:
@@ -284,8 +272,7 @@ def main(argv: list[str] | None = None) -> int:
             for finding in found:
                 print(f"{name}: {finding}")
         print(
-            f"{len(plates)} plate(s), {total} finding(s)."
-            if total
+            f"{len(plates)} plate(s), {total} finding(s)." if total
             else f"{len(plates)} plate(s), each says how it was made."
         )
     return 1 if total else 0

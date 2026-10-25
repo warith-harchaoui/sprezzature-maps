@@ -34,9 +34,7 @@ def test_situation_map_renders(tmp_path: Path) -> None:
     assert "<path" in svg
 
 
-def test_figures_scripts_dir_resolves_via_installed_package(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_figures_scripts_dir_resolves_via_installed_package(monkeypatch: pytest.MonkeyPatch) -> None:
     """tooltip_bubble's home must not depend on a sibling checkout existing.
 
     Regression test: ``make_choropleth.py`` and ``make_situation_map.py``

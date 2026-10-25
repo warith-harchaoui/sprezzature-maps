@@ -63,8 +63,8 @@ pip install -e ~/sprezzature-maps
 ```python
 from sprezzature_maps import make_choropleth, make_situation_map
 
-make_choropleth(out="world.svg")  # données de démonstration si rien n'est fourni
-make_situation_map(out="region.svg")  # configuration de démonstration intégrée
+make_choropleth(out="world.svg")          # données de démonstration si rien n'est fourni
+make_situation_map(out="region.svg")      # configuration de démonstration intégrée
 ```
 
 ```bash
@@ -306,10 +306,9 @@ puisse pas diverger de la planche au-dessus :
 
 ```python
 from sprezzature_maps import article_sidecar
-
 card = article_sidecar(svg)
-card["alt"]  # la description, plus une conclusion calculée
-card["zones"]  # [{"category", "confidence", "area_share"}, ...]
+card["alt"]      # la description, plus une conclusion calculée
+card["zones"]    # [{"category", "confidence", "area_share"}, ...]
 card["markers"]  # [{"lon", "lat", "precision", "radius_km"}, ...]
 ```
 

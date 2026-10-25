@@ -95,16 +95,8 @@ DEFAULT_BINS: int = 120
 #: so the ramp survives greyscale and colour blindness: the reading is
 #: carried by lightness, and hue only makes it pleasant.
 RAMP: tuple[str, ...] = (
-    "#0b1b3a",
-    "#12306b",
-    "#1a4a9c",
-    "#2168c8",
-    "#3b8ae0",
-    "#63a9ee",
-    "#8fc4f5",
-    "#b6dcfa",
-    "#d8eefd",
-    "#f2f9ff",
+    "#0b1b3a", "#12306b", "#1a4a9c", "#2168c8", "#3b8ae0",
+    "#63a9ee", "#8fc4f5", "#b6dcfa", "#d8eefd", "#f2f9ff",
 )
 
 #: The ground. Not pure black: a hair of blue keeps the plate from reading
@@ -179,7 +171,9 @@ def demo_points(n: int = 400_000, seed: int = 20260912) -> list[tuple[float, flo
         np.column_stack([rng.normal(cx, sx, n // 6), rng.normal(cy, sy, n // 6)])
         for cx, cy, sx, sy in corridors
     ]
-    parts.append(np.column_stack([rng.uniform(-125, -67, n // 3), rng.uniform(25, 49, n // 3)]))
+    parts.append(
+        np.column_stack([rng.uniform(-125, -67, n // 3), rng.uniform(25, 49, n // 3)])
+    )
     pts = np.vstack(parts)
     keep = (pts[:, 0] > -125) & (pts[:, 0] < -67) & (pts[:, 1] > 25) & (pts[:, 1] < 49)
     pts = pts[keep]
@@ -231,7 +225,8 @@ def _land_mask() -> tuple[float, float, float, float, int, int, list[bool]]:
     # Per-ring bounding boxes: most rings are nowhere near most cells, and
     # skipping them early is what turns this from slow into instant.
     boxes = [
-        (min(p[0] for p in r), min(p[1] for p in r), max(p[0] for p in r), max(p[1] for p in r), r)
+        (min(p[0] for p in r), min(p[1] for p in r),
+         max(p[0] for p in r), max(p[1] for p in r), r)
         for r in rings
     ]
     bits: list[bool] = [False] * (nx * ny)
@@ -258,8 +253,7 @@ def _us_rings() -> list[list[tuple[float, float]]]:
         # Only rings that touch the window: Alaska and Hawaii are in the file
         # and would cost a point-in-polygon test each, for nothing.
         _US_RINGS = [
-            r
-            for r in us["rings"]
+            r for r in us["rings"]
             if len(r) > 3 and min(p[0] for p in r) > -130 and max(p[0] for p in r) < -60
         ]
     return _US_RINGS
@@ -411,7 +405,9 @@ def build_svg(
     peak_value = float(peak)
     if per_area:
         areas = cell_ground_areas(bbox, ny)
-        scaled = [[column[row] / areas[row] * 1000.0 for row in range(ny)] for column in grid]
+        scaled = [
+            [column[row] / areas[row] * 1000.0 for row in range(ny)] for column in grid
+        ]
         flat = [v for column in scaled for v in column]
         peak_value = max(flat) if flat else 0.0
         # The ramp indexes integers, so rescale to the same 0..peak span the
@@ -426,8 +422,8 @@ def build_svg(
 
     west, south, east, north = bbox
     height = round(width * (north - south) / (east - west))
-    top = 92  # room for the title block
-    foot = 46  # room for the caption
+    top = 92          # room for the title block
+    foot = 46         # room for the caption
     plate_h = height + top + foot
     cw = width / nx
     ch = height / ny
@@ -440,7 +436,7 @@ def build_svg(
         for j in range(ny):
             count = column[j]
             if count <= 0:
-                continue  # no data is not zero data: leave the plate bare
+                continue      # no data is not zero data: leave the plate bare
             # sqrt keeps the long tail visible: a linear ramp on a field with
             # one bright core paints everything else the darkest step.
             level = min(len(RAMP) - 1, int(math.sqrt(count / peak) * len(RAMP)))
@@ -461,8 +457,8 @@ def build_svg(
         f'shape-rendering="crispEdges">',
         f'<title id="dens-title">{_esc(title)}</title>',
         f'<desc id="dens-desc">{_esc(subtitle)} — {len(pts):,} points binned to '
-        f"{nx} by {ny} cells. {_esc(extent_sentence(bbox))}"
-        f"{' ' + _esc(str(region)) + ' is the mapped area.' if region else ''}</desc>",
+        f'{nx} by {ny} cells. {_esc(extent_sentence(bbox))}'
+        f'{" " + _esc(str(region)) + " is the mapped area." if region else ""}</desc>',
         *([stamp] if stamp else []),
         f'<rect width="{width}" height="{plate_h}" fill="{PLATE}"/>',
     ]
@@ -579,7 +575,10 @@ def extent_sentence(bbox: tuple[float, float, float, float]) -> str:
     'Covering 125.0\u00b0W to 67.0\u00b0W, 25.0\u00b0N to 49.0\u00b0N.'
     """
     west, south, east, north = bbox
-    return f"Covering {_fmt_lon(west)} to {_fmt_lon(east)}, {_fmt_lat(south)} to {_fmt_lat(north)}."
+    return (
+        f"Covering {_fmt_lon(west)} to {_fmt_lon(east)}, "
+        f"{_fmt_lat(south)} to {_fmt_lat(north)}."
+    )
 
 
 def _ramp_legend(x: float, y: float, peak: str, unit: str) -> list[str]:
@@ -608,11 +607,8 @@ def _esc(text: str) -> str:
     """Escape the five XML characters."""
     return (
         str(text)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&apos;")
+        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        .replace('"', "&quot;").replace("'", "&apos;")
     )
 
 

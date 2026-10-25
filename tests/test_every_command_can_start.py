@@ -94,7 +94,9 @@ def test_the_manifest_declares_commands() -> None:
 
 
 @pytest.mark.parametrize("command,module,function", _commands(), ids=lambda v: v)
-def test_the_command_starts_and_names_itself(command: str, module: str, function: str) -> None:
+def test_the_command_starts_and_names_itself(
+    command: str, module: str, function: str
+) -> None:
     """``--help`` is the cheapest proof that a command is callable at all."""
     proc = _run(command, module, function)
     output = proc.stdout + proc.stderr
@@ -108,7 +110,9 @@ def test_the_command_starts_and_names_itself(command: str, module: str, function
     if f"No module named '{top}'" in output:
         pytest.skip(f"{PACKAGE} is not installed here: pip install -e '.[dev]'")
 
-    assert "Traceback" not in output, f"{command} --help raised:\n{output}"
+    assert "Traceback" not in output, (
+        f"{command} --help raised:\n{output}"
+    )
     assert output.strip(), f"{command} --help printed nothing (exit {proc.returncode})"
 
     if proc.returncode != 0:

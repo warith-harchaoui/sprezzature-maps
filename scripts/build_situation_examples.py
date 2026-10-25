@@ -262,37 +262,15 @@ def build_ukraine() -> dict[str, Any]:
         # used to sit in the legend's wording is now carried by the ink.
         "events": [
             {"lon": 38.0008, "lat": 48.5947, "color": "#c0392b", "r": 5, "precision": 2},  # Bakhmut
-            {
-                "lon": 37.7450,
-                "lat": 48.1453,
-                "color": "#c0392b",
-                "r": 5,
-                "precision": 2,
-            },  # Avdiivka
-            {
-                "lon": 37.1828,
-                "lat": 48.2828,
-                "color": "#c0392b",
-                "r": 5,
-                "precision": 2,
-            },  # Pokrovsk
-            {
-                "lon": 37.2483,
-                "lat": 47.7792,
-                "color": "#c0392b",
-                "r": 5,
-                "precision": 2,
-            },  # Vuhledar
-            {
-                "lon": 35.8261,
-                "lat": 47.4431,
-                "color": "#c0392b",
-                "r": 5,
-                "precision": 2,
-            },  # Robotyne
+            {"lon": 37.7450, "lat": 48.1453, "color": "#c0392b", "r": 5, "precision": 2},  # Avdiivka
+            {"lon": 37.1828, "lat": 48.2828, "color": "#c0392b", "r": 5, "precision": 2},  # Pokrovsk
+            {"lon": 37.2483, "lat": 47.7792, "color": "#c0392b", "r": 5, "precision": 2},  # Vuhledar
+            {"lon": 35.8261, "lat": 47.4431, "color": "#c0392b", "r": 5, "precision": 2},  # Robotyne
             {"lon": 36.9428, "lat": 50.2878, "color": "#c0392b", "r": 5, "precision": 2},
         ],  # Vovchansk
-        "marker_legend": [{"color": "#c0392b", "label": "Contested flashpoint", "precision": 2}],
+        "marker_legend": [
+            {"color": "#c0392b", "label": "Contested flashpoint", "precision": 2}
+        ],
         "labels": {
             "waters": [
                 # The plate's largest orientation cue, and it has taken three
@@ -580,6 +558,7 @@ def build_libya() -> dict[str, Any]:
     }
 
 
+
 # --------------------------------------------------------------------------- #
 # Sudan: schematic, per open-source reporting                                  #
 # --------------------------------------------------------------------------- #
@@ -600,7 +579,9 @@ SUDAN_FRONT = [
 # The claim polygon runs past both ends of the drawn line, so the difference
 # covers the whole country; the line itself stops at the border, because a
 # contact line drawn across South Sudan claims a front that is not there.
-SUDAN_RSF_CLAIM = [(21.0, 23.0), (27.70, 23.0)] + SUDAN_FRONT + [(27.95, 8.0), (21.0, 8.0)]
+SUDAN_RSF_CLAIM = (
+    [(21.0, 23.0), (27.70, 23.0)] + SUDAN_FRONT + [(27.95, 8.0), (21.0, 8.0)]
+)
 # Jebel Marra + Tawila: the Sudan Liberation Movement (Abdel Wahid al-Nur) has
 # held the massif throughout, a third zone belonging to neither belligerent.
 # The west edge stops short of Zalingei, which is RSF-held.
@@ -677,7 +658,9 @@ def build_sudan() -> dict[str, Any]:
     bbox = [b[0] - 0.8, b[1] - 0.8, b[2] + 0.8, b[3] + 0.8]
     return {
         "title": "Sudan: Areas of Control",
-        "subtitle": ("Schematic · the war's east-west partition, with the fighting in Kordofan"),
+        "subtitle": (
+            "Schematic · the war's east-west partition, with the fighting in Kordofan"
+        ),
         "method": "Schematic polygons drawn by hand from the sources below, not a geocoded dataset",
         "source": "Open-source reporting (ACLED, Sudans Post territorial-control tracking)",
         "as_of": "As of ~25 September 2026 · illustrative, not an operational assessment",
@@ -745,36 +728,20 @@ def build_sudan() -> dict[str, Any]:
                 {"lon": 37.216, "lat": 19.616, "text": "Port Sudan", "anchor": "end"},
                 {"lon": 24.883, "lat": 12.050, "text": "Nyala"},
                 {
-                    "lon": 25.350,
-                    "lat": 13.631,
-                    "text": "El Fasher",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "above",
+                    "lon": 25.350, "lat": 13.631, "text": "El Fasher",
+                    "dot": False, "clear": 5.5, "anchor": "above",
                 },
                 {
-                    "lon": 30.217,
-                    "lat": 13.183,
-                    "text": "El Obeid",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "above",
+                    "lon": 30.217, "lat": 13.183, "text": "El Obeid",
+                    "dot": False, "clear": 5.5, "anchor": "above",
                 },
                 {
-                    "lon": 29.717,
-                    "lat": 11.017,
-                    "text": "Kadugli",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "below",
+                    "lon": 29.717, "lat": 11.017, "text": "Kadugli",
+                    "dot": False, "clear": 5.5, "anchor": "below",
                 },
                 {
-                    "lon": 34.350,
-                    "lat": 11.767,
-                    "text": "Ad-Damazin",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "below",
+                    "lon": 34.350, "lat": 11.767, "text": "Ad-Damazin",
+                    "dot": False, "clear": 5.5, "anchor": "below",
                 },
                 # Set above the dot: El Geneina is 0.5 degrees from the
                 # plate's west edge, so a left-hand name opens on the margin,
@@ -797,6 +764,7 @@ def build_sudan() -> dict[str, Any]:
             ],
         },
     }
+
 
 
 # --------------------------------------------------------------------------- #
@@ -944,30 +912,16 @@ def build_drc() -> dict[str, Any]:
         "labels": {
             "places": [
                 {
-                    "lon": 29.2336,
-                    "lat": -1.6794,
-                    "text": "Goma",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "above",
-                    "size": 14,
+                    "lon": 29.2336, "lat": -1.6794, "text": "Goma",
+                    "dot": False, "clear": 5.5, "anchor": "above", "size": 14,
                 },
                 {
-                    "lon": 28.8608,
-                    "lat": -2.5061,
-                    "text": "Bukavu",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "end",
-                    "size": 14,
+                    "lon": 28.8608, "lat": -2.5061, "text": "Bukavu",
+                    "dot": False, "clear": 5.5, "anchor": "end", "size": 14,
                 },
                 {
-                    "lon": 29.4667,
-                    "lat": 0.5000,
-                    "text": "Beni",
-                    "dot": False,
-                    "clear": 5.5,
-                    "anchor": "above",
+                    "lon": 29.4667, "lat": 0.5000, "text": "Beni",
+                    "dot": False, "clear": 5.5, "anchor": "above",
                 },
                 {"lon": 29.2800, "lat": 0.1300, "text": "Butembo", "size": 11},
                 {"lon": 29.4494, "lat": -1.1858, "text": "Rutshuru", "size": 11},
@@ -1014,7 +968,8 @@ def build_switzerland() -> dict[str, Any]:
     return {
         "title": "Switzerland: Relief and Water",
         "subtitle": (
-            "A reference plate: terrain, lakes and rivers with no thematic layer over them"
+            "A reference plate: terrain, lakes and rivers with no thematic "
+            "layer over them"
         ),
         "region": {"bbox": [5.7, 45.6, 10.7, 48.0]},
         "projection": "auto",
@@ -1107,12 +1062,8 @@ def build_iberia() -> dict[str, Any]:
                 # is turned to match it: upright off the Portuguese coast,
                 # between Porto and Lisbon, clear of both.
                 {
-                    "lon": -9.55,
-                    "lat": 40.4,
-                    "text": "ATLANTIC OCEAN",
-                    "size": 14,
-                    "tracking": 5,
-                    "rotate": -90,
+                    "lon": -9.55, "lat": 40.4, "text": "ATLANTIC OCEAN",
+                    "size": 14, "tracking": 5, "rotate": -90,
                 },
                 {"lon": 0.5, "lat": 39.6, "text": "Mediterranean Sea", "size": 12, "tracking": 2.4},
                 {"lon": -5.4, "lat": 36.25, "text": "Strait of Gibraltar", "size": 9},
@@ -1121,13 +1072,7 @@ def build_iberia() -> dict[str, Any]:
                 {"lon": -3.7038, "lat": 40.4168, "text": "Madrid", "capital": True},
                 # Inland, not seaward: Lisbon is the westernmost city on the
                 # plate and a left-hand name lost "LI" to the margin.
-                {
-                    "lon": -9.1393,
-                    "lat": 38.7223,
-                    "text": "Lisbon",
-                    "capital": True,
-                    "anchor": "start",
-                },
+                {"lon": -9.1393, "lat": 38.7223, "text": "Lisbon", "capital": True, "anchor": "start"},
                 {"lon": 2.1734, "lat": 41.3851, "text": "Barcelona"},
                 {"lon": -5.9845, "lat": 37.3891, "text": "Seville", "anchor": "below"},
                 {"lon": -0.3763, "lat": 39.4699, "text": "Valencia"},
@@ -1199,13 +1144,7 @@ def build_western_europe() -> dict[str, Any]:
                 {"lon": 13.4050, "lat": 52.5200, "text": "Berlin", "capital": True},
                 {"lon": -3.7038, "lat": 40.4168, "text": "Madrid", "capital": True},
                 {"lon": 12.4964, "lat": 41.9028, "text": "Rome", "capital": True},
-                {
-                    "lon": -0.1276,
-                    "lat": 51.5074,
-                    "text": "London",
-                    "capital": True,
-                    "anchor": "above",
-                },
+                {"lon": -0.1276, "lat": 51.5074, "text": "London", "capital": True, "anchor": "above"},
                 {"lon": 4.3517, "lat": 50.8503, "text": "Brussels", "size": 11, "anchor": "end"},
                 {"lon": 8.5417, "lat": 47.3769, "text": "Zurich", "size": 11},
                 {"lon": 9.1900, "lat": 45.4642, "text": "Milan", "size": 11},
