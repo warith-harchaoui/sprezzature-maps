@@ -48,9 +48,7 @@ def _render(module_name: str, destination: Path) -> str:
     scripts = REPO_ROOT / "scripts"
     sys.path.insert(0, str(scripts))
     try:
-        spec = importlib.util.spec_from_file_location(
-            module_name, scripts / f"{module_name}.py"
-        )
+        spec = importlib.util.spec_from_file_location(module_name, scripts / f"{module_name}.py")
         assert spec and spec.loader
         module = sys.modules.get(module_name)
         if module is None:
@@ -115,9 +113,7 @@ def test_the_embedded_demo_is_what_the_generator_produces_now(
     is also the moment to look at the new plate before shipping it.
     """
     shipped = REPO_ROOT / "assets" / "svg-examples" / filename
-    assert shipped.exists(), (
-        f"{filename} is missing. Run: python scripts/build_demo_examples.py"
-    )
+    assert shipped.exists(), f"{filename} is missing. Run: python scripts/build_demo_examples.py"
     fresh = _render(module_name, tmp_path / filename)
     on_disk = _fingerprint(shipped.read_text(encoding="utf-8"))
     rendered = _fingerprint(fresh)

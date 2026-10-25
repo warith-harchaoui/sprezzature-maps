@@ -138,9 +138,7 @@ def _csv(path: Path, rows: list[list[str]]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(
-            ["event_date", "event_type", "latitude", "longitude", "geo_precision"]
-        )
+        writer.writerow(["event_date", "event_type", "latitude", "longitude", "geo_precision"])
         writer.writerows(rows)
     return path
 
@@ -282,9 +280,7 @@ def test_a_keyword_generator_replays_by_re_rendering() -> None:
     """
     first = sidecar.plate_provenance(density.build_svg(provenance=True, title="A"))
     again = sidecar.plate_provenance(density.build_svg(provenance=True, title="A"))
-    other = sidecar.plate_provenance(
-        density.build_svg(provenance=True, title="A", bins=60)
-    )
+    other = sidecar.plate_provenance(density.build_svg(provenance=True, title="A", bins=60))
     assert first["config_sha256"] == again["config_sha256"]
     assert first["config_sha256"] != other["config_sha256"]
 
@@ -298,7 +294,7 @@ def test_a_large_input_is_not_read_whole_into_memory(tmp_path: Path) -> None:
     """
     import hashlib
 
-    blob = (b"event_date,latitude\n" * 200_000)
+    blob = b"event_date,latitude\n" * 200_000
     big = tmp_path / "big.csv"
     big.write_bytes(blob)
     record = sidecar.file_fingerprint(big)
@@ -317,9 +313,7 @@ def test_a_filename_with_a_quote_in_it_does_not_truncate_the_record(
     """
     odd = _csv(tmp_path / 'a"b.csv', _ROWS)
     stamp = sidecar.plate_provenance(
-        "<svg>"
-        + sidecar.provenance_metadata({"provenance": {"inputs": [str(odd)]}})
-        + "</svg>"
+        "<svg>" + sidecar.provenance_metadata({"provenance": {"inputs": [str(odd)]}}) + "</svg>"
     )
     assert [rec["name"] for rec in stamp["inputs"]] == ['a"b.csv']
 

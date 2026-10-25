@@ -10,9 +10,43 @@ generators that already have their own unit tests.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
+
+_MANIFEST_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _console_scripts() -> dict[str, str]:
+    """
+    ``[project.scripts]``, read with a regex rather than ``tomllib``.
+
+    ``tomllib`` is standard library only from 3.11 and this package supports
+    3.10, where the import alone fails -- in CI, while passing on every
+    developer machine. sprezzature-cli-gui's own test says exactly this in a
+    comment, and it was written there because it had already happened once.
+    """
+    text = (_MANIFEST_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^\[project\.scripts\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
+    if block is None:
+        return {}
+    return dict(re.findall(r'^([\w.-]+)\s*=\s*"([^"]+)"', block.group(1), re.M))
+
+
+def _base_dependencies() -> str:
+    """The ``dependencies = [...]`` block as text, comments stripped."""
+    text = (_MANIFEST_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^dependencies\s*=\s*\[(.*?)\]", text, re.M | re.S)
+    return re.sub(r"#[^\n]*", "", block.group(1)) if block else ""
+
+
+def _extras() -> set[str]:
+    """The extras this package declares."""
+    text = (_MANIFEST_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"^\[project\.optional-dependencies\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
+    return set(re.findall(r"^([\w.-]+)\s*=\s*\[", block.group(1), re.M)) if block else set()
+
 
 click = pytest.importorskip("click")
 from click.testing import CliRunner  # noqa: E402
@@ -87,12 +121,7 @@ def test_the_two_spellings_are_one_callable() -> None:
     command the argparse one had — ``density`` — which is exactly how a second
     front door fails: not loudly, but by quietly offering less.
     """
-    from pathlib import Path
-
-    import tomllib
-
-    root = Path(__file__).resolve().parent.parent
-    scripts = tomllib.loads((root / "pyproject.toml").read_text())["project"]["scripts"]
+    scripts = _console_scripts()
     assert scripts["make-map"] == scripts["sprezzature-maps"]
     assert scripts["make-map"] == "sprezzature_maps.cli:main"
 

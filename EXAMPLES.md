@@ -63,6 +63,7 @@ make_situation_map(out="region.svg")
 # passed in as a Python dict. See scripts/make_situation_map.py's module
 # docstring for the full list of fields it accepts.
 import yaml
+
 config = yaml.safe_load(open("my-region.yaml"))
 make_situation_map(config=config, out="region.svg")
 ```
@@ -77,7 +78,7 @@ make_density(out="where.svg")
 make_density(
     points=[(2.35, 48.86), (2.29, 48.85), ...],
     bbox=(-5.0, 42.0, 9.0, 51.5),
-    region="France",          # named, so the plate says what it maps
+    region="France",  # named, so the plate says what it maps
     title="Where the strikes fell",
     out="france.svg",
 )
@@ -565,9 +566,9 @@ plate_provenance(svg)
 #  "config_sha256": "9a1f…", "inputs": [{"name": "sudan-2024.csv", ...}]}
 
 report = replay_report(svg, cfg, ["sudan-2024.csv"])
-report["replays"]        # True only when everything the stamp named matched
-report["differences"]    # one sentence per thing that moved, empty otherwise
-report["unchecked"]      # stamped inputs nobody supplied
+report["replays"]  # True only when everything the stamp named matched
+report["differences"]  # one sentence per thing that moved, empty otherwise
+report["unchecked"]  # stamped inputs nobody supplied
 ```
 
 `replays` is `True` only when everything the stamp names was checked **and**

@@ -38,8 +38,26 @@ from _classify import (  # noqa: E402
 #: way real indicators are — which is the whole point: a linear ramp handles
 #: it badly and that is not a corner case, it is the common case.
 GDP = [
-    128259, 103685, 99995, 87925, 82769, 68453, 64572, 54343, 44461, 38373,
-    33511, 22113, 13790, 12614, 10295, 2485, 1950, 1294, 529, 238,
+    128259,
+    103685,
+    99995,
+    87925,
+    82769,
+    68453,
+    64572,
+    54343,
+    44461,
+    38373,
+    33511,
+    22113,
+    13790,
+    12614,
+    10295,
+    2485,
+    1950,
+    1294,
+    529,
+    238,
 ]
 
 #: Just-noticeable difference in OKLab for a flat area of colour. Below this

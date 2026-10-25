@@ -39,9 +39,7 @@ _CLASSED = {"classes": 5, "method": "quantile"}
 
 def _no_data_swatch_x(svg: str) -> list[str]:
     """Return the x of every legend swatch filled with the no-data grey."""
-    return re.findall(
-        rf'<rect x="(-?[\d.]+)"[^>]*fill="{re.escape(mc.NO_DATA)}"', svg
-    )
+    return re.findall(rf'<rect x="(-?[\d.]+)"[^>]*fill="{re.escape(mc.NO_DATA)}"', svg)
 
 
 def test_the_no_data_swatch_lands_in_the_same_place_with_and_without_rivers() -> None:

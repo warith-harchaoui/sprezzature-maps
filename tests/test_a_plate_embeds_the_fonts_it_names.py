@@ -76,7 +76,8 @@ def test_every_face_the_density_plate_embeds_is_actually_installed() -> None:
 
     assert not missing, (
         "make_density embeds font faces that are not present in the installed "
-        "sprezzature-figures:\n  " + "\n  ".join(missing)
+        "sprezzature-figures:\n  "
+        + "\n  ".join(missing)
         + "\n\nEither the family has to be added to that package's "
         "`[tool.setuptools.package-data]` font globs, or this plate has to "
         "name a family that ships."
@@ -99,8 +100,7 @@ def test_the_density_plate_names_only_families_it_embeds(tmp_path: Path) -> None
     svg = out.read_text(encoding="utf-8")
 
     embedded = {
-        m.strip("'\"")
-        for m in re.findall(r"@font-face\{[^}]*?font-family:\s*([^;}]+)", svg)
+        m.strip("'\"") for m in re.findall(r"@font-face\{[^}]*?font-family:\s*([^;}]+)", svg)
     }
     assert embedded, "the plate carries no @font-face block at all"
 
@@ -124,8 +124,7 @@ def test_nothing_is_embedded_that_nothing_names() -> None:
     svg = demo.read_text(encoding="utf-8")
 
     embedded = {
-        m.strip("'\"")
-        for m in re.findall(r"@font-face\{[^}]*?font-family:\s*([^;}]+)", svg)
+        m.strip("'\"") for m in re.findall(r"@font-face\{[^}]*?font-family:\s*([^;}]+)", svg)
     }
     named = {
         stack.split(",")[0].strip().strip("'\"")
