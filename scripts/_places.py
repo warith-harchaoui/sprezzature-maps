@@ -47,12 +47,12 @@ from _textbox import boxes_overlap, ink_bottom, ink_top, text_width
 #: gets the couple of dozen places that belong on a world map; a single
 #: country gets its regional centres too.
 _RANK_BY_SPAN: tuple[tuple[float, int], ...] = (
-    (0.0, 8),      # a city and its surroundings
-    (5.0, 6),      # a province
-    (15.0, 4),     # a country
-    (40.0, 2),     # a continent
-    (120.0, 1),    # a hemisphere
-    (240.0, 0),    # the world
+    (0.0, 8),  # a city and its surroundings
+    (5.0, 6),  # a province
+    (15.0, 4),  # a country
+    (40.0, 2),  # a continent
+    (120.0, 1),  # a hemisphere
+    (240.0, 0),  # the world
 )
 
 

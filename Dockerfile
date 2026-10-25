@@ -13,7 +13,7 @@ COPY . .
 #
 # Not editable: an image has no source tree to edit. The generators ship as
 # the packaged `sprezzature_maps_scripts`, so a plain install carries them.
-RUN pip install --no-cache-dir ".[cli,api,mcp]"
+RUN pip install --no-cache-dir ".[api,mcp]"
 
 EXPOSE 8000
 

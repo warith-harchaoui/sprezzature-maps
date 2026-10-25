@@ -293,9 +293,7 @@ def _radii(values: list[float], base: float, biggest: float) -> list[float]:
     return [round(base + span * math.sqrt(v / top), 2) for v in values]
 
 
-def _legend(
-    classes: list[str], palette: Iterable[str], precision: int = 1
-) -> list[dict[str, Any]]:
+def _legend(classes: list[str], palette: Iterable[str], precision: int = 1) -> list[dict[str, Any]]:
     """Return one legend row per class met, in the order the vocabulary lists them.
 
     ``precision`` is the symbol the key draws, and it has to be the symbol the
@@ -415,8 +413,9 @@ def _aggregate(
             "precision": 3,
             "time_precision": 1,
             "_class": cls,
-            "label": f"{unit}: {n} event{'s' if n != 1 else ''}" if unit else
-                     f"{n} event{'s' if n != 1 else ''}",
+            "label": f"{unit}: {n} event{'s' if n != 1 else ''}"
+            if unit
+            else f"{n} event{'s' if n != 1 else ''}",
             "color": None,
         }
         if window:
@@ -674,8 +673,10 @@ def acled_events(
     '1 ACLED event drawn; 2024-07-01.'
     """
     rows = _rows(source)
-    vocab = list(vocabulary) if vocabulary is not None else (
-        list(ACLED_EVENT_TYPES) if colour_by == "event_type" else []
+    vocab = (
+        list(vocabulary)
+        if vocabulary is not None
+        else (list(ACLED_EVENT_TYPES) if colour_by == "event_type" else [])
     )
     source_file = _source_fingerprint(source)
 
@@ -684,9 +685,7 @@ def acled_events(
             "lon": _number(row.get("longitude"), "longitude", n),
             "lat": _number(row.get("latitude"), "latitude", n),
             "precision": _code(row.get("geo_precision", 1), "geo_precision", n, (1, 2, 3)),
-            "time_precision": _code(
-                row.get("time_precision", 1), "time_precision", n, (1, 2, 3)
-            ),
+            "time_precision": _code(row.get("time_precision", 1), "time_precision", n, (1, 2, 3)),
         }
         if row.get("event_date"):
             mark["date"] = str(row["event_date"])

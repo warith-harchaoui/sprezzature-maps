@@ -1360,7 +1360,6 @@ def load_rivers() -> list[tuple[Any, str, int]]:
     return out
 
 
-
 def load_lakes() -> list[tuple[Any, str, int]]:
     """Return ``(geometry, name, scalerank)`` for the vendored inland lakes.
 
@@ -1399,7 +1398,6 @@ def load_lakes() -> list[tuple[Any, str, int]]:
         props = feat.get("properties", {})
         out.append((geom, props.get("name") or "", int(props.get("scalerank") or 10)))
     return out
-
 
 
 # --------------------------------------------------------------------------- #
@@ -1616,9 +1614,7 @@ def _projected_ring_to_path(
     pts = [to_svg(x, y) for x, y in coords]
     thin = simplify_ring if close else simplify_screen
     pts = thin(pts, vp.get("simplify", DEFAULT_TOLERANCE))
-    return "".join(
-        f"{'M' if i == 0 else 'L'}{sx:.2f},{sy:.2f}" for i, (sx, sy) in enumerate(pts)
-    )
+    return "".join(f"{'M' if i == 0 else 'L'}{sx:.2f},{sy:.2f}" for i, (sx, sy) in enumerate(pts))
 
 
 def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) -> str:
@@ -1652,9 +1648,7 @@ def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) ->
         for line in lines:
             if line.is_empty:
                 continue
-            parts.append(
-                _projected_ring_to_path(line.coords, vp, close) + ("Z" if close else "")
-            )
+            parts.append(_projected_ring_to_path(line.coords, vp, close) + ("Z" if close else ""))
     return " ".join(parts)
 
 
@@ -1727,15 +1721,11 @@ def _pattern_def(kind: str, color: str, scale: float = 1.0) -> str:
     """
     if kind not in _PATTERN_KINDS:
         raise ValueError(
-            f"unknown fill pattern {kind!r}; known patterns are "
-            f"{', '.join(sorted(_PATTERN_KINDS))}"
+            f"unknown fill pattern {kind!r}; known patterns are {', '.join(sorted(_PATTERN_KINDS))}"
         )
     t = 7.0 * scale  # tile side
     pid = _pattern_id(kind, color)
-    head = (
-        f'<pattern id="{pid}" width="{t:.2f}" height="{t:.2f}" '
-        'patternUnits="userSpaceOnUse"'
-    )
+    head = f'<pattern id="{pid}" width="{t:.2f}" height="{t:.2f}" patternUnits="userSpaceOnUse"'
     if kind == "hatches":
         # Rotated so the strokes never run parallel to a frontier dash.
         return (
@@ -1794,7 +1784,12 @@ _CONFIDENCE_TIERS: dict[str, dict[str, Any]] = {
     # Still plainly the same class, plainly less certain: rendered at 0.45 of
     # the zone opacity the stripes read but the band stopped looking like the
     # same actor and started looking like a fifth colour on the plate.
-    "reported": {"fill": 0.6, "pattern": "hatches", "dashed": False, "label": "reported, not assessed"},
+    "reported": {
+        "fill": 0.6,
+        "pattern": "hatches",
+        "dashed": False,
+        "label": "reported, not assessed",
+    },
     # No solid fill at all: a claim nobody has verified should not paint the
     # ground the colour of ground that is held.
     "claimed": {"fill": 0.0, "pattern": "dots", "dashed": True, "label": "claimed, unverified"},
@@ -1891,9 +1886,7 @@ def _zone_tiers(cfg: dict[str, Any]) -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for feat in features:
         props = feat.get("properties", {})
-        out.setdefault(_confidence_of(props.get(conf_field)), set()).add(
-            str(props.get(field, ""))
-        )
+        out.setdefault(_confidence_of(props.get(conf_field)), set()).add(str(props.get(field, "")))
     return out
 
 
@@ -2096,7 +2089,6 @@ def _controls_origin(
     return margin, H - panel_h - margin
 
 
-
 def _scale_bar_origin(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float]:
     """Return where :func:`_furniture_layer` will put the scale bar.
 
@@ -2115,7 +2107,9 @@ def _scale_bar_origin(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, f
     return x, H - 44 * ts - _caption_height(cfg, ts)
 
 
-def _reserved_boxes(cfg: dict[str, Any], vp: dict[str, Any]) -> list[tuple[float, float, float, float]]:
+def _reserved_boxes(
+    cfg: dict[str, Any], vp: dict[str, Any]
+) -> list[tuple[float, float, float, float]]:
     """Return the plate rectangles furniture owns, which labels must not enter.
 
     Furniture wins and labels yield. The alternative -- drawing the bar over
@@ -2246,9 +2240,7 @@ def _relief_strength(cfg: dict[str, Any], palette: dict[str, Any]) -> float:
     if override is not None:
         value = float(override)
         if not 0.0 <= value <= 1.0:
-            raise ValueError(
-                f"basemap.relief_strength must be between 0 and 1, got {value}"
-            )
+            raise ValueError(f"basemap.relief_strength must be between 0 and 1, got {value}")
         return value
     thematic = (cfg.get("areas_of_control") or {}).get("source")
     return float(palette["relief_opacity"]) if thematic else 1.0
@@ -2331,9 +2323,7 @@ def _relief_layer(
             west, south, east, north, plot_w, plot_h
         )
     else:
-        shade, shade_bounds = terrain_shade_for_bbox(
-            west, south, east, north, plot_w, plot_h
-        )
+        shade, shade_bounds = terrain_shade_for_bbox(west, south, east, north, plot_w, plot_h)
         elevation = None
     relief_rgba = sample_terrain_shade(
         lon_grid, lat_grid, valid_grid, shade, shade_bounds, elevation=elevation
@@ -2379,9 +2369,7 @@ def _share_phrase(share: float) -> str:
     'under 1% of the mapped area'
     """
     pct = share * 100.0
-    return (
-        "under 1% of the mapped area" if pct < 0.5 else f"{pct:.0f}% of the mapped area"
-    )
+    return "under 1% of the mapped area" if pct < 0.5 else f"{pct:.0f}% of the mapped area"
 
 
 def zone_label(category: str, confidence: str, share: float) -> str:
@@ -2405,9 +2393,7 @@ def zone_label(category: str, confidence: str, share: float) -> str:
     return ", ".join(parts)
 
 
-def marker_label(
-    headline: str, precision: int, date: str | None, time_precision: int
-) -> str:
+def marker_label(headline: str, precision: int, date: str | None, time_precision: int) -> str:
     """Return what a screen reader should say when focus reaches a marker.
 
     The same facts the hover tooltip shows a sighted reader, in one sentence
@@ -2469,9 +2455,7 @@ def parse_length_mm(raw: Any) -> float:
                 return float(text[: -len(unit)]) * factor
             except ValueError:
                 break
-    raise ValueError(
-        f"print_width {raw!r} has no unit this understands; use mm, cm, in or pt"
-    )
+    raise ValueError(f"print_width {raw!r} has no unit this understands; use mm, cm, in or pt")
 
 
 def smallest_type_pt(svg: str, print_width_mm: float) -> tuple[float, float]:
@@ -2634,9 +2618,7 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
     # footer, repeated here because that is text a screen reader reaches only
     # as three disconnected <text> runs somewhere in the middle of the file.
     provenance = [
-        str(x).rstrip(".")
-        for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of"))
-        if x
+        str(x).rstrip(".") for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x
     ]
     if provenance:
         sentences.append(f"{'. '.join(provenance)}.")
@@ -2686,7 +2668,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     width = float(cfg.get("canvas_width", 1000))
     pad = float(cfg.get("padding", 26))
     vp = make_viewport(
-        proj, bbox, width, pad, float(cfg.get("simplify", DEFAULT_TOLERANCE)),
+        proj,
+        bbox,
+        width,
+        pad,
+        float(cfg.get("simplify", DEFAULT_TOLERANCE)),
         pad_top=_header_inset(cfg, pad, width),
     )
     # Computed before any layer draws, because the label layers run first and
@@ -2709,8 +2695,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     interactivity = str(cfg.get("interactivity", "self-contained"))
     if interactivity not in ("self-contained", "external", "static"):
         raise ValueError(
-            f"unknown interactivity {interactivity!r}; "
-            "known: self-contained, external, static"
+            f"unknown interactivity {interactivity!r}; known: self-contained, external, static"
         )
     has_controls = bool(
         interactivity == "self-contained" and cfg.get("areas_of_control", {}).get("palette")
@@ -2798,8 +2783,12 @@ def build_map(cfg: dict[str, Any]) -> str:
     # again later is a layer that can answer differently twice.
     vp["ink"] = []
     marker_legend = cfg.get("marker_legend", [])
-    force_marks = tag_layer(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend))
-    event_marks = tag_layer(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend))
+    force_marks = tag_layer(
+        _markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend)
+    )
+    event_marks = tag_layer(
+        _markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend)
+    )
     hand_names = tag_layer(_labels_layer(cfg, proj, vp))
     hand_notes = tag_layer(_annotations_layer(cfg, proj, vp))
     # The contact line and the axes of advance carry the author's words too
@@ -2896,7 +2885,13 @@ def build_map(cfg: dict[str, Any]) -> str:
             relief, cfg["_relief_tone"] = shared["markup"], shared["tone"]
         else:
             relief, cfg["_relief_tone"] = _relief_layer(
-                vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox,
+                vp,
+                proj,
+                pad,
+                W,
+                H,
+                projected_geom_to_path(region_proj, vp),
+                bbox,
                 hypsometric=_wants_hypsometry(cfg),
             )
             if shared is not None:
@@ -3102,7 +3097,7 @@ def build_map(cfg: dict[str, Any]) -> str:
         size = f'width="{mm_w:.4g}mm" height="{mm_w * outer_h / outer_w:.4g}mm"'
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {outer_w:.1f} {outer_h:.1f}" '
-        f'{size} '
+        f"{size} "
         f'role="{role}" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
@@ -3165,14 +3160,16 @@ def build_map(cfg: dict[str, Any]) -> str:
 #: this region is silently wrong until they happen to read a docstring. A
 #: config that sets ``lakes.historic`` replaces this list outright, and
 #: ``lakes.historic: []`` restores the basemap's own extents.
-_HISTORIC_EXTENT_LAKES: frozenset[str] = frozenset({
-    # Natural Earth carries roughly its historic ~4 200 km2. It has
-    # repeatedly fallen below a fifth of that since the 2010s, with partial
-    # recoveries in wet years; there is no single current extent to vendor in
-    # its place, which is exactly why the outline is drawn as historic rather
-    # than silently corrected to a number that would be wrong by next season.
-    "lake urmia",
-})
+_HISTORIC_EXTENT_LAKES: frozenset[str] = frozenset(
+    {
+        # Natural Earth carries roughly its historic ~4 200 km2. It has
+        # repeatedly fallen below a fifth of that since the 2010s, with partial
+        # recoveries in wet years; there is no single current extent to vendor in
+        # its place, which is exactly why the outline is drawn as historic rather
+        # than silently corrected to a number that would be wrong by next season.
+        "lake urmia",
+    }
+)
 
 
 def _lake_water_color(cfg: dict[str, Any]) -> str:
@@ -3186,9 +3183,7 @@ def _lake_water_color(cfg: dict[str, Any]) -> str:
     return settings.get("color", basemap.get("sea_color", _pal(cfg)["sea"]))
 
 
-def _inner_depth_rings(
-    geom: Any, vp: dict[str, Any], rings: int, palette: dict[str, Any]
-) -> str:
+def _inner_depth_rings(geom: Any, vp: dict[str, Any], rings: int, palette: dict[str, Any]) -> str:
     """Return depth rings buffered *inward* from a water body's own shore.
 
     The sea gets its halo by buffering outward from the coast into open
@@ -3391,7 +3386,12 @@ def _lakes_layer(
         # why: its deepest point is under a marker on the Ukraine plate, and
         # "(former)" is the one word on that plate saying the water is gone.
         at = _claim_area_label(
-            biggest, name, size=size, tracking=0.0, vp=vp, caps=False,
+            biggest,
+            name,
+            size=size,
+            tracking=0.0,
+            vp=vp,
+            caps=False,
             anchor_xy=(x, y),
             # One line-height of water's worth of slack, in ground metres.
             # A name a line outside its own shoreline still reads as that
@@ -3412,7 +3412,10 @@ def _lakes_layer(
 
 
 def _bathymetry_layer(
-    land_proj: Any, sea_proj: Any, vp: dict[str, Any], bath: dict[str, Any],
+    land_proj: Any,
+    sea_proj: Any,
+    vp: dict[str, Any],
+    bath: dict[str, Any],
     palette: dict[str, str | float] | None = None,
 ) -> str:
     """Return concentric depth-contour halos buffered out from the coast into the sea."""
@@ -3606,9 +3609,7 @@ def _areas_of_control_layer(
         # same colour as ground a force is assessed to hold would assert
         # exactly the thing nobody has verified.
         zone_op = fill_op * float(tier["fill"])
-        edge = (
-            f' stroke-dasharray="{5.0:.1f} {3.2:.1f}"' if tier["dashed"] else ""
-        )
+        edge = f' stroke-dasharray="{5.0:.1f} {3.2:.1f}"' if tier["dashed"] else ""
         # The zone's claim, readable back out of the file: svgis's
         # ``--data-fields`` idea, kept to the three fields that *are* the
         # claim. ``data-area-share`` is the same number the tooltip shows,
@@ -3690,7 +3691,10 @@ def _infrastructure_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, 
 
 
 def _frontiers_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any,
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any,
     region: Any | None = None,
 ) -> str:
     """Return real international frontiers (hairline dashes) + neighbour labels.
@@ -3774,7 +3778,9 @@ def _frontiers_layer(
             )
             if at is not None:
                 labels.append(
-                    tracked_text(*at, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600")
+                    tracked_text(
+                        *at, name, size=9.5 * ts, fill="#9ba1a7", tracking=2.2, weight="600"
+                    )
                 )
     if pieces:
         # unary_union nodes the collection and merges the coincident runs, so a
@@ -3881,9 +3887,7 @@ def _label_fits(
     >>> _label_fits(100, 50, "CHAD", size=10, tracking=2, vp=vp)
     False
     """
-    x0, y0, x1, y1 = text_box(
-        x, y, text, size=size, tracking=tracking, anchor=anchor, caps=caps
-    )
+    x0, y0, x1, y1 = text_box(x, y, text, size=size, tracking=tracking, anchor=anchor, caps=caps)
     # Furniture owns its rectangles and labels yield: a name with a scale bar
     # through it is not a name. Read off the viewport rather than passed in,
     # so every layer that places text -- cities, territories, neighbours --
@@ -3944,8 +3948,15 @@ def _claim_label(
         ink ledger, so every later layer will see it.
     """
     if not _label_fits(
-        x, y, text, size=size, tracking=tracking, vp=vp,
-        region=region, anchor=anchor, caps=caps,
+        x,
+        y,
+        text,
+        size=size,
+        tracking=tracking,
+        vp=vp,
+        region=region,
+        anchor=anchor,
+        caps=caps,
     ):
         return False
     vp.setdefault("ink", []).append(
@@ -4043,17 +4054,24 @@ def _claim_area_label(
     # would have been thrown away by a list that only offered 0.56.
     offsets = (
         (0.0, 0.0),
-        (0.0, -down), (0.0, down),
-        (-0.28 * wide, 0.0), (0.28 * wide, 0.0),
-        (-0.42 * wide, 0.0), (0.42 * wide, 0.0),
-        (-0.56 * wide, 0.0), (0.56 * wide, 0.0),
-        (0.0, -2.0 * down), (0.0, 2.0 * down),
-        (-0.42 * wide, -down), (0.42 * wide, -down),
-        (-0.42 * wide, down), (0.42 * wide, down),
+        (0.0, -down),
+        (0.0, down),
+        (-0.28 * wide, 0.0),
+        (0.28 * wide, 0.0),
+        (-0.42 * wide, 0.0),
+        (0.42 * wide, 0.0),
+        (-0.56 * wide, 0.0),
+        (0.56 * wide, 0.0),
+        (0.0, -2.0 * down),
+        (0.0, 2.0 * down),
+        (-0.42 * wide, -down),
+        (0.42 * wide, -down),
+        (-0.42 * wide, down),
+        (0.42 * wide, down),
     )
     for dx, dy in offsets:
         cx, cy = x + dx, y + dy
-        if (dx or dy):
+        if dx or dy:
             wx, wy = vp["to_world"](cx, cy)
             if proj is not None:
                 wx, wy = proj.transform(wx, wy, direction="INVERSE")
@@ -4095,9 +4113,7 @@ def _rotated_box(
     rad = math.radians(angle_deg)
     cos, sin = math.cos(rad), math.sin(rad)
     xs, ys = [], []
-    for px, py in (
-        (box_[0], box_[1]), (box_[2], box_[1]), (box_[2], box_[3]), (box_[0], box_[3])
-    ):
+    for px, py in ((box_[0], box_[1]), (box_[2], box_[1]), (box_[2], box_[3]), (box_[0], box_[3])):
         dx, dy = px - cx, py - cy
         xs.append(cx + dx * cos - dy * sin)
         ys.append(cy + dx * sin + dy * cos)
@@ -4115,9 +4131,7 @@ def _ink_mark(x: float, y: float, radius: float, vp: dict[str, Any]) -> None:
     vp.setdefault("ink", []).append((x - radius, y - radius, x + radius, y + radius))
 
 
-def _ink_hand_label(
-    box_: tuple[float, float, float, float], vp: dict[str, Any], what: str
-) -> None:
+def _ink_hand_label(box_: tuple[float, float, float, float], vp: dict[str, Any], what: str) -> None:
     """Record a hand-placed label, refusing one the drawn map does not cover.
 
     Hand-placed names are the author's argument and are never dropped for
@@ -4272,7 +4286,10 @@ def _polygonal_boundary_source(poly: Any) -> Any | None:
 
 
 def _internal_borders_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any,
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any,
     region: Any | None = None,
 ) -> str:
     """Return sub-national admin-1 borders (US states, French regions) for covered areas.
@@ -4334,13 +4351,18 @@ def _internal_borders_layer(
             )
             if at is not None:
                 labels.append(
-                    tracked_text(*at, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500")
+                    tracked_text(
+                        *at, name, size=8.0 * ts, fill="#a7abaf", tracking=1.6, weight="500"
+                    )
                 )
     return f'<g id="internal-borders">{"".join(lines)}{"".join(labels)}</g>'
 
 
 def _admin2_borders_layer(
-    cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any], region_box: Any,
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any,
     region: Any | None = None,
 ) -> str:
     """Return admin-2 borders (French departments) for a sufficiently zoomed-in region.
@@ -4389,7 +4411,9 @@ def _admin2_borders_layer(
             )
             if at is not None:
                 labels.append(
-                    tracked_text(*at, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500")
+                    tracked_text(
+                        *at, name, size=6.8 * ts, fill="#b5b9bc", tracking=1.2, weight="500"
+                    )
                 )
     return f'<g id="admin2-borders">{"".join(lines)}{"".join(labels)}</g>'
 
@@ -4553,8 +4577,9 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
         dx = fr.get("label_dx", 10) * ts
         dy = fr.get("label_dy", -6) * ts
         _ink_hand_label(
-            text_box(x + dx, y + dy, label, size=10.5 * ts, tracking=1.4,
-                     anchor="start", caps=True),
+            text_box(
+                x + dx, y + dy, label, size=10.5 * ts, tracking=1.4, anchor="start", caps=True
+            ),
             vp,
             f'the front label "{label}"',
         )
@@ -4629,10 +4654,20 @@ _TIME_PRECISION: dict[int, str] = {1: "{}", 2: "week of {}", 3: "month of {}", 4
 #: precision at all -- which draws the confident, solid dot, the exact
 #: opposite of what the author asked for, on a plate that still looks
 #: finished. The failure is silent and it runs in the dangerous direction.
-_MARKER_KEYS: frozenset[str] = frozenset({
-    "lon", "lat", "color", "r", "label",
-    "precision", "radius_km", "date", "time_precision", "source",
-})
+_MARKER_KEYS: frozenset[str] = frozenset(
+    {
+        "lon",
+        "lat",
+        "color",
+        "r",
+        "label",
+        "precision",
+        "radius_km",
+        "date",
+        "time_precision",
+        "source",
+    }
+)
 
 
 def _check_marker(item: dict[str, Any], layer_id: str) -> None:
@@ -4742,8 +4777,7 @@ def _markers_layer(
         # read back out of the file. Named for their meaning rather than for
         # whatever the config happened to call the column.
         data = (
-            f' data-precision="{precision}"'
-            f' data-lon="{it["lon"]:.4f}" data-lat="{it["lat"]:.4f}"'
+            f' data-precision="{precision}" data-lon="{it["lon"]:.4f}" data-lat="{it["lat"]:.4f}"'
         )
         if radius_km is not None:
             data += f' data-radius-km="{float(radius_km):g}"'
@@ -4823,7 +4857,9 @@ def _markers_layer(
     return f'<g id="{layer_id}">{"".join(out)}</g>'
 
 
-def _catmull_rom(points: list[tuple[float, float]], per_segment: int = 14) -> list[tuple[float, float]]:
+def _catmull_rom(
+    points: list[tuple[float, float]], per_segment: int = 14
+) -> list[tuple[float, float]]:
     """Return ``points`` densified into a smooth curve through every one of them.
 
     A hand-typed axis of advance is four or five coordinates, and drawn as
@@ -4869,12 +4905,20 @@ def _catmull_rom(points: list[tuple[float, float]], per_segment: int = 14) -> li
             t2, t3 = t * t, t * t * t
             out.append(
                 (
-                    0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
-                           + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
-                           + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
-                    0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
-                           + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
-                           + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+                    0.5
+                    * (
+                        (2 * p1[0])
+                        + (-p0[0] + p2[0]) * t
+                        + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
+                        + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
+                    ),
+                    0.5
+                    * (
+                        (2 * p1[1])
+                        + (-p0[1] + p2[1]) * t
+                        + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
+                        + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
+                    ),
                 )
             )
     out.append(points[-1])
@@ -5073,8 +5117,7 @@ def _arrows_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
             # side of the arrow that the text grows into.
             anchor = "end" if (-ty / tnorm) * offset < 0 else "start"
             _ink_hand_label(
-                text_box(lx, ly, str(label), size=9.0 * ts, tracking=1.4,
-                         anchor=anchor, caps=True),
+                text_box(lx, ly, str(label), size=9.0 * ts, tracking=1.4, anchor=anchor, caps=True),
                 vp,
                 f'the arrow label "{label}"',
             )
@@ -5210,7 +5253,6 @@ def _cities_layer(
     return '<g id="cities">' + "".join(out) + "</g>"
 
 
-
 def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
     """Return populated-place dots with offset names, plus a tracked water label.
 
@@ -5257,8 +5299,7 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
             lx, ly, ta = x + clear + gap, y + 0.32 * size, "start"
         weight = "700" if place.get("capital") else "600"
         _ink_hand_label(
-            text_box(lx, ly, place["text"], size=size, tracking=tracking,
-                     anchor=ta, caps=True),
+            text_box(lx, ly, place["text"], size=size, tracking=tracking, anchor=ta, caps=True),
             vp,
             f'labels.places "{place["text"]}"',
         )
@@ -5284,10 +5325,18 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         angle = w.get("rotate", 0)
         _ink_hand_label(
             _rotated_box(
-                text_box(x, y, w["text"], size=w.get("size", 19) * ts,
-                         tracking=w.get("tracking", 6), anchor="middle",
-                         caps=w.get("upper", True)),
-                angle, x, y,
+                text_box(
+                    x,
+                    y,
+                    w["text"],
+                    size=w.get("size", 19) * ts,
+                    tracking=w.get("tracking", 6),
+                    anchor="middle",
+                    caps=w.get("upper", True),
+                ),
+                angle,
+                x,
+                y,
             ),
             vp,
             f'labels.waters "{w["text"]}"',
@@ -5323,10 +5372,18 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         size = region.get("size", 12) * ts
         _ink_hand_label(
             _rotated_box(
-                text_box(x, y, region["text"], size=size,
-                         tracking=region.get("tracking", 4), anchor="middle",
-                         caps=region.get("upper", True)),
-                region.get("rotate", 0), x, y,
+                text_box(
+                    x,
+                    y,
+                    region["text"],
+                    size=size,
+                    tracking=region.get("tracking", 4),
+                    anchor="middle",
+                    caps=region.get("upper", True),
+                ),
+                region.get("rotate", 0),
+                x,
+                y,
             ),
             vp,
             f'labels.territories "{region["text"]}"',
@@ -5429,13 +5486,15 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
                 f'stroke="{color}" stroke-width="{1.4 * ts:.1f}" stroke-opacity="0.9"/>'
             )
         else:
-            out.append(
-                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{3.0 * ts:.1f}" fill="{color}"/>'
-            )
+            out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{3.0 * ts:.1f}" fill="{color}"/>')
         place = str(note.get("place", "right"))
         gap = ring + _ANNOTATION_OFFSET * ts
-        dx, dy = {"right": (gap, 0.0), "left": (-gap, 0.0),
-                  "above": (0.0, -gap), "below": (0.0, gap)}.get(place, (gap, 0.0))
+        dx, dy = {
+            "right": (gap, 0.0),
+            "left": (-gap, 0.0),
+            "above": (0.0, -gap),
+            "below": (0.0, gap),
+        }.get(place, (gap, 0.0))
         tx, ty = x + dx, y + dy
         out.append(
             f'<line x1="{x + (ring * (1 if dx > 0 else -1 if dx < 0 else 0)):.1f}" '
@@ -5448,14 +5507,15 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
         size = 11.5 * ts
         # Vertically centre the block on the leader's end for a side note,
         # and hang it off the end for one above or below.
-        first = ty - (len(lines) - 1) * size * 0.62 if place in ("right", "left") else (
-            ty - (len(lines) - 1) * size * 1.24 if place == "above" else ty + size * 0.9
+        first = (
+            ty - (len(lines) - 1) * size * 0.62
+            if place in ("right", "left")
+            else (ty - (len(lines) - 1) * size * 1.24 if place == "above" else ty + size * 0.9)
         )
         pad = 3 * ts if place == "right" else (-3 * ts if place == "left" else 0.0)
         for i, line in enumerate(lines):
             _ink_hand_label(
-                text_box(tx + pad, first + i * size * 1.24, line,
-                         size=size, anchor=anchor),
+                text_box(tx + pad, first + i * size * 1.24, line, size=size, anchor=anchor),
                 vp,
                 f'the annotation "{line}"',
             )
@@ -5521,8 +5581,10 @@ def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, f
         return None
     ts, W, H = vp["ts"], vp["width"], vp["height"]
     region_bbox = [float(v) for v in cfg["region"]["bbox"]]
-    context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
-        region_bbox, float(inset.get("zoom", _INSET_ZOOM))
+    context = (
+        [float(v) for v in inset["bbox"]]
+        if inset.get("bbox")
+        else _inset_context_bbox(region_bbox, float(inset.get("zoom", _INSET_ZOOM)))
     )
     box_w = float(inset.get("width", _INSET_WIDTH)) * W
     sub = make_viewport(build_projection(context, "auto"), context, box_w, 0.0)
@@ -5574,8 +5636,10 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     palette = _pal(cfg)
     ts, W = vp["ts"], vp["width"]
     region_bbox = [float(v) for v in cfg["region"]["bbox"]]
-    context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
-        region_bbox, float(inset.get("zoom", _INSET_ZOOM))
+    context = (
+        [float(v) for v in inset["bbox"]]
+        if inset.get("bbox")
+        else _inset_context_bbox(region_bbox, float(inset.get("zoom", _INSET_ZOOM)))
     )
 
     box_w = float(inset.get("width", _INSET_WIDTH)) * W
@@ -5674,9 +5738,7 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     if not lines:
         # Refusing beats printing an empty rule: a caption that says nothing
         # is worse than no caption, because it looks like provenance.
-        raise ValueError(
-            'caption: full needs at least one of "method", "source" or "as_of"'
-        )
+        raise ValueError('caption: full needs at least one of "method", "source" or "as_of"')
 
     size = 8.2 * ts
     leading = 11.5 * ts
@@ -5871,9 +5933,13 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     contested = set(aoc.get("contested", []))
     fill_op = float(aoc.get("fill_opacity", COMPOSITING["claim"]))
     rows: list[dict[str, Any]] = [
-        {"kind": "class", "label": str(name),
-         "color": _as_rendered(color, cfg, fill_op),
-         "contested": name in contested, "fill": 1.0}
+        {
+            "kind": "class",
+            "label": str(name),
+            "color": _as_rendered(color, cfg, fill_op),
+            "contested": name in contested,
+            "fill": 1.0,
+        }
         for name, color in palette.items()
     ]
     for tier_name in _tiers_present(cfg):
@@ -5882,14 +5948,22 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
         rows.append({"kind": "tier", "label": label[0].upper() + label[1:], "tier": tier})
     front = cfg.get("front", {})
     if front.get("line") and front.get("legend", True):
-        rows.append({"kind": "front",
-                     "label": str(front.get("legend_label", "Approx. front line")),
-                     "color": front.get("color", "#3a4149")})
+        rows.append(
+            {
+                "kind": "front",
+                "label": str(front.get("legend_label", "Approx. front line")),
+                "color": front.get("color", "#3a4149"),
+            }
+        )
     for mk in cfg.get("marker_legend", []):
-        rows.append({"kind": "marker", "label": str(mk.get("label", "")),
-                     "color": mk.get("color", "#c0392b"),
-                     "precision": _precision_of(
-                         mk.get("precision"), _GEO_PRECISION, "precision")})
+        rows.append(
+            {
+                "kind": "marker",
+                "label": str(mk.get("label", "")),
+                "color": mk.get("color", "#c0392b"),
+                "precision": _precision_of(mk.get("precision"), _GEO_PRECISION, "precision"),
+            }
+        )
     # The rows above key the *colour* -- which class a mark belongs to -- and
     # on an event plate they are all drawn at the confident solid disc. The
     # ring vocabulary is the other half, and it is the half this generator
@@ -5903,16 +5977,23 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     # a plate whose marks are all exact does not need a lesson in rings it
     # never draws. The wording is :data:`_GEO_PRECISION`'s own, so the key,
     # the tooltip and the accessible name say the same sentence.
-    codes = sorted({
-        _precision_of(it.get("precision"), _GEO_PRECISION, "precision")
-        for layer in ("events", "forces")
-        for it in (cfg.get(layer) or [])
-    })
+    codes = sorted(
+        {
+            _precision_of(it.get("precision"), _GEO_PRECISION, "precision")
+            for layer in ("events", "forces")
+            for it in (cfg.get(layer) or [])
+        }
+    )
     if codes != [1]:
         for code in codes:
-            rows.append({"kind": "marker", "precision": code,
-                         "label": _GEO_PRECISION_KEY[code],
-                         "color": _pal(cfg)["chrome_sub"]})
+            rows.append(
+                {
+                    "kind": "marker",
+                    "precision": code,
+                    "label": _GEO_PRECISION_KEY[code],
+                    "color": _pal(cfg)["chrome_sub"],
+                }
+            )
     return rows
 
 
@@ -5942,9 +6023,7 @@ def _as_rendered(color: str, cfg: dict[str, Any], fill_op: float) -> str:
     if not tone:
         return color
     palette = cfg.get("_plate", _PLATES["day"])
-    blend = (cfg.get("areas_of_control") or {}).get(
-        "blend", palette["blend"] if tone else "none"
-    )
+    blend = (cfg.get("areas_of_control") or {}).get("blend", palette["blend"] if tone else "none")
     if blend != "multiply":  # only multiply shifts the hue; screen is the night plate
         return color
     land = _hex_to_rgb((cfg.get("basemap") or {}).get("land_color", palette["land"]))
@@ -5966,7 +6045,7 @@ def _hex_to_rgb(value: str) -> tuple[int, int, int]:
     h = value.lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
 
 
 def _legend_mark(row: dict[str, Any], x: float, y: float, sw: float, ts: float) -> str:
@@ -5980,12 +6059,16 @@ def _legend_mark(row: dict[str, Any], x: float, y: float, sw: float, ts: float) 
     kind = row["kind"]
     sy = y - sw / 2 - 1 * ts
     if kind == "class":
-        out = (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
-               f'rx="{2.5 * ts:.1f}" fill="{row["color"]}" fill-opacity="{row["fill"]:.2f}" '
-               f'stroke="{row["color"]}" stroke-width="1"/>')
+        out = (
+            f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+            f'rx="{2.5 * ts:.1f}" fill="{row["color"]}" fill-opacity="{row["fill"]:.2f}" '
+            f'stroke="{row["color"]}" stroke-width="1"/>'
+        )
         if row["contested"]:
-            out += (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
-                    f'rx="{2.5 * ts:.1f}" fill="url(#hatch-contested)"/>')
+            out += (
+                f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+                f'rx="{2.5 * ts:.1f}" fill="url(#hatch-contested)"/>'
+            )
         return out
     if kind == "tier":
         tier = row["tier"]
@@ -5994,26 +6077,34 @@ def _legend_mark(row: dict[str, Any], x: float, y: float, sw: float, ts: float) 
         # *texture*, so it is drawn light enough for the stripes or dots to
         # read: at the zone's own 0.47 grey the hatch disappeared into its
         # own background and the row looked like a plain dark square.
-        out = (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
-               f'rx="{2.5 * ts:.1f}" fill="{_LEGEND_TEXTURE_INK}" '
-               f'fill-opacity="{0.18 * float(tier["fill"]):.2f}" '
-               f'stroke="{_LEGEND_TEXTURE_INK}" stroke-width="1"{edge}/>')
+        out = (
+            f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+            f'rx="{2.5 * ts:.1f}" fill="{_LEGEND_TEXTURE_INK}" '
+            f'fill-opacity="{0.18 * float(tier["fill"]):.2f}" '
+            f'stroke="{_LEGEND_TEXTURE_INK}" stroke-width="1"{edge}/>'
+        )
         if tier["pattern"]:
-            out += (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
-                    f'rx="{2.5 * ts:.1f}" '
-                    f'fill="url(#{_pattern_id(str(tier["pattern"]), _LEGEND_TEXTURE_INK)})"/>')
+            out += (
+                f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+                f'rx="{2.5 * ts:.1f}" '
+                f'fill="url(#{_pattern_id(str(tier["pattern"]), _LEGEND_TEXTURE_INK)})"/>'
+            )
         return out
     if kind == "front":
-        return (f'<line x1="{x:.1f}" y1="{y:.1f}" x2="{x + sw:.1f}" y2="{y:.1f}" '
-                f'stroke="{row["color"]}" stroke-width="{2.4 * ts:.1f}" '
-                f'stroke-dasharray="{7 * ts:.1f} {3.5 * ts:.1f}" stroke-linecap="round"/>')
+        return (
+            f'<line x1="{x:.1f}" y1="{y:.1f}" x2="{x + sw:.1f}" y2="{y:.1f}" '
+            f'stroke="{row["color"]}" stroke-width="{2.4 * ts:.1f}" '
+            f'stroke-dasharray="{7 * ts:.1f} {3.5 * ts:.1f}" stroke-linecap="round"/>'
+        )
     # marker: the swatch mirrors the mark's precision, including its ring.
     if row["precision"] == 1:
         paint = f'fill="{row["color"]}" stroke="#fff" stroke-width="{1.4 * ts:.1f}"'
     else:
         broken = f' stroke-dasharray="{3 * ts:.1f} {2.2 * ts:.1f}"' if row["precision"] == 3 else ""
-        paint = (f'fill="#ffffff" fill-opacity="0.65" stroke="{row["color"]}" '
-                 f'stroke-width="{2.5 * ts:.1f}"{broken}')
+        paint = (
+            f'fill="#ffffff" fill-opacity="0.65" stroke="{row["color"]}" '
+            f'stroke-width="{2.5 * ts:.1f}"{broken}'
+        )
     return f'<circle cx="{x + sw / 2:.1f}" cy="{y:.1f}" r="{5.5 * ts:.1f}" {paint}/>'
 
 
@@ -6242,7 +6333,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
         f'rx="{9 * ts:.1f}" fill="{_pal(cfg)["panel"]}" fill-opacity="0.96"'
-        f'{_drop_shadow(vp, "panel-shadow")}/>',
+        f"{_drop_shadow(vp, 'panel-shadow')}/>",
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
         f'rx="{9 * ts:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
         f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
@@ -6341,8 +6432,18 @@ _SM_STEPS: tuple[str, ...] = ("day", "week", "month", "quarter", "year")
 
 #: Three-letter month names, so a label does not depend on the host's locale.
 _SM_MONTHS: tuple[str, ...] = (
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
 )
 
 #: How coarse each ``time_precision`` code is, phrased for a refusal message.
@@ -6561,17 +6662,11 @@ def build_small_multiples(cfg: dict[str, Any]) -> str:
     sm = dict(cfg.get("small_multiples") or {})
     by = str(sm.get("by", "year")).lower()
     if by not in _SM_STEPS:
-        raise ValueError(
-            f"unknown small_multiples.by {by!r}; known: {', '.join(_SM_STEPS)}"
-        )
+        raise ValueError(f"unknown small_multiples.by {by!r}; known: {', '.join(_SM_STEPS)}")
 
     # ── which window, if any, holds each mark ──────────────────────────────
     layer_names = ("events", "forces")
-    marks = [
-        (name, i, it)
-        for name in layer_names
-        for i, it in enumerate(cfg.get(name) or [])
-    ]
+    marks = [(name, i, it) for name in layer_names for i, it in enumerate(cfg.get(name) or [])]
     spans: dict[tuple[str, int], tuple[date, date, int]] = {}
     withheld: dict[str, int] = {}
     for name, i, it in marks:
@@ -6628,10 +6723,7 @@ def build_small_multiples(cfg: dict[str, Any]) -> str:
             if high < windows[0][0] or low >= windows[-1][1]:
                 reason = "outside the span this sheet covers"
             else:
-                reason = (
-                    f"dated only to {_SM_GRAIN[code]}, which no single "
-                    f"{by} panel contains"
-                )
+                reason = f"dated only to {_SM_GRAIN[code]}, which no single {by} panel contains"
             withheld[reason] = withheld.get(reason, 0) + 1
 
     # ── one plate per window, all from the same config ─────────────────────
@@ -6650,8 +6742,7 @@ def build_small_multiples(cfg: dict[str, Any]) -> str:
         panel = dict(base)
         for name in layer_names:
             panel[name] = [
-                it for (owner, i, it) in marks
-                if owner == name and holds.get((owner, i)) == index
+                it for (owner, i, it) in marks if owner == name and holds.get((owner, i)) == index
             ]
         counts.append(sum(len(panel[name]) for name in layer_names))
         panel["canvas_width"] = panel_w
@@ -6773,7 +6864,8 @@ def _sm_sheet(
         x = margin + column * (cell_w + gutter)
         y = grid_top + row * (cell_h + label_h + gutter)
         tally = (
-            "nothing drawn" if not drawn_here
+            "nothing drawn"
+            if not drawn_here
             else f"{drawn_here:,} mark{'s' if drawn_here != 1 else ''}"
         )
         cells.append(
@@ -6849,9 +6941,7 @@ def _sm_sheet(
         )
 
     height = foot_y + margin
-    chrome.append(
-        _attribution_layer(sheet, {"width": width, "height": height, "ts": ts}, bbox)
-    )
+    chrome.append(_attribution_layer(sheet, {"width": width, "height": height, "ts": ts}, bbox))
 
     a11y_title = str(title or f"Situation map, {windows[0][2]} to {windows[-1][2]}")
     a11y_desc = " ".join(lines)
@@ -6888,22 +6978,58 @@ def _sm_sheet(
 #: simply never read -- so a one-letter slip silently drops a whole layer and
 #: the plate still looks like a finished intelligence product. That is the
 #: worst possible response to a typo, and it is why this list exists.
-CONFIG_KEYS: frozenset[str] = frozenset({
-    "admin2_borders", "annotations", "inset", "interactivity",
-    "areas_of_control", "arrows", "as_of", "attribution", "basemap", "canvas_width",
-    "lakes",
-    "caption", "events", "forces", "frame", "front", "frontiers",
-    "infrastructure", "internal_borders", "labels", "legend_footer",
-    "legend_position", "marker_legend", "method", "padding", "projection",
-    "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
-    "legend_title", "print_width", "small_multiples", "provenance",
-})
+CONFIG_KEYS: frozenset[str] = frozenset(
+    {
+        "admin2_borders",
+        "annotations",
+        "inset",
+        "interactivity",
+        "areas_of_control",
+        "arrows",
+        "as_of",
+        "attribution",
+        "basemap",
+        "canvas_width",
+        "lakes",
+        "caption",
+        "events",
+        "forces",
+        "frame",
+        "front",
+        "frontiers",
+        "infrastructure",
+        "internal_borders",
+        "labels",
+        "legend_footer",
+        "legend_position",
+        "marker_legend",
+        "method",
+        "padding",
+        "projection",
+        "cities",
+        "region",
+        "rivers",
+        "simplify",
+        "source",
+        "subtitle",
+        "title",
+        "legend_title",
+        "print_width",
+        "small_multiples",
+        "provenance",
+    }
+)
 
 #: Keys the loaders set themselves; a caller never writes these.
 _INTERNAL_KEYS: frozenset[str] = frozenset(
     {
-        "_config_dir", "_panel", "_plate", "_print", "_relief_cache",
-        "_relief_tone", "_source_file",
+        "_config_dir",
+        "_panel",
+        "_plate",
+        "_print",
+        "_relief_cache",
+        "_relief_tone",
+        "_source_file",
     }
 )
 
@@ -6971,8 +7097,7 @@ def validate_region(region: Any) -> list[float]:
     """
     if not isinstance(region, dict) or "bbox" not in region:
         raise ValueError(
-            "region needs a 'bbox': [west, south, east, north] in degrees. "
-            f"Got {region!r}"
+            f"region needs a 'bbox': [west, south, east, north] in degrees. Got {region!r}"
         )
     raw = list(region["bbox"])
     if len(raw) != 4:
@@ -7035,38 +7160,90 @@ def validate_region(region: Any) -> list[float]:
 #: ``tests/test_config_schema_is_documented.py`` fails if the two drift.
 SECTION_KEYS: dict[str, frozenset[str]] = {
     "admin2_borders": frozenset({"show", "color", "label_names", "label_min_area_frac"}),
-    "areas_of_control": frozenset({
-        "source", "category_field", "confidence_field", "palette", "contested",
-        "fill_opacity", "casing_width", "blend", "over_water", "hatch_color",
-    }),
-    "basemap": frozenset({
-        "relief", "relief_strength", "hypsometric", "plate", "sea_color",
-        "land_color", "coast_color", "bathymetry",
-    }),
+    "areas_of_control": frozenset(
+        {
+            "source",
+            "category_field",
+            "confidence_field",
+            "palette",
+            "contested",
+            "fill_opacity",
+            "casing_width",
+            "blend",
+            "over_water",
+            "hatch_color",
+        }
+    ),
+    "basemap": frozenset(
+        {
+            "relief",
+            "relief_strength",
+            "hypsometric",
+            "plate",
+            "sea_color",
+            "land_color",
+            "coast_color",
+            "bathymetry",
+        }
+    ),
     "cities": frozenset({"show", "size", "limit", "max_rank", "hand_placed_clearance"}),
     "frame": frozenset({"margin", "page_color", "radius"}),
-    "front": frozenset({
-        "line", "color", "label", "label_at", "label_dx", "label_dy",
-        "legend", "legend_label",
-    }),
-    "frontiers": frozenset({
-        "show", "color", "focus", "label_neighbours", "label_min_area_frac",
-        "source", "as_of", "fields",
-    }),
+    "front": frozenset(
+        {
+            "line",
+            "color",
+            "label",
+            "label_at",
+            "label_dx",
+            "label_dy",
+            "legend",
+            "legend_label",
+        }
+    ),
+    "frontiers": frozenset(
+        {
+            "show",
+            "color",
+            "focus",
+            "label_neighbours",
+            "label_min_area_frac",
+            "source",
+            "as_of",
+            "fields",
+        }
+    ),
     "infrastructure": frozenset({"roads", "airports"}),
     "inset": frozenset({"show", "bbox", "position", "width", "zoom"}),
     "internal_borders": frozenset({"show", "color", "label_names", "label_min_area_frac"}),
     "labels": frozenset({"places", "waters", "water", "territories"}),
-    "lakes": frozenset({
-        "show", "color", "edge_color", "skip", "former", "historic", "always_label",
-        "label_color", "label_min_area_frac", "depth_rings",
-    }),
+    "lakes": frozenset(
+        {
+            "show",
+            "color",
+            "edge_color",
+            "skip",
+            "former",
+            "historic",
+            "always_label",
+            "label_color",
+            "label_min_area_frac",
+            "depth_rings",
+        }
+    ),
     "provenance": frozenset({"inputs"}),
     "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
-    "rivers": frozenset({
-        "show", "width", "color", "skip", "always_label", "label_color",
-        "label_min_length_frac", "label_max_scalerank",
-    }),
+    "rivers": frozenset(
+        {
+            "show",
+            "width",
+            "color",
+            "skip",
+            "always_label",
+            "label_color",
+            "label_min_length_frac",
+            "label_max_scalerank",
+        }
+    ),
 }
 
 

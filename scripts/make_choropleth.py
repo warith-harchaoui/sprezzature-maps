@@ -485,7 +485,6 @@ def _load_countries() -> list[dict[str, Any]]:
     return countries
 
 
-
 #: Water blue, the cartographic convention; muted so rivers describe the land
 #: without competing with the choropleth painted over them.
 _RIVER_COLOR = "#7FA3C0"
@@ -497,11 +496,8 @@ def _line_segments(geometry: dict[str, Any]) -> list[list[tuple[float, float]]]:
     if kind == "LineString":
         return [[(float(x), float(y)) for x, y in geometry["coordinates"]]]
     if kind == "MultiLineString":
-        return [
-            [(float(x), float(y)) for x, y in line] for line in geometry["coordinates"]
-        ]
+        return [[(float(x), float(y)) for x, y in line] for line in geometry["coordinates"]]
     return []
-
 
 
 def _classed_legend(
@@ -542,7 +538,7 @@ def _classed_legend(
     strip_end = x0 + len(class_colors) * (swatch_w + gap)
     parts.append(
         f'<text x="{x0:.1f}" y="{swatch_top - 4:.1f}" font-size="9" fill="{SECONDARY}">'
-        f'{len(class_colors)} classes, {METHOD_LABELS[method]}</text>'
+        f"{len(class_colors)} classes, {METHOD_LABELS[method]}</text>"
     )
     parts.append(
         f'<rect x="{no_data_x:.1f}" y="{swatch_top:.1f}" width="14" height="12" '
@@ -687,9 +683,7 @@ def build_svg(
     # Not dropped silently either: a country with no value is already a
     # first-class state here -- it renders grey and the subtitle says so --
     # and the caller is the only one who can say which of the two they meant.
-    unusable = sorted(
-        key for key, value in values_by_id.items() if not math.isfinite(value)
-    )
+    unusable = sorted(key for key, value in values_by_id.items() if not math.isfinite(value))
     if unusable:
         raise ValueError(
             "these ids carry a value that is not a finite number "
@@ -915,12 +909,8 @@ def build_svg(
         # raster -- on the Himalaya, 2.8x its contrast; the Andes 2.7x;
         # the Alps 3.0x. Ridge structure at continental scale is exactly
         # what a scale-invariant operator is for.
-        shade, shade_bounds = terrain_shade_for_bbox(
-            -180.0, -90.0, 180.0, 90.0, plot_w, plot_h
-        )
-        relief_rgba = sample_terrain_shade(
-            lon_grid, lat_grid, valid_grid, shade, shade_bounds
-        )
+        shade, shade_bounds = terrain_shade_for_bbox(-180.0, -90.0, 180.0, 90.0, plot_w, plot_h)
+        relief_rgba = sample_terrain_shade(lon_grid, lat_grid, valid_grid, shade, shade_bounds)
         parts.append(
             f'<image x="{side_margin:.1f}" y="{top_margin:.1f}" '
             f'width="{int(plot_w)}" height="{int(plot_h)}" '
@@ -984,9 +974,7 @@ def build_svg(
                 # atlas are shorter than one unit; they are ~1.5 MB of path
                 # data per map that no reader can ever see. See _simplify.
                 drawn = simplify_ring(seg, simplify)
-                path_d_parts.append(
-                    "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in drawn) + " Z"
-                )
+                path_d_parts.append("M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in drawn) + " Z")
                 if len(seg) > len(anchor_seg):
                     # The hover anchor is a centroid, so it uses the full
                     # ring: a simplified ring would move the bubble for no
@@ -1064,9 +1052,7 @@ def build_svg(
                 # drawn with rivers, which is the default.
                 stroke_w = 1.6 if rank <= 1 else (1.1 if rank == 2 else 0.8)
                 for line in _line_segments(feature["geometry"]):
-                    points = simplify_screen(
-                        [project(lon, lat) for lon, lat in line], simplify
-                    )
+                    points = simplify_screen([project(lon, lat) for lon, lat in line], simplify)
                     if len(points) < 2:
                         continue
                     d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in points)

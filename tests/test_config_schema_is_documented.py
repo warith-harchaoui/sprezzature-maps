@@ -67,8 +67,7 @@ def test_the_docstring_does_not_promise_keys_the_validator_rejects() -> None:
     assert documented, "the reference section parsed to nothing; the format changed"
     unknown = sorted(documented - set(msm.CONFIG_KEYS))
     assert not unknown, (
-        f"documented as top-level config keys but rejected by validate_config: "
-        f"{', '.join(unknown)}"
+        f"documented as top-level config keys but rejected by validate_config: {', '.join(unknown)}"
     )
     # And the section really does cover the schema, not just a subset.
     assert documented == set(msm.CONFIG_KEYS), (
@@ -97,7 +96,11 @@ def test_every_nested_key_is_documented_too() -> None:
     missing: list[str] = []
     for parent, keys in sorted(msm.SECTION_KEYS.items()):
         for key in sorted(keys):
-            if f"``{key}``" not in section and f"{key}," not in section and f"{key}}}" not in section:
+            if (
+                f"``{key}``" not in section
+                and f"{key}," not in section
+                and f"{key}}}" not in section
+            ):
                 missing.append(f"{parent}.{key}")
     assert not missing, (
         f"{len(missing)} nested option(s) the generator reads and the reference "
