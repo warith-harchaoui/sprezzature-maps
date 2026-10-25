@@ -60,8 +60,8 @@ pip install -e ~/sprezzature-maps
 ```python
 from sprezzature_maps import make_choropleth, make_situation_map
 
-make_choropleth(out="world.svg")  # demo data if none supplied
-make_situation_map(out="region.svg")  # bundled demo config
+make_choropleth(out="world.svg")          # demo data if none supplied
+make_situation_map(out="region.svg")      # bundled demo config
 ```
 
 ```bash
@@ -167,11 +167,11 @@ make_situation_map(config=cfg, out="plate.svg")
 ```python
 from sprezzature_maps import plate_provenance, replay_report
 
-plate_provenance(svg)  # {"version", "config_sha256", "inputs": [...]}
+plate_provenance(svg)   # {"version", "config_sha256", "inputs": [...]}
 
 report = replay_report(svg, cfg, ["export.csv"])
-report["replays"]  # True only if everything the stamp names matched
-report["differences"]  # ["export.csv differs: 3f2a91c0d4e8 on the plate, …"]
+report["replays"]       # True only if everything the stamp names matched
+report["differences"]   # ["export.csv differs: 3f2a91c0d4e8 on the plate, …"]
 ```
 
 Three things about that stamp are each the opposite of the obvious choice.
@@ -381,10 +381,9 @@ drift from the plate above it:
 
 ```python
 from sprezzature_maps import article_sidecar
-
 card = article_sidecar(svg)
-card["alt"]  # description + a computed takeaway
-card["zones"]  # [{"category", "confidence", "area_share"}, ...]
+card["alt"]      # description + a computed takeaway
+card["zones"]    # [{"category", "confidence", "area_share"}, ...]
 card["markers"]  # [{"lon", "lat", "precision", "radius_km"}, ...]
 ```
 

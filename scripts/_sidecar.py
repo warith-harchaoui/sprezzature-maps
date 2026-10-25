@@ -87,7 +87,9 @@ _DESC_RE = re.compile(r"<desc\b[^>]*>(.*?)</desc>", re.S)
 #: them comes back empty for the other two and says nothing about it. The
 #: trailing ``/?`` takes both the self-closing form (no inputs) and the
 #: paired one.
-_PROVENANCE_RE = re.compile(r'<metadata\b([^>]*?\bdata-generator="sprezzature-maps"[^>]*?)/?>')
+_PROVENANCE_RE = re.compile(
+    r'<metadata\b([^>]*?\bdata-generator="sprezzature-maps"[^>]*?)/?>'
+)
 
 #: One recorded input file. Scanned over the whole document rather than
 #: inside the matched ``<metadata>``: the element name exists nowhere else,
@@ -105,7 +107,10 @@ def _unescape(text: str) -> str:
     ``&amp;lt;`` back into a ``<``.
     """
     return (
-        text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&amp;", "&")
+        text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&amp;", "&")
     )
 
 
@@ -117,7 +122,10 @@ def _esc_attr(text: str) -> str:
     otherwise close the attribute and silently truncate the record.
     """
     return (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
     )
 
 
@@ -457,7 +465,9 @@ def provenance_metadata(cfg: Mapping[str, Any], base: str | Path | None = None) 
             )
         declared = _declared_inputs(raw.get("inputs"), base)
     else:
-        raise ValueError(f"provenance is {raw!r}; write true, false, or a mapping with 'inputs'.")
+        raise ValueError(
+            f"provenance is {raw!r}; write true, false, or a mapping with 'inputs'."
+        )
     inputs = _with_loader_input(cfg, declared)
 
     head = (
@@ -582,12 +592,15 @@ def replay_report(
 
     running = _package_version()
     if stamp["version"] != running:
-        differences.append(f"drawn by sprezzature-maps {stamp['version']}; {running} is installed")
+        differences.append(
+            f"drawn by sprezzature-maps {stamp['version']}; {running} is installed"
+        )
 
     digest = config_digest(cfg)
     if stamp["config_sha256"] != digest:
         differences.append(
-            f"the config differs: {stamp['config_sha256'][:12]} on the plate, {digest[:12]} here"
+            f"the config differs: {stamp['config_sha256'][:12]} on the plate, "
+            f"{digest[:12]} here"
         )
 
     # Keyed by basename, which is all the stamp kept -- and a list per name,

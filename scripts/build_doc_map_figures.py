@@ -117,7 +117,9 @@ def main() -> None:
     doc_img.mkdir(parents=True, exist_ok=True)
     missing = [n for n in _SOURCE_NAMES if not (source / f"{n}.svg").is_file()]
     if missing:
-        raise SystemExit(f"{source} is missing: {', '.join(n + '.svg' for n in missing)}")
+        raise SystemExit(
+            f"{source} is missing: {', '.join(n + '.svg' for n in missing)}"
+        )
     for name in _SOURCE_NAMES:
         out_path = doc_img / f"{name}.png"
         rasterize(source / f"{name}.svg", out_path)

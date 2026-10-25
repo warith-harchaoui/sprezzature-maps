@@ -67,7 +67,9 @@ def test_empty_cells_are_left_bare() -> None:
     rectangle and lose the only thing this form is for.
     """
     module = _density()
-    grid, nx, ny, peak = module.bin_points([(-100.0, 40.0)] * 50, (-125.0, 25.0, -67.0, 49.0), 20)
+    grid, nx, ny, peak = module.bin_points(
+        [(-100.0, 40.0)] * 50, (-125.0, 25.0, -67.0, 49.0), 20
+    )
     filled = sum(1 for col in grid for cell in col if cell)
     assert filled == 1, filled
     assert peak == 50
@@ -155,7 +157,6 @@ def test_normalising_actually_changes_the_field_not_just_the_label() -> None:
     module = _density()
     counts = module.build_svg(points=points, bbox=(0, 50, 20, 71), bins=20)
     density = module.build_svg(points=points, bbox=(0, 50, 20, 71), bins=20, per_area=True)
-
     def levels(svg: str) -> set[str]:
         return set(re.findall(r'<path fill="(#[0-9a-fA-F]{6})"', svg))
 

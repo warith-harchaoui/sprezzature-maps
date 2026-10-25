@@ -87,6 +87,7 @@ def layer_key_for(group_id: str) -> str | None:
     return None
 
 
+
 def _steps_for(tiers: Collection[str] | None) -> list[tuple[str, str]]:
     """Return the confidence ladder to offer, or nothing if it would not be one.
 
@@ -118,15 +119,10 @@ def controls_size(ts: float, *, tiers: tuple[str, ...] = ()) -> tuple[float, flo
 
 # The palette is one of make_situation_map's _PLATES entries: colour strings
 # with one opacity number among them, which is why the value type is a union.
-def controls_markup(
-    width: float,
-    height: float,
-    ts: float,
-    palette: dict[str, str | float],
-    *,
-    tiers: tuple[str, ...] = (),
-    origin: tuple[float, float] | None = None,
-) -> str:
+def controls_markup(width: float, height: float, ts: float,
+                    palette: dict[str, str | float],
+                    *, tiers: tuple[str, ...] = (),
+                    origin: tuple[float, float] | None = None) -> str:
     """Return the control panel, hidden until the script reveals it.
 
     Parameters
@@ -370,4 +366,6 @@ def tag_layer(group_svg: str) -> str:
     group_id = group_svg[len(marker) : end]
     if layer_key_for(group_id) is None:
         return group_svg
-    return group_svg[: end + 1] + f' data-layer-id="{group_id}"' + group_svg[end + 1 :]
+    return (
+        group_svg[: end + 1] + f' data-layer-id="{group_id}"' + group_svg[end + 1 :]
+    )

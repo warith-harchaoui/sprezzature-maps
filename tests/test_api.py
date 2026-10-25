@@ -128,7 +128,9 @@ def test_a_classed_map_always_names_its_method() -> None:
         ("jenks", "natural breaks"),
         ("headtail", "head/tail breaks"),
     ):
-        resp = client.post("/v1/choropleth", json={"data": rows, "classes": 3, "method": method})
+        resp = client.post(
+            "/v1/choropleth", json={"data": rows, "classes": 3, "method": method}
+        )
         assert resp.status_code == 200, resp.text
         assert label in resp.text, f"{method}: the legend does not name the method"
 
@@ -162,7 +164,9 @@ def test_every_kind_this_repo_draws_is_reachable_from_every_surface() -> None:
         assert f"make_{kind}" in sprezzature_maps.__all__, f"{kind}: not exported"
 
     operations = {
-        route.operation_id for route in app.routes if getattr(route, "operation_id", None)
+        route.operation_id
+        for route in app.routes
+        if getattr(route, "operation_id", None)
     }
     for kind in advertised:
         assert f"render_{kind}" in operations, f"{kind}: no route, so no MCP tool either"

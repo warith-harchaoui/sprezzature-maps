@@ -58,7 +58,9 @@ from pathlib import Path
 #: ``print_width`` puts a physical size on the root (``width="90mm"``), which
 #: is the whole point of it: the file then lands at exactly that size in
 #: InDesign or ``\includegraphics``. The rasteriser will not read it.
-_PHYSICAL_SIZE_RE = re.compile(r'\s(width|height)="\s*[\d.]+\s*(?:mm|cm|in|pt|pc|q)"', re.I)
+_PHYSICAL_SIZE_RE = re.compile(
+    r'\s(width|height)="\s*[\d.]+\s*(?:mm|cm|in|pt|pc|q)"', re.I
+)
 
 #: The root ``viewBox``, which carries the drawing's own coordinate system.
 _VIEWBOX_RE = re.compile(r'viewBox="\s*[\d.+-]+\s+[\d.+-]+\s+([\d.]+)\s+([\d.]+)\s*"')
@@ -68,11 +70,7 @@ _ROOT_DIM_RE = re.compile(r'\s(width|height)="\s*([\d.]+)\s*(mm|cm|in|pt|pc)"', 
 
 #: Millimetres per unit, for the units ``print_width`` accepts.
 _MM_PER_UNIT: dict[str, float] = {
-    "mm": 1.0,
-    "cm": 10.0,
-    "in": 25.4,
-    "pt": 25.4 / 72.0,
-    "pc": 25.4 / 6.0,
+    "mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72.0, "pc": 25.4 / 6.0,
 }
 
 
@@ -242,7 +240,9 @@ def _size_in_pixels(svg: str) -> str:
         return svg
     head_end = svg.find(">") + 1
     head = _PHYSICAL_SIZE_RE.sub("", svg[:head_end])
-    sized = head.replace("<svg", f'<svg width="{box.group(1)}" height="{box.group(2)}"', 1)
+    sized = head.replace(
+        "<svg", f'<svg width="{box.group(1)}" height="{box.group(2)}"', 1
+    )
     return sized + svg[head_end:]
 
 

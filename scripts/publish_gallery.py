@@ -88,15 +88,15 @@ def main(argv: list[str]) -> int:
         if not _render_png(svg_path, png_path, width=width):
             raise SystemExit(f"could not rasterise {stem}; the gallery needs both files")
         written.append(stem)
-        print(
-            f"  {stem:28s} {svg_path.stat().st_size // 1024:5d} KB svg  "
-            f"{png_path.stat().st_size // 1024:5d} KB png"
-        )
+        print(f"  {stem:28s} {svg_path.stat().st_size // 1024:5d} KB svg  "
+              f"{png_path.stat().st_size // 1024:5d} KB png")
 
     # A name sitting in the gallery that nothing here produces is the exact
     # situation this script was written to end, so say so rather than leave
     # it to be discovered again in six months.
-    stale = sorted(p.stem for p in target.glob("*.svg") if p.stem not in _published_names())
+    stale = sorted(
+        p.stem for p in target.glob("*.svg") if p.stem not in _published_names()
+    )
     if stale:
         print(
             f"\n{len(stale)} map(s) in {target} that no builder here produces, "

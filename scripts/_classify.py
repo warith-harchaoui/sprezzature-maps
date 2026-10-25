@@ -108,11 +108,7 @@ def quantile_breaks(values: Sequence[float], k: int) -> list[float]:
     if k < 2 or len(data) < k:
         return []
     return _dedupe_breaks(
-        [
-            data[round(i * len(data) / k)]
-            for i in range(1, k)
-            if 0 < round(i * len(data) / k) < len(data)
-        ]
+        [data[round(i * len(data) / k)] for i in range(1, k) if 0 < round(i * len(data) / k) < len(data)]
     )
 
 
