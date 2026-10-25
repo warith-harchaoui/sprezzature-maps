@@ -30,15 +30,15 @@ TRIGGERS = (REPO / "TRIGGERS.md").read_text(encoding="utf-8")
 
 
 def _cli_subcommands() -> set[str]:
-    """The sub-commands ``make-map`` really accepts, read off its own parser."""
-    from sprezzature_maps.cli import build_parser  # noqa: PLC0415
+    """Every sub-command the one front door registers.
 
-    parser = build_parser()
-    return {
-        name
-        for action in parser._subparsers._group_actions  # type: ignore[union-attr]
-        for name in action.choices
-    }
+    Read from click's own command table rather than from an argparse parser:
+    the argparse front door was removed on 2026-10-25, and this used to call
+    its `build_parser`.
+    """
+    from sprezzature_maps.cli import main  # noqa: PLC0415
+
+    return set(main.commands)
 
 
 def _operation_ids() -> set[str]:
@@ -47,11 +47,7 @@ def _operation_ids() -> set[str]:
     assert fastapi  # the import is the check
     from sprezzature_maps.api import app  # noqa: PLC0415
 
-    return {
-        route.operation_id
-        for route in app.routes
-        if getattr(route, "operation_id", None)
-    }
+    return {route.operation_id for route in app.routes if getattr(route, "operation_id", None)}
 
 
 #: Every ``make-map <sub>`` TRIGGERS.md tells an agent to run.
@@ -101,7 +97,15 @@ def test_no_generator_is_missing_from_the_routing_table() -> None:
     agent will ever choose: the feature ships, and the only document that
     would have sent anyone to it does not mention it.
     """
-    missing = sorted(_cli_subcommands() - set(CLI_CALLS))
+
+    # `situation_map` and `situation-map` are one command under two names --
+    # the underscore is what every published instruction says, the hyphen is
+    # click's idiom -- so comparing the spellings literally would report a
+    # missing route that is the row above it. Normalise before comparing.
+    def _norm(names: set[str]) -> set[str]:
+        return {name.replace("-", "_") for name in names}
+
+    missing = sorted(_norm(_cli_subcommands()) - _norm(set(CLI_CALLS)))
     assert not missing, (
         f"`make-map` can render {missing}, and TRIGGERS.md never tells an "
         "agent to. Add a row to the routing table."

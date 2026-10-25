@@ -73,7 +73,7 @@ have a list of things that happened at coordinates, density.
 | Situation map | `make-map situation_map --config region.yaml --out r.svg` | `render_situation_map` |
 | Density | `make-map density --out where.svg` | `render_density` |
 | Audit a finished plate | `make-map audit plate.svg` | — |
-| Which kinds exist | `make-map --help` | `list_kinds` |
+| Which kinds exist | `make-map list` (or `--help`) | `list_kinds` |
 
 A conflict export has no CLI of its own: the loaders are a Python call that
 builds the config the situation map then renders.
@@ -133,7 +133,7 @@ no CLI or MCP tool for it. It is two Python calls on the finished file:
 ```python
 from sprezzature_maps import plate_provenance, replay_report
 
-plate_provenance(svg)                       # {} if it was never stamped
+plate_provenance(svg)  # {} if it was never stamped
 replay_report(svg, cfg, ["sudan-2024.csv"])["replays"]
 ```
 
