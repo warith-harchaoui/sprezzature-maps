@@ -2,7 +2,7 @@
 renders both map kinds and reads CSV data with column mapping correctly.
 
 One scenario-style file covering many small cases together, mirroring
-what was checked by hand while building ``sprezzature_maps/cli_click.py``,
+what was checked by hand while building ``sprezzature_maps/cli.py``,
 following CODING.md's "prefer functional tests over one test per
 function" guidance, since these commands are thin adapters over
 generators that already have their own unit tests.
@@ -17,7 +17,7 @@ import pytest
 click = pytest.importorskip("click")
 from click.testing import CliRunner  # noqa: E402
 
-from sprezzature_maps.cli_click import main  # noqa: E402
+from sprezzature_maps.cli import main  # noqa: E402
 
 runner = CliRunner()
 
@@ -77,3 +77,43 @@ def test_situation_map_demo(tmp_path: Path) -> None:
     result = runner.invoke(main, ["situation-map", "--out", str(out)])
     assert result.exit_code == 0, result.output
     assert out.exists()
+
+
+def test_the_two_spellings_are_one_callable() -> None:
+    """
+    ``make-map`` and ``sprezzature-maps`` must resolve to the same target.
+
+    There were two parsers until 2026-10-25, and the click one was missing a
+    command the argparse one had — ``density`` — which is exactly how a second
+    front door fails: not loudly, but by quietly offering less.
+    """
+    from pathlib import Path
+
+    import tomllib
+
+    root = Path(__file__).resolve().parent.parent
+    scripts = tomllib.loads((root / "pyproject.toml").read_text())["project"]["scripts"]
+    assert scripts["make-map"] == scripts["sprezzature-maps"]
+    assert scripts["make-map"] == "sprezzature_maps.cli:main"
+
+
+def test_every_generator_has_a_command() -> None:
+    """
+    The three generators this package ships must each be reachable.
+
+    ``density`` was in the argparse front door and not the click one. Removing
+    argparse without porting it would have dropped a documented generator from
+    the command line with nothing to notice.
+    """
+    from sprezzature_maps.cli import main
+
+    assert {"choropleth", "density", "situation-map"} <= set(main.commands)
+
+
+def test_no_second_parser_grows_back() -> None:
+    """A second front door is how `density` went missing in the first place."""
+    from pathlib import Path
+
+    pkg = Path(__file__).resolve().parent.parent / "sprezzature_maps"
+    assert not (pkg / "cli_click.py").exists()
+    assert "import argparse" not in (pkg / "cli.py").read_text(encoding="utf-8")

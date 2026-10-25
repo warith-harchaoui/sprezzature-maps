@@ -1,11 +1,46 @@
-"""``make-map``: render a choropleth or situation map from the command line.
+"""
+sprezzature-maps: the Click-based command line (the ``sprezzature-maps`` command).
 
-A thin dispatcher, built with argparse (Python's standard library for
-parsing command-line arguments), that just hands off to the two
-generators. Its shape deliberately mirrors the sister
-`sprezzature-figures <https://github.com/warith-harchaoui/sprezzature-figures>`_
-repository's own ``make-figure`` command, so a user already familiar with
-one recognizes the other.
+Module summary
+--------------
+Click is a Python library for building command-line tools with
+subcommands. This module uses it to provide a richer twin of the
+always-installed, argparse-based ``make-map`` command
+(:mod:`sprezzature_maps.cli`); it is available separately, through the
+``[cli]`` extra. Both commands call the exact same underlying functions
+(:func:`sprezzature_maps.make_choropleth`,
+:func:`sprezzature_maps.make_situation_map`; see CODING.md §19.1), so this
+file only adds a new way to reach the generators, not a second
+implementation of them.
+
+What this command adds over ``make-map``, specifically: it can read data
+straight from a CSV file (``make-map`` only reads a JSON file already
+shaped the way the generator expects), and it accepts ``--map
+role=column`` bindings for a CSV whose columns are not already named
+``id``/``value``. That is exactly the same gap that exists between the
+two command lines in the sister ``sprezzature-figures`` repository (its
+argparse-based command is JSON-and-demo-data only too; its Click command
+is where CSV reading and column mapping live). This file deliberately does
+not duplicate ``make-map``'s JSON-file path, and does not add a second way
+to load a ``situation_map`` configuration: both already work, and a CSV
+story simply does not apply to ``situation_map``, since it is driven by a
+YAML configuration file describing zones and markers, not by rows of
+tabular data.
+
+Install the extra to pull in Click::
+
+    pip install 'sprezzature-maps[cli]'
+
+Then run the command::
+
+    sprezzature-maps list
+    sprezzature-maps choropleth --data my.csv --map id=Code --map value=Score --out world.svg
+    sprezzature-maps situation-map --config my-region.yaml --out region.svg
+
+Usage example
+-------------
+>>> # sprezzature-maps choropleth --out world.svg
+>>> # world.svg
 
 Author
 ------
@@ -14,162 +49,304 @@ Author
 
 from __future__ import annotations
 
-import argparse
+import csv
 import json
 import sys
 from pathlib import Path
+from typing import Any
+
+import click
 
 from . import make_choropleth, make_density, make_situation_map
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Return the ``make-map`` parser, fully populated.
+def _parse_mapping(pairs: tuple[str, ...]) -> dict[str, str]:
+    """Parse repeated ``--map role=column`` options into a dict.
 
-    Split out of :func:`main` so the sub-commands this dispatcher really
-    accepts can be read without running it. ``TRIGGERS.md`` tells an agent
-    which of them to call, and ``tests/test_triggers_are_real.py`` resolves
-    every name in that file against this parser: a routing table that names a
-    command the dispatcher does not have sends every agent that trusts it
-    into an argparse error, and the agent reports that the tool is broken
-    rather than that the documentation is.
+    Parameters
+    ----------
+    pairs : tuple of str
+        Each element is one ``--map`` option's raw value, expected in
+        ``"role=column"`` form.
+
+    Returns
+    -------
+    dict of str to str
+        ``{role: column}``, e.g. ``{"id": "Code", "value": "Score"}``.
+
+    Raises
+    ------
+    click.ClickException
+        If any entry is missing the ``=`` separator.
+
+    Examples
+    --------
+    >>> _parse_mapping(("id=Code", "value=Score"))
+    {'id': 'Code', 'value': 'Score'}
     """
-    parser = argparse.ArgumentParser(prog="make-map", description=__doc__)
-    sub = parser.add_subparsers(dest="kind", required=True)
-
-    p_choro = sub.add_parser("choropleth", help="World choropleth map.")
-    p_choro.add_argument("--data", help="JSON file of rows ({id, value}); defaults to demo data.")
-    p_choro.add_argument("--out", help="Output SVG path.")
-    p_choro.add_argument("--title", default=None)
-    p_choro.add_argument(
-        "--classes",
-        type=int,
-        default=None,
-        metavar="K",
-        help="Class the values into K colour classes instead of stretching the ramp "
-        "linearly from min to max. On skewed data -- which most indicators are -- "
-        "the linear default puts most territories in the bottom of the ramp. "
-        "Omit for the unclassed ramp.",
-    )
-    p_choro.add_argument(
-        "--no-cities",
-        action="store_true",
-        help="Do not name the major cities. They are drawn by default: a map with "
-        "nobody on it gives a reader nowhere to stand, and the selection is by "
-        "cartographic prominence, not by 'is it a capital'.",
-    )
-    p_choro.add_argument(
-        "--no-rivers",
-        action="store_true",
-        help="Do not draw the major rivers. They are drawn by default, tapered by "
-        "prominence so a trunk reads thick and a tributary thin.",
-    )
-    p_choro.add_argument(
-        "--breaks",
-        default=None,
-        metavar="V,V,V",
-        help="Class boundaries you choose yourself, comma-separated, e.g. '5,10,25'. "
-        "Overrides --classes/--method: some bands have to mean something outside the "
-        "data (a regulatory threshold, a figure already published) and no algorithm "
-        "will land on them by luck. The legend then says the breaks were given.",
-    )
-    p_choro.add_argument(
-        "--method",
-        default="quantile",
-        choices=["quantile", "equal", "jenks", "headtail"],
-        help="How to place the class boundaries, when --classes is given. "
-        "quantile: equal count per class, supports ranking. equal: equal width, "
-        "poor on skewed data. jenks: natural breaks, shows the data's own groups. "
-        "headtail: for heavy tails. The legend names whichever you pick.",
-    )
-
-    p_den = sub.add_parser(
-        "density",
-        help="Accumulation map: point events binned to a luminous field, no coastline.",
-    )
-    p_den.add_argument(
-        "--points",
-        help="JSON file of [[lon, lat], ...] event positions; defaults to demo points.",
-    )
-    p_den.add_argument("--out", help="Output SVG path.")
-    p_den.add_argument("--title", default=None)
-    p_den.add_argument(
-        "--bins",
-        type=int,
-        default=None,
-        help="Cells across the image. Past roughly 260 the field becomes grain, so the "
-        "visual limit arrives before the size limit.",
-    )
-
-    p_sit = sub.add_parser("situation_map", help="Layered areas-of-control situation map.")
-    p_sit.add_argument("--config", help="YAML config; defaults to the bundled demo.")
-    p_sit.add_argument("--out", help="Output SVG path.")
-
-    # The audit half, beside the three that make plates. A brick that only
-    # makes is half a brick: this asks whether what came out says enough
-    # about itself for a reader to question it.
-    p_audit = sub.add_parser(
-        "audit",
-        help="Check that a rendered plate says how it was made.",
-    )
-    p_audit.add_argument("target", help="An SVG plate, or a folder of them.")
-    p_audit.add_argument(
-        "--format", choices=["text", "json"], default="text",
-        help="Output shape (default: text).",
-    )
-
-    return parser
+    mapping: dict[str, str] = {}
+    for pair in pairs:
+        # Split on the FIRST "=" only: a column header could itself
+        # contain "=" (unusual, but not impossible for a hand-edited
+        # CSV), and the role name never does.
+        if "=" not in pair:
+            raise click.ClickException(
+                f"--map expects role=column (e.g. --map id=Code), got: {pair!r}"
+            )
+        role, _, column = pair.partition("=")
+        mapping[role.strip()] = column.strip()
+    return mapping
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def _load_choropleth_rows(data_path: str, mapping: dict[str, str]) -> list[dict[str, Any]]:
+    """Load choropleth rows from a CSV or JSON file, applying ``--map``.
 
-    if args.kind == "audit":
-        from sprezzature_maps.audit import main as audit_main
+    Parameters
+    ----------
+    data_path : str
+        Path to a ``.csv``/``.tsv`` or ``.json``/``.jsonl`` file, or
+        ``"-"`` to read CSV from stdin.
+    mapping : dict of str to str
+        ``{"id": <column name>, "value": <column name>}``, from
+        :func:`_parse_mapping`. Empty means the file's own columns are
+        already named ``id``/``value``.
 
-        return audit_main([args.target, "--format", args.format])
+    Returns
+    -------
+    list of dict
+        Rows in the ``[{"id": str, "value": float}, ...]`` shape
+        :func:`~sprezzature_maps.make_choropleth` expects.
 
-    if args.kind == "choropleth":
-        kwargs = {}
-        if args.data:
-            kwargs["data"] = json.loads(Path(args.data).read_text())
-        if args.title:
-            kwargs["title"] = args.title
-        if args.out:
-            kwargs["out"] = args.out
-        if args.no_cities:
-            kwargs["cities"] = False
-        if args.no_rivers:
-            kwargs["rivers"] = False
-        if args.breaks:
-            kwargs["breaks"] = [float(v) for v in args.breaks.split(",") if v.strip()]
-        elif args.classes:
-            kwargs["classes"] = args.classes
-            kwargs["method"] = args.method
-        path = make_choropleth(**kwargs)
-    elif args.kind == "density":
-        kwargs = {}
-        if args.points:
-            kwargs["points"] = [tuple(p) for p in json.loads(Path(args.points).read_text())]
-        if args.title:
-            kwargs["title"] = args.title
-        if args.out:
-            kwargs["out"] = args.out
-        if args.bins:
-            kwargs["bins"] = args.bins
-        path = make_density(**kwargs)
+    Raises
+    ------
+    click.ClickException
+        If the file is missing, has an unsupported extension, or a
+        required column is not present after mapping.
+
+    Examples
+    --------
+    >>> import tempfile, os
+    >>> fd, path = tempfile.mkstemp(suffix=".csv")
+    >>> _ = os.write(fd, b"id,value\\n840,12.5\\n124,-3.2\\n")
+    >>> os.close(fd)
+    >>> rows = _load_choropleth_rows(path, {})
+    >>> os.unlink(path)
+    >>> rows
+    [{'id': '840', 'value': 12.5}, {'id': '124', 'value': -3.2}]
+    """
+    id_col = mapping.get("id", "id")
+    value_col = mapping.get("value", "value")
+
+    if data_path == "-":
+        # Reading from stdin only makes sense as CSV (JSON piped in
+        # would need its own flag to disambiguate from CSV) -- keep
+        # the stdin path single-purpose rather than guessing a format.
+        reader = csv.DictReader(sys.stdin)
+        raw_rows = list(reader)
     else:
-        kwargs = {}
-        if args.config:
-            import yaml
+        path = Path(data_path)
+        if not path.is_file():
+            raise click.ClickException(f"--data file not found: {data_path}")
+        suffix = path.suffix.lower()
+        if suffix in (".csv", ".tsv"):
+            delimiter = "\t" if suffix == ".tsv" else ","
+            with path.open(newline="", encoding="utf-8") as f:
+                raw_rows = list(csv.DictReader(f, delimiter=delimiter))
+        elif suffix == ".json":
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, list):
+                raise click.ClickException(
+                    f"--data JSON must be a list of rows, got {type(loaded).__name__}"
+                )
+            raw_rows = loaded
+        elif suffix == ".jsonl":
+            raw_rows = [
+                json.loads(line)
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        else:
+            raise click.ClickException(
+                f"Unsupported --data extension: {suffix!r} (expected .csv/.tsv/.json/.jsonl)"
+            )
 
-            kwargs["config"] = yaml.safe_load(Path(args.config).read_text())
-        if args.out:
-            kwargs["out"] = args.out
-        path = make_situation_map(**kwargs)
+    rows: list[dict[str, Any]] = []
+    for i, raw in enumerate(raw_rows):
+        if id_col not in raw or value_col not in raw:
+            raise click.ClickException(
+                f"Row {i}: missing column {id_col!r} or {value_col!r} "
+                f"(available: {sorted(raw.keys())}). Use --map id=<col> --map value=<col> "
+                "if your file names them differently."
+            )
+        rows.append({"id": str(raw[id_col]), "value": float(raw[value_col])})
+    return rows
 
-    print(path)
-    return 0
 
+@click.group()
+def main() -> None:
+    """sprezzature-maps: render hand-authored SVG world maps."""
+
+
+@main.command("list")
+def list_cmd() -> None:
+    """Print the two map kinds this repo carries."""
+    for kind in ("choropleth", "situation_map"):
+        click.echo(kind)
+
+
+@main.command("audit")
+@click.argument("target", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output shape.",
+)
+def audit_cmd(target: str, fmt: str) -> None:
+    """Check that a rendered plate says how it was made.
+
+    The twin of ``make-map audit``: same engine, the other parser. A
+    brick that only makes is half a brick.
+    """
+    from sprezzature_maps.audit import main as audit_main
+
+    raise SystemExit(audit_main([target, "--format", fmt]))
+
+
+@main.command("choropleth")
+@click.option(
+    "--data",
+    "data_path",
+    default=None,
+    type=click.Path(dir_okay=False, allow_dash=True),
+    help="CSV/TSV/JSON/JSONL file of per-country rows. Omit for the built-in demo data. "
+    "Use '-' to read CSV from stdin.",
+)
+@click.option(
+    "--map",
+    "mappings",
+    multiple=True,
+    metavar="ROLE=COLUMN",
+    help="Bind a role (id, value) to a column when your file names them differently, "
+    "e.g. --map id=CountryCode --map value=Score (repeatable). Only used with --data.",
+)
+@click.option("--out", default=None, help="Output path (.svg/.png/.pdf/.jpg).")
+@click.option("--title", default=None, help="Chart title.")
+@click.option(
+    "--diverging/--no-diverging",
+    default=None,
+    help="Force the diverging ramp on/off. Default: auto-detect from the data's sign.",
+)
+@click.option(
+    "--relief/--no-relief",
+    default=True,
+    show_default=True,
+    help="Composite the vendored hillshade texture.",
+)
+@click.option(
+    "--simplify",
+    type=float,
+    default=None,
+    help=(
+        "Vertex-thinning tolerance in output pixels. The default drops "
+        "detail the canvas cannot resolve; pass 0 to keep every vertex."
+    ),
+)
+def choropleth_cmd(
+    data_path: str | None,
+    mappings: tuple[str, ...],
+    out: str | None,
+    title: str | None,
+    diverging: bool | None,
+    relief: bool,
+    simplify: float | None,
+) -> None:
+    """Render a world choropleth map."""
+    kwargs: dict[str, Any] = {"diverging": diverging, "relief": relief}
+    if simplify is not None:
+        kwargs["simplify"] = simplify
+    if data_path:
+        kwargs["data"] = _load_choropleth_rows(data_path, _parse_mapping(mappings))
+    elif mappings:
+        raise click.ClickException("--map only applies with --data.")
+    if title:
+        kwargs["title"] = title
+    if out:
+        kwargs["out"] = out
+    result = make_choropleth(**kwargs)
+    click.echo(result)
+
+
+@main.command("density")
+@click.option(
+    "--points",
+    "points_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="JSON file of [[lon, lat], ...] event positions; defaults to demo points.",
+)
+@click.option("--out", default=None, help="Output SVG path.")
+@click.option("--title", default=None)
+@click.option(
+    "--bins",
+    type=int,
+    default=None,
+    help=(
+        "Cells across the image. Past roughly 260 the field becomes grain, so the "
+        "visual limit arrives before the size limit."
+    ),
+)
+def density_cmd(
+    points_path: str | None, out: str | None, title: str | None, bins: int | None
+) -> None:
+    """Accumulation map: point events binned to a luminous field, no coastline."""
+    kwargs: dict[str, Any] = {}
+    if points_path:
+        kwargs["points"] = [tuple(point) for point in json.loads(Path(points_path).read_text())]
+    if title:
+        kwargs["title"] = title
+    if out:
+        kwargs["out"] = out
+    if bins:
+        kwargs["bins"] = bins
+    click.echo(str(make_density(**kwargs)))
+
+
+@main.command("situation-map")
+@click.option(
+    "--config",
+    "config_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="YAML region config. Omit for the bundled Europe demo.",
+)
+@click.option("--out", default=None, help="Output path (.svg/.png/.pdf/.jpg).")
+@click.option("--title", default=None, help="Overrides the config's own title if set.")
+def situation_map_cmd(config_path: str | None, out: str | None, title: str | None) -> None:
+    """Render a layered areas-of-control situation map."""
+    kwargs: dict[str, Any] = {}
+    if config_path:
+        import yaml
+
+        kwargs["config"] = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    if title:
+        kwargs["title"] = title
+    if out:
+        kwargs["out"] = out
+    result = make_situation_map(**kwargs)
+    click.echo(result)
+
+
+# The argparse front door spelled this sub-command `situation_map`, and
+# TRIGGERS.md, SKILL.md and the hub's routing table all tell an agent to type
+# that. Click's own idiom is the hyphen. Both are registered on the one
+# callback rather than picking a winner: renaming would break every published
+# instruction, and keeping only the underscore would read as a typo to anyone
+# who knows click. Two spellings, one command -- the same bargain as
+# `make-map` and `sprezzature-maps`.
+main.add_command(main.commands["situation-map"], "situation_map")
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

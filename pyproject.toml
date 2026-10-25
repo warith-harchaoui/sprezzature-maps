@@ -50,16 +50,11 @@ dependencies = [
     # Equal Earth projection (Newton-Raphson over the whole pixel grid at
     # once) -- was an unlisted transitive dependency until this pass.
     "numpy>=1.24",
+    # The command line, and the only parser since 2026-10-25.
+    "click>=8.1",
 ]
 
 [project.optional-dependencies]
-# Click twin of the always-installed argparse `make-map` CLI: adds CSV
-# ingestion + role=column mapping, which the shared argparse render path
-# (scripts/_render.py, byte-identical across the whole sprezzature-figures
-# generator family) is not the place to special-case for just this repo.
-cli = [
-    "click>=8.1",
-]
 # HTTP surface (sprezzature_maps/api.py) -- also carries the GUI gallery
 # page, served as static routes on the same FastAPI app.
 api = [
@@ -101,7 +96,7 @@ dev = [
 
 [project.scripts]
 make-map = "sprezzature_maps.cli:main"
-sprezzature-maps = "sprezzature_maps.cli_click:main"
+sprezzature-maps = "sprezzature_maps.cli:main"
 sprezzature-maps-mcp = "sprezzature_maps.mcp:main"
 
 [project.urls]
