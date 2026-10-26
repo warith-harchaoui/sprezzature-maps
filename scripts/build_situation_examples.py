@@ -204,10 +204,11 @@ def build_ukraine() -> dict[str, Any]:
     bbox = [b[0] - 0.6, b[1] - 1.2, b[2] + 0.6, b[3] + 0.6]
     return {
         "title": "Ukraine: Areas of Control",
-        "subtitle": (
-            "Schematic, approximate open-source positions circa 2024 · "
-            "roughly 18% of the country occupied · illustrative, not operational intelligence"
-        ),
+        # Short enough to clear the legend, which floats top-right over the
+        # quiet side of the plate. The long form ran under the card and was
+        # cut mid-word; the footer below the map still carries the full
+        # provenance, so nothing is lost by saying less here.
+        "subtitle": "Approximate open-source positions, circa 2024 · roughly 18% occupied",
         "region": {"bbox": bbox},
         "projection": "auto",
         "canvas_width": 1320,
@@ -219,7 +220,7 @@ def build_ukraine() -> dict[str, Any]:
             "bathymetry": {"rings": 7, "color": "#ffffff", "opacity": 0.4},
         },
         "frontiers": {"focus": "Ukraine"},
-        "legend_position": "right",
+        "legend_position": "top-right",
         "rivers": {"always_label": ["Dnieper"], "color": "#5d86a6", "label_color": "#3f6a8c"},
         # Natural Earth still carries the Kakhovka Reservoir at its full
         # ~2 150 km2 extent. It drained within two weeks of the dam breach of
