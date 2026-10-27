@@ -335,18 +335,51 @@ _DEMO_BBOX: tuple[float, float, float, float] = (-125.0, 25.0, -67.0, 49.0)
 _DEMO_REGION = "Contiguous United States"
 
 
+#: The plate's own words, per language. Only the chrome: the data carries no
+#: text, which is the whole point of the form.
+#:
+#: `--language fr` was in this package's `--help` long before any generator
+#: honoured it. The flag parsed, the exit code was 0, and the file came out
+#: in English, so a French page could be shipped with an English map and
+#: nothing anywhere said no. `_render.render_cli` refuses an unhonoured
+#: option now; this is the other half, the one that makes the answer yes.
+CHROME: dict[str, dict[str, str]] = {
+    "en": {
+        "title": "Where the lightning fell",
+        "subtitle": "Every flash of a synthetic year, accumulated one day at a time",
+        "caption": "SYNTHETIC DEMONSTRATION DATA \u00b7 NOT AN OBSERVATIONAL RECORD",
+        "ramp": "fewer \u2192 more",
+        "per": "per",
+        "cell": "cell",
+        "peak": "peak",
+    },
+    "fr": {
+        "title": "O\u00f9 la foudre est tomb\u00e9e",
+        "subtitle": "Chaque \u00e9clair d'une ann\u00e9e synth\u00e9tique, "
+                    "accumul\u00e9 jour apr\u00e8s jour",
+        "caption": "DONN\u00c9ES DE D\u00c9MONSTRATION SYNTH\u00c9TIQUES "
+                   "\u00b7 PAS UN RELEV\u00c9 D'OBSERVATION",
+        "ramp": "moins \u2192 plus",
+        "per": "par",
+        "cell": "cellule",
+        "peak": "pic",
+    },
+}
+
+
 def build_svg(
     points: Sequence[tuple[float, float]] | None = None,
     *,
     bbox: tuple[float, float, float, float] = _DEMO_BBOX,
     bins: int = DEFAULT_BINS,
     width: int = 1000,
-    title: str = "Where the lightning fell",
-    subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
-    caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
+    title: str | None = None,
+    subtitle: str | None = None,
+    caption: str | None = None,
     region: str | None = None,
     per_area: bool = False,
     provenance: bool = False,
+    language: str = "en",
 ) -> str:
     """
     Render the accumulation plate.
@@ -401,7 +434,17 @@ def build_svg(
     # by its own ground area, which is the only way the colours mean the
     # same thing at the top of a tall frame as at the bottom -- see this
     # module's docstring for the measured spread.
-    unit = "cell"
+    if language not in CHROME:
+        raise ValueError(
+            f"no chrome for {language!r}; this plate speaks "
+            f"{', '.join(sorted(CHROME))}"
+        )
+    words = CHROME[language]
+    title = words["title"] if title is None else title
+    subtitle = words["subtitle"] if subtitle is None else subtitle
+    caption = words["caption"] if caption is None else caption
+
+    unit = words["cell"]
     peak_value = float(peak)
     if per_area:
         areas = cell_ground_areas(bbox, ny)
@@ -484,7 +527,9 @@ def build_svg(
     out.append("</g>")
     peak_label = f"{peak_value:,.1f}" if per_area else f"{peak:,}"
     out.append('<g id="legend">')
-    out.extend(_ramp_legend(width - 300, plate_h - 26, peak_label, unit))
+    out.extend(_ramp_legend(width - 300, plate_h - 26, peak_label, unit,
+                            ramp=words["ramp"], per=words["per"],
+                            peak_word=words["peak"]))
     out.append("</g>")
     out.append('<g id="caption">')
     out.append(
@@ -581,7 +626,9 @@ def extent_sentence(bbox: tuple[float, float, float, float]) -> str:
     )
 
 
-def _ramp_legend(x: float, y: float, peak: str, unit: str) -> list[str]:
+def _ramp_legend(x: float, y: float, peak: str, unit: str,
+                 ramp: str = "fewer \u2192 more", per: str = "per",
+                 peak_word: str = "peak") -> list[str]:
     """
     A bare gradient bar with two words under it.
 
@@ -598,7 +645,7 @@ def _ramp_legend(x: float, y: float, peak: str, unit: str) -> list[str]:
         )
     parts.append(
         f'<text x="{x:.0f}" y="{y + 2:.0f}" font-family="{_MONO_FONT}" '
-        f'font-size="9" fill="{SUBTLE}">fewer → more (peak {peak} per {unit})</text>'
+        f'font-size="9" fill="{SUBTLE}">{ramp} ({peak_word} {peak} {per} {unit})</text>'
     )
     return parts
 
