@@ -236,9 +236,24 @@ of the three.
 
 Two things to flag for a package that ships figures.
 
-**The OpenStreetMap share-alike applies.** Deriving a road layer from OSM and
-shipping the SVG puts the ODbL on the output. That is a licensing decision
-for the suite, not a detail.
+**The OpenStreetMap share-alike does not reach the SVG, and this package
+already knew that.** The first draft of this document said that shipping an
+SVG with an OSM layer puts the ODbL on the output. That is wrong. ODbL
+distinguishes a *Derivative Database* from a *Produced Work*: share-alike
+binds the first, a rendered map is the second, and a produced work may carry
+any licence its author likes. What is owed is attribution.
+
+`make_situation_map.py` had this right before the question was asked. Its
+vendoring note states the distinction in those terms, `_attribution_layer`
+adds "© OpenStreetMap contributors (ODbL)" automatically whenever an OSM
+layer would actually draw for the given bounding box rather than leaving it
+for a caller to remember, and `test_attribution_layer_only_credits_osm_when_in_view`
+checks both directions: the credit appears inside the covered bounds and
+stays absent outside them.
+
+So the requirement is discharged, and the remaining obligation is narrow. The
+three vendored admin-1 extracts *are* derivative databases, so those files
+carry ODbL themselves. The plates do not.
 
 **No open, machine readable, daily areas-of-control feed exists.** ISW
 publishes maps rather than data. Any plate claiming current positions is
