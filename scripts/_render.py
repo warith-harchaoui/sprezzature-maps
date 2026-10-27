@@ -501,6 +501,28 @@ def render_cli(
         kwargs["accessibility"] = args.accessibility
     if "language" in params:
         kwargs["language"] = args.language
+
+    # Asking for something this generator cannot do is an error, not a
+    # shrug. Passing an option only to the generators that accept it keeps
+    # this helper working while they adopt it one at a time; silently
+    # dropping it when somebody *asked* turns that convenience into a lie.
+    #
+    # `--language fr` was accepted by every map generator in this package
+    # and honoured by none: the flag was in `--help`, the exit code was 0,
+    # and the file came out in English. A reader checks the help, runs the
+    # command, gets a plausible SVG, and ships an English map into a French
+    # page. Nothing anywhere said no.
+    for name, asked, default in (("mode", args.mode, "self-contained"),
+                                 ("accessibility", args.accessibility, "universal"),
+                                 ("language", args.language, "en")):
+        if name not in params and asked != default:
+            parser.error(
+                f"--{name} {asked!r} was asked for, and this generator does "
+                f"not accept it: build_svg() takes "
+                f"({', '.join(params) or 'no options'}). Rerun without it, "
+                f"or teach build_svg the argument."
+            )
+
     write_svg(args.out, build_svg(**kwargs))
 
 
