@@ -13,6 +13,12 @@ build/
 # EXAMPLES.md/README.md embed these two as <img> -- keep them trackable so
 # the images aren't broken links on GitHub.
 !assets/svg-examples/*.svg
+# The how-it-works figure README.md and LISEZMOI.md open with. Generated,
+# like everything the blanket rule above is for, and tracked anyway: a
+# README cannot show an image a clone does not carry, and the raw URL it
+# points at is served from this repository.
+!assets/how-it-works.svg
+!assets/comment-ca-marche.svg
 # Vendored relief/elevation rasters make_choropleth.py and
 # make_situation_map.py load at render time (relief-lowres.png,
 # elevation-30arcsec.png) -- data assets, not generated output; without

@@ -1,0 +1,91 @@
+# How this brick works, as drawn in README.md and LISEZMOI.md.
+#
+# The renderer lives in the hub, at sprezzature/scripts/make_brick_diagram.py,
+# because the ten bricks share one drawing and ten generators would have become
+# ten dialects of it. The content lives here, because the brick is what knows
+# what is true about itself.
+#
+# Redraw after any edit:
+#   python ~/sprezzature/scripts/make_brick_diagram.py sprezzature-maps
+package: sprezzature-maps
+
+en:
+  title: How sprezzature-maps works
+  subtitle: Numbers attached to real places, where the shape of the land is part of the answer.
+  alt: >-
+    Flow diagram. At the top, a value per region, point events or a plate
+    configuration feed two lanes. The left lane draws: it centres and projects on a
+    real base map, classifies the values and names the method used, and draws one
+    of three plates, returning an SVG with a scale bar in two units. The right lane
+    audits: six static rules read the rendered plate back and ask whether it names
+    its classification, carries its scale and credits its sources. Both meet in one
+    outcome, a plate a reader can argue with.
+  input:
+    label: A value per region, point events, or a plate configuration
+    note: "and the region it is about. The schematic, place-shaped charts, hex map, dot density, spike map, binned grid, stayed in sprezzature-figures: they plot cells, not coastlines."
+  lanes:
+    - title: "Make: three plates on a real base map"
+      steps:
+        - label: Centre the region, then project it
+          note: "a Lambert conformal conic for a region, chosen rather than inherited. Every projection distorts something, so the choice is part of the figure and is written down."
+        - label: Classify, and name the method on the plate
+          note: "the same numbers in quantiles and in natural breaks tell two different stories. A plate that does not say which one it used is not readable, only decorative."
+        - label: "Draw: choropleth, situation map, or density"
+          note: "real national outlines from a bundled Natural Earth base map. The density plate has no coastline at all: the land appears because events fell on it, and the sea stays dark because none did."
+      result:
+        label: An SVG, with a scale bar in two units at once
+        note: kilometres and miles, because a plate is read by people who think in either
+    - title: "Audit: read the plate back"
+      steps:
+        - label: Six static rules over the rendered plate
+          note: a map is read the way a text is, so it is checked the way a text is
+        - label: Does it say what it did to the numbers
+          note: "the classification method, the scale bar, the data credits, and how sure it is. A map that hides its uncertainty is making a claim it cannot support."
+      result:
+        label: Findings, exit 1 on any
+        note: on a plate this package drew, or on one it did not
+  outcome:
+    label: A plate a reader can argue with, because it says what it did to the numbers
+    note: "The rendering primitives are shared with sprezzature-figures rather than copied: the faces embedded in the file so it looks the same on a machine without them, and the choice between a self-contained SVG and one that links out."
+  footer: This used to be a set of chart kinds inside sprezzature-figures. It was split out because a map on a real projection is a different product from a chart, with its own release schedule and its own editor to come.
+
+fr:
+  title: Comment fonctionne sprezzature-maps
+  subtitle: Des nombres attachés à de vrais lieux, où la forme du terrain fait partie de la réponse.
+  alt: >-
+    Schéma de flux. En haut, une valeur par territoire, des événements ponctuels ou
+    une configuration de planche alimentent deux voies. La voie de gauche dessine :
+    elle centre et projette sur un vrai fond de carte, classe les valeurs et nomme
+    la méthode employée, et trace l'une des trois planches, puis rend un SVG avec
+    une échelle en deux unités. La voie de droite contrôle : six règles statiques
+    relisent la planche rendue et demandent si elle nomme sa classification, porte
+    son échelle et crédite ses sources. Les deux se rejoignent en un seul résultat,
+    une planche avec laquelle un lecteur peut discuter.
+  input:
+    label: Une valeur par territoire, des événements ponctuels, ou une configuration de planche
+    note: "et le territoire concerné. Les cartes schématiques en forme de lieu, carte hexagonale, densité de points, carte à pics, grille agrégée, sont restées dans sprezzature-figures : elles tracent des cellules, pas des côtes."
+  lanes:
+    - title: "Fabriquer : trois planches sur un vrai fond de carte"
+      steps:
+        - label: Centrer le territoire, puis le projeter
+          note: "une conique conforme de Lambert pour une région, choisie et non héritée. Toute projection déforme quelque chose, donc le choix fait partie de la figure et il est écrit."
+        - label: Classer, et nommer la méthode sur la planche
+          note: "les mêmes nombres en quantiles et en seuils naturels racontent deux histoires différentes. Une planche qui ne dit pas laquelle elle a prise n'est pas lisible, elle est décorative."
+        - label: "Tracer : choroplèthe, carte de situation, ou densité"
+          note: "de vrais contours nationaux depuis un fond Natural Earth embarqué. La planche de densité n'a aucune côte : la terre apparaît parce que des événements y sont tombés, et la mer reste sombre parce qu'aucun n'y est tombé."
+      result:
+        label: Un SVG, avec une échelle en deux unités à la fois
+        note: kilomètres et milles, parce qu'une planche est lue par des gens qui pensent dans l'une ou l'autre
+    - title: "Contrôler : relire la planche"
+      steps:
+        - label: Six règles statiques sur la planche rendue
+          note: une carte se lit comme un texte, donc elle se contrôle comme un texte
+        - label: Dit-elle ce qu'elle a fait aux nombres
+          note: "la méthode de classification, l'échelle, le crédit des données, et le degré de certitude. Une carte qui cache son incertitude avance une affirmation qu'elle ne peut pas tenir."
+      result:
+        label: Des constats, code de sortie 1 au premier
+        note: sur une planche tracée par ce paquet, ou sur une autre
+  outcome:
+    label: Une planche avec laquelle un lecteur peut discuter, parce qu'elle dit ce qu'elle a fait aux nombres
+    note: "Les primitives de rendu sont partagées avec sprezzature-figures plutôt que recopiées : les fontes embarquées dans le fichier pour qu'il ait le même aspect sur une machine qui ne les a pas, et le choix entre un SVG autonome et un SVG qui pointe vers l'extérieur."
+  footer: Ceci était autrefois un jeu de types de figures dans sprezzature-figures. La séparation a eu lieu parce qu'une carte sur une vraie projection est un autre produit qu'un graphique, avec son propre rythme de versions et son éditeur à venir.

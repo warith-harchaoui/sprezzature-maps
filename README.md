@@ -15,6 +15,10 @@ Part of the [sprezzature](https://sprezzature.ai/) suite.
 
 ---
 
+## How it works
+
+![Flow diagram. At the top, a value per region, point events or a plate configuration feed two lanes. The left lane draws: it centres and projects on a real base map, classifies the values and names the method used, and draws one of three plates, returning an SVG with a scale bar in two units. The right lane audits: six static rules read the rendered plate back and ask whether it names its classification, carries its scale and credits its sources. Both meet in one outcome, a plate a reader can argue with.](https://raw.githubusercontent.com/warith-harchaoui/sprezzature-maps/main/assets/how-it-works.svg)
+
 ## What's here
 
 Three generators. Two draw on a real base map with a real geographic

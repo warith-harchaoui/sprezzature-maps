@@ -17,6 +17,10 @@ Fait partie de la suite [sprezzature](https://sprezzature.ai/).
 
 ---
 
+## Comment ça marche
+
+![Schéma de flux. En haut, une valeur par territoire, des événements ponctuels ou une configuration de planche alimentent deux voies. La voie de gauche dessine : elle centre et projette sur un vrai fond de carte, classe les valeurs et nomme la méthode employée, et trace l'une des trois planches, puis rend un SVG avec une échelle en deux unités. La voie de droite contrôle : six règles statiques relisent la planche rendue et demandent si elle nomme sa classification, porte son échelle et crédite ses sources. Les deux se rejoignent en un seul résultat, une planche avec laquelle un lecteur peut discuter.](https://raw.githubusercontent.com/warith-harchaoui/sprezzature-maps/main/assets/comment-ca-marche.svg)
+
 ## Ce qu'on trouve ici
 
 Trois générateurs. Deux s'appuient sur un vrai fond de carte avec
