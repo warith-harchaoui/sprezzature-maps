@@ -109,8 +109,16 @@ jobs:
       # anyone retries this knob. The pre-push hook does pass `-n auto`,
       # because a developer machine has the memory a runner does not; same
       # tests either way.
+      # `-n auto`, which this repository's own pre-push hook has used since
+      # it was written. CI ran the same suite serially, so the local gate
+      # was three times faster than the remote one for no reason: 555 tests
+      # in 160s against 524s, measured on both. pytest-xdist is already a
+      # declared dev dependency -- nothing new is installed for this.
+      #
+      # The suite is parallel-safe because the hook has been proving it on
+      # every push. If that ever stops being true, it fails locally first.
       - name: Tests
-        run: python -m pytest -q
+        run: python -m pytest -q -n auto
 
       # Every module, not a hand-written list. This list and the pre-push
       # hook's had already drifted apart by a file, which is the whole
