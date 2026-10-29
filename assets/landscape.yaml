@@ -1,0 +1,615 @@
+meta:
+  reference: sprezzature-maps
+  rotation_deg: -83.312
+  explained_variance_ratio:
+  - 0.3602
+  - 0.2021
+  cumulative_variance: 0.5623
+  n_approaches: 25
+  attributes:
+  - Publication quality without restyling
+  - Output needs no runtime to view
+  - Selectable text in the output
+  - Projection breadth
+  - Named classification of values
+  - Flow and link maps
+  - Interactivity, zoom and tiles
+  - Large datasets
+  - Open and account-free
+  - Light install
+  - Reproducibility
+  - Accessibility built in
+  - Maturity and ecosystem
+  - Reach for a non-programmer
+  lower_is_better: []
+  imputed_cells: []
+axes:
+  axis_1:
+    name: Robustness ↔ Usability
+    pole_left: Robustness
+    pole_right: Usability
+    loadings:
+      Publication quality without restyling: 0.3837
+      Output needs no runtime to view: 0.0532
+      Selectable text in the output: 0.1678
+      Projection breadth: -0.1789
+      Named classification of values: 0.3338
+      Flow and link maps: -0.0971
+      Interactivity, zoom and tiles: 0.003
+      Large datasets: -0.2762
+      Open and account-free: -0.2941
+      Light install: 0.2761
+      Reproducibility: -0.023
+      Accessibility built in: 0.5005
+      Maturity and ecosystem: -0.213
+      Reach for a non-programmer: 0.3653
+  axis_2:
+    name: Dynamism ↔ Clarity
+    pole_bottom: Dynamism
+    pole_top: Clarity
+    loadings:
+      Publication quality without restyling: 0.1589
+      Output needs no runtime to view: 0.3843
+      Selectable text in the output: 0.3472
+      Projection breadth: 0.3038
+      Named classification of values: 0.1109
+      Flow and link maps: -0.1803
+      Interactivity, zoom and tiles: -0.4096
+      Large datasets: -0.2441
+      Open and account-free: 0.2649
+      Light install: -0.2185
+      Reproducibility: 0.3793
+      Accessibility built in: -0.0144
+      Maturity and ecosystem: -0.1586
+      Reach for a non-programmer: -0.2344
+approaches:
+- name: sprezzature-maps
+  coordinates:
+    axis_1: 3.2523
+    axis_2: 3.6353
+  role: best
+  color: '#FF3B30'
+  attributes:
+    Publication quality without restyling: 5.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 5.0
+    Projection breadth: 2.0
+    Named classification of values: 5.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 2.0
+    Large datasets: 1.0
+    Open and account-free: 5.0
+    Light install: 3.0
+    Reproducibility: 5.0
+    Accessibility built in: 5.0
+    Maturity and ecosystem: 1.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
+- name: svgis
+  coordinates:
+    axis_1: -2.7127
+    axis_2: 3.0078
+  role: competitor
+  color: '#7B8BDE'
+  attributes:
+    Publication quality without restyling: 2.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 5.0
+    Named classification of values: 1.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 1.0
+    Large datasets: 2.0
+    Open and account-free: 5.0
+    Light install: 2.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 2.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: D3 + d3-geo
+  coordinates:
+    axis_1: -1.6308
+    axis_2: 0.9132
+  role: competitor
+  color: '#CD77AD'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 2.0
+    Selectable text in the output: 5.0
+    Projection breadth: 5.0
+    Named classification of values: 2.0
+    Flow and link maps: 4.0
+    Interactivity, zoom and tiles: 3.0
+    Large datasets: 3.0
+    Open and account-free: 5.0
+    Light install: 4.0
+    Reproducibility: 3.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: Observable Plot
+  coordinates:
+    axis_1: -0.4799
+    axis_2: 1.6226
+  role: competitor
+  color: '#34D1E1'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 2.0
+    Selectable text in the output: 5.0
+    Projection breadth: 4.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 2.0
+    Large datasets: 2.0
+    Open and account-free: 5.0
+    Light install: 4.0
+    Reproducibility: 3.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 3.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
+- name: Vega-Lite / Altair
+  coordinates:
+    axis_1: -1.1771
+    axis_2: 1.3801
+  role: competitor
+  color: '#89C0FF'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 3.0
+    Selectable text in the output: 4.0
+    Projection breadth: 4.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 3.0
+    Large datasets: 2.0
+    Open and account-free: 5.0
+    Light install: 4.0
+    Reproducibility: 4.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 4.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
+- name: matplotlib + Cartopy
+  coordinates:
+    axis_1: -2.9151
+    axis_2: 2.4873
+  role: competitor
+  color: '#DBAEFF'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 5.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 1.0
+    Large datasets: 3.0
+    Open and account-free: 5.0
+    Light install: 2.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: GeoPandas
+  coordinates:
+    axis_1: -2.7919
+    axis_2: 1.7112
+  role: competitor
+  color: '#CD88CF'
+  attributes:
+    Publication quality without restyling: 2.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 4.0
+    Named classification of values: 4.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 3.0
+    Large datasets: 4.0
+    Open and account-free: 5.0
+    Light install: 2.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: PyGMT
+  coordinates:
+    axis_1: -2.2173
+    axis_2: 3.0493
+  role: competitor
+  color: '#3798D3'
+  attributes:
+    Publication quality without restyling: 5.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 5.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 1.0
+    Large datasets: 4.0
+    Open and account-free: 5.0
+    Light install: 1.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 3.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: Folium / Leaflet
+  coordinates:
+    axis_1: -1.4075
+    axis_2: -1.786
+  role: competitor
+  color: '#EBA858'
+  attributes:
+    Publication quality without restyling: 2.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 2.0
+    Projection breadth: 1.0
+    Named classification of values: 3.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 2.0
+    Open and account-free: 5.0
+    Light install: 4.0
+    Reproducibility: 2.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
+- name: MapLibre GL JS
+  coordinates:
+    axis_1: -2.3297
+    axis_2: -1.562
+  role: competitor
+  color: '#F39C67'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 2.0
+    Projection breadth: 2.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 4.0
+    Open and account-free: 5.0
+    Light install: 3.0
+    Reproducibility: 2.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: Mapbox GL JS
+  coordinates:
+    axis_1: -1.0656
+    axis_2: -2.5244
+  role: competitor
+  color: '#BAAE46'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 1.0
+    Projection breadth: 2.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 4.0
+    Open and account-free: 1.0
+    Light install: 3.0
+    Reproducibility: 2.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
+- name: OpenLayers
+  coordinates:
+    axis_1: -2.8539
+    axis_2: -0.9162
+  role: competitor
+  color: '#F28C91'
+  attributes:
+    Publication quality without restyling: 2.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 2.0
+    Projection breadth: 5.0
+    Named classification of values: 2.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 3.0
+    Open and account-free: 5.0
+    Light install: 3.0
+    Reproducibility: 2.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: deck.gl
+  coordinates:
+    axis_1: -3.2523
+    axis_2: -2.4044
+  role: worst
+  color: '#A52A2A'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 1.0
+    Projection breadth: 2.0
+    Named classification of values: 2.0
+    Flow and link maps: 5.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 5.0
+    Open and account-free: 4.0
+    Light install: 2.0
+    Reproducibility: 2.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 4.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: kepler.gl
+  coordinates:
+    axis_1: -1.9175
+    axis_2: -2.5293
+  role: competitor
+  color: '#CBA13E'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 1.0
+    Projection breadth: 2.0
+    Named classification of values: 3.0
+    Flow and link maps: 4.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 5.0
+    Open and account-free: 4.0
+    Light install: 2.0
+    Reproducibility: 2.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 3.0
+    Reach for a non-programmer: 4.0
+  imputed_attributes: []
+- name: Plotly maps
+  coordinates:
+    axis_1: -1.5446
+    axis_2: -0.2471
+  role: competitor
+  color: '#F18EAE'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 3.0
+    Selectable text in the output: 3.0
+    Projection breadth: 4.0
+    Named classification of values: 2.0
+    Flow and link maps: 3.0
+    Interactivity, zoom and tiles: 4.0
+    Large datasets: 3.0
+    Open and account-free: 4.0
+    Light install: 3.0
+    Reproducibility: 3.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 3.0
+  imputed_attributes: []
+- name: Highmaps
+  coordinates:
+    axis_1: 0.7597
+    axis_2: -0.6645
+  role: competitor
+  color: '#29B492'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 3.0
+    Projection breadth: 3.0
+    Named classification of values: 3.0
+    Flow and link maps: 3.0
+    Interactivity, zoom and tiles: 4.0
+    Large datasets: 2.0
+    Open and account-free: 2.0
+    Light install: 4.0
+    Reproducibility: 3.0
+    Accessibility built in: 4.0
+    Maturity and ecosystem: 4.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
+- name: Datawrapper
+  coordinates:
+    axis_1: 3.2523
+    axis_2: -0.938
+  role: right
+  color: '#007AFF'
+  attributes:
+    Publication quality without restyling: 5.0
+    Output needs no runtime to view: 3.0
+    Selectable text in the output: 3.0
+    Projection breadth: 2.0
+    Named classification of values: 4.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 4.0
+    Large datasets: 2.0
+    Open and account-free: 2.0
+    Light install: 5.0
+    Reproducibility: 2.0
+    Accessibility built in: 5.0
+    Maturity and ecosystem: 4.0
+    Reach for a non-programmer: 5.0
+  imputed_attributes: []
+- name: Flourish
+  coordinates:
+    axis_1: 1.3819
+    axis_2: -2.2804
+  role: competitor
+  color: '#5AB87E'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 2.0
+    Selectable text in the output: 2.0
+    Projection breadth: 2.0
+    Named classification of values: 3.0
+    Flow and link maps: 3.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 2.0
+    Open and account-free: 2.0
+    Light install: 5.0
+    Reproducibility: 2.0
+    Accessibility built in: 3.0
+    Maturity and ecosystem: 4.0
+    Reach for a non-programmer: 5.0
+  imputed_attributes: []
+- name: Felt
+  coordinates:
+    axis_1: 0.7885
+    axis_2: -3.0882
+  role: competitor
+  color: '#669D4F'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 1.0
+    Projection breadth: 1.0
+    Named classification of values: 3.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 4.0
+    Open and account-free: 1.0
+    Light install: 5.0
+    Reproducibility: 2.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 2.0
+    Reach for a non-programmer: 5.0
+  imputed_attributes: []
+- name: CARTO
+  coordinates:
+    axis_1: 0.0159
+    axis_2: -3.6353
+  role: competitor
+  color: '#809432'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 1.0
+    Projection breadth: 1.0
+    Named classification of values: 4.0
+    Flow and link maps: 3.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 5.0
+    Open and account-free: 1.0
+    Light install: 5.0
+    Reproducibility: 2.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 4.0
+    Reach for a non-programmer: 4.0
+  imputed_attributes: []
+- name: QGIS
+  coordinates:
+    axis_1: -1.1813
+    axis_2: 1.2934
+  role: competitor
+  color: '#8877CB'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 5.0
+    Named classification of values: 5.0
+    Flow and link maps: 2.0
+    Interactivity, zoom and tiles: 4.0
+    Large datasets: 4.0
+    Open and account-free: 5.0
+    Light install: 1.0
+    Reproducibility: 3.0
+    Accessibility built in: 2.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 3.0
+  imputed_attributes: []
+- name: ArcGIS Pro
+  coordinates:
+    axis_1: 0.0957
+    axis_2: 0.0085
+  role: competitor
+  color: '#00B7AE'
+  attributes:
+    Publication quality without restyling: 5.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 5.0
+    Named classification of values: 5.0
+    Flow and link maps: 3.0
+    Interactivity, zoom and tiles: 4.0
+    Large datasets: 5.0
+    Open and account-free: 1.0
+    Light install: 1.0
+    Reproducibility: 2.0
+    Accessibility built in: 3.0
+    Maturity and ecosystem: 5.0
+    Reach for a non-programmer: 3.0
+  imputed_attributes: []
+- name: tmap (R)
+  coordinates:
+    axis_1: -0.9454
+    axis_2: 2.7833
+  role: competitor
+  color: '#00A5CD'
+  attributes:
+    Publication quality without restyling: 4.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 4.0
+    Named classification of values: 5.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 3.0
+    Large datasets: 2.0
+    Open and account-free: 5.0
+    Light install: 2.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 3.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: mapsf (R)
+  coordinates:
+    axis_1: -0.3807
+    axis_2: 3.6353
+  role: top
+  color: '#AF52DE'
+  attributes:
+    Publication quality without restyling: 5.0
+    Output needs no runtime to view: 5.0
+    Selectable text in the output: 3.0
+    Projection breadth: 4.0
+    Named classification of values: 5.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 1.0
+    Large datasets: 2.0
+    Open and account-free: 5.0
+    Light install: 2.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 2.0
+    Reach for a non-programmer: 1.0
+  imputed_attributes: []
+- name: Protomaps / PMTiles
+  coordinates:
+    axis_1: -2.3822
+    axis_2: -1.4333
+  role: competitor
+  color: '#FFA28A'
+  attributes:
+    Publication quality without restyling: 3.0
+    Output needs no runtime to view: 1.0
+    Selectable text in the output: 1.0
+    Projection breadth: 1.0
+    Named classification of values: 1.0
+    Flow and link maps: 1.0
+    Interactivity, zoom and tiles: 5.0
+    Large datasets: 5.0
+    Open and account-free: 5.0
+    Light install: 4.0
+    Reproducibility: 4.0
+    Accessibility built in: 1.0
+    Maturity and ecosystem: 3.0
+    Reach for a non-programmer: 2.0
+  imputed_attributes: []
