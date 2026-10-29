@@ -19,6 +19,12 @@ build/
 # points at is served from this repository.
 !assets/how-it-works.svg
 !assets/comment-ca-marche.svg
+# The positioning maps LANDSCAPE.md and PAYSAGE.md embed, drawn by
+# `standpoint` from the star table in those same files. Same reasoning as the
+# two above: the documents reference them by relative path, so a clone that
+# does not carry them shows two broken images where the comparison is.
+!assets/landscape.svg
+!assets/paysage.svg
 # Vendored relief/elevation rasters make_choropleth.py and
 # make_situation_map.py load at render time (relief-lowres.png,
 # elevation-30arcsec.png) -- data assets, not generated output; without

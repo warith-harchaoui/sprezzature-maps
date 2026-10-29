@@ -1,127 +1,615 @@
 meta:
   reference: sprezzature-maps
-  rotation_deg: -33.165
+  rotation_deg: -83.312
   explained_variance_ratio:
-  - 0.5041
-  - 0.2887
-  cumulative_variance: 0.7928
-  n_approaches: 6
+  - 0.3602
+  - 0.2021
+  cumulative_variance: 0.5623
+  n_approaches: 25
   attributes:
+  - Qualité de publication sans reprise
   - Fichier lisible sans moteur
-  - Publiable sans reprise graphique
-  - Carte de situation / zones de contrôle
-  - Données quelconques, projection quelconque
-  - Analyse spatiale
-  - Panoramique / zoom interactif
-  - Temps jusqu'à la première carte
+  - Texte sélectionnable dans la sortie
+  - Étendue des projections
+  - Classification des valeurs nommée
+  - Cartes de flux et de liens
+  - Interactivité, zoom et tuiles
+  - Grands jeux de données
+  - Libre et sans compte
+  - Installation légère
+  - Reproductibilité
+  - Accessibilité intégrée
+  - Maturité et écosystème
+  - À portée de qui ne programme pas
   lower_is_better: []
+  imputed_cells: []
 axes:
   axis_1:
-    name: Dynamique ↔ Précision
-    pole_left: Dynamique
-    pole_right: Précision
+    name: Autonomie ↔ Clarté
+    pole_left: Autonomie
+    pole_right: Clarté
     loadings:
-      Fichier lisible sans moteur: 0.544
-      Publiable sans reprise graphique: 0.1072
-      Carte de situation / zones de contrôle: 0.4145
-      Données quelconques, projection quelconque: 0.1951
-      Analyse spatiale: 0.0485
-      Panoramique / zoom interactif: -0.4927
-      Temps jusqu'à la première carte: -0.4874
+      Qualité de publication sans reprise: 0.3837
+      Fichier lisible sans moteur: 0.0532
+      Texte sélectionnable dans la sortie: 0.1678
+      Étendue des projections: -0.1789
+      Classification des valeurs nommée: 0.3338
+      Cartes de flux et de liens: -0.0971
+      Interactivité, zoom et tuiles: 0.003
+      Grands jeux de données: -0.2762
+      Libre et sans compte: -0.2941
+      Installation légère: 0.2761
+      Reproductibilité: -0.023
+      Accessibilité intégrée: 0.5005
+      Maturité et écosystème: -0.213
+      À portée de qui ne programme pas: 0.3653
   axis_2:
-    name: Polyvalence ↔ Accessibilité
-    pole_bottom: Polyvalence
-    pole_top: Accessibilité
+    name: Dynamisme ↔ Rigueur
+    pole_bottom: Dynamisme
+    pole_top: Rigueur
     loadings:
-      Fichier lisible sans moteur: -0.0783
-      Publiable sans reprise graphique: 0.6002
-      Carte de situation / zones de contrôle: 0.4223
-      Données quelconques, projection quelconque: -0.5141
-      Analyse spatiale: -0.4098
-      Panoramique / zoom interactif: 0.0052
-      Temps jusqu'à la première carte: 0.1519
+      Qualité de publication sans reprise: 0.1589
+      Fichier lisible sans moteur: 0.3843
+      Texte sélectionnable dans la sortie: 0.3472
+      Étendue des projections: 0.3038
+      Classification des valeurs nommée: 0.1109
+      Cartes de flux et de liens: -0.1803
+      Interactivité, zoom et tuiles: -0.4096
+      Grands jeux de données: -0.2441
+      Libre et sans compte: 0.2649
+      Installation légère: -0.2185
+      Reproductibilité: 0.3793
+      Accessibilité intégrée: -0.0144
+      Maturité et écosystème: -0.1586
+      À portée de qui ne programme pas: -0.2344
 approaches:
 - name: sprezzature-maps
   coordinates:
-    axis_1: 1.8853
-    axis_2: 1.942
+    axis_1: 3.2523
+    axis_2: 3.6353
   role: best
   color: '#FF3B30'
   attributes:
+    Qualité de publication sans reprise: 5.0
     Fichier lisible sans moteur: 5.0
-    Publiable sans reprise graphique: 5.0
-    Carte de situation / zones de contrôle: 5.0
-    Données quelconques, projection quelconque: 2.0
-    Analyse spatiale: 1.0
-    Panoramique / zoom interactif: 1.0
-    Temps jusqu'à la première carte: 3.0
+    Texte sélectionnable dans la sortie: 5.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 5.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 2.0
+    Grands jeux de données: 1.0
+    Libre et sans compte: 5.0
+    Installation légère: 3.0
+    Reproductibilité: 5.0
+    Accessibilité intégrée: 5.0
+    Maturité et écosystème: 1.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
 - name: svgis
   coordinates:
-    axis_1: 1.4605
-    axis_2: -1.1285
+    axis_1: -2.7127
+    axis_2: 3.0078
   role: competitor
-  color: '#C26383'
+  color: '#7B8BDE'
   attributes:
+    Qualité de publication sans reprise: 2.0
     Fichier lisible sans moteur: 5.0
-    Publiable sans reprise graphique: 2.0
-    Carte de situation / zones de contrôle: 1.0
-    Données quelconques, projection quelconque: 5.0
-    Analyse spatiale: 1.0
-    Panoramique / zoom interactif: 1.0
-    Temps jusqu'à la première carte: 3.0
-- name: Vega-Lite
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 1.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 1.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 5.0
+    Installation légère: 2.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 2.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: D3 + d3-geo
   coordinates:
-    axis_1: -0.6168
-    axis_2: 0.4168
+    axis_1: -1.6308
+    axis_2: 0.9132
   role: competitor
-  color: '#52DEC7'
+  color: '#CD77AD'
   attributes:
+    Qualité de publication sans reprise: 4.0
     Fichier lisible sans moteur: 2.0
-    Publiable sans reprise graphique: 3.0
-    Carte de situation / zones de contrôle: 1.0
-    Données quelconques, projection quelconque: 3.0
-    Analyse spatiale: 1.0
-    Panoramique / zoom interactif: 2.0
-    Temps jusqu'à la première carte: 4.0
-- name: matplotlib+cartopy
+    Texte sélectionnable dans la sortie: 5.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 4.0
+    Interactivité, zoom et tuiles: 3.0
+    Grands jeux de données: 3.0
+    Libre et sans compte: 5.0
+    Installation légère: 4.0
+    Reproductibilité: 3.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: Observable Plot
   coordinates:
-    axis_1: 1.8853
-    axis_2: -1.942
-  role: right
-  color: '#007AFF'
+    axis_1: -0.4799
+    axis_2: 1.6226
+  role: competitor
+  color: '#34D1E1'
   attributes:
-    Fichier lisible sans moteur: 5.0
-    Publiable sans reprise graphique: 2.0
-    Carte de situation / zones de contrôle: 2.0
-    Données quelconques, projection quelconque: 5.0
-    Analyse spatiale: 4.0
-    Panoramique / zoom interactif: 1.0
-    Temps jusqu'à la première carte: 3.0
-- name: Folium/deck.gl
+    Qualité de publication sans reprise: 4.0
+    Fichier lisible sans moteur: 2.0
+    Texte sélectionnable dans la sortie: 5.0
+    Étendue des projections: 4.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 2.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 5.0
+    Installation légère: 4.0
+    Reproductibilité: 3.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 3.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
+- name: Vega-Lite / Altair
   coordinates:
-    axis_1: -1.8073
-    axis_2: 0.3332
+    axis_1: -1.1771
+    axis_2: 1.3801
+  role: competitor
+  color: '#89C0FF'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 3.0
+    Texte sélectionnable dans la sortie: 4.0
+    Étendue des projections: 4.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 3.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 5.0
+    Installation légère: 4.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 4.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
+- name: matplotlib + Cartopy
+  coordinates:
+    axis_1: -2.9151
+    axis_2: 2.4873
+  role: competitor
+  color: '#DBAEFF'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 1.0
+    Grands jeux de données: 3.0
+    Libre et sans compte: 5.0
+    Installation légère: 2.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: GeoPandas
+  coordinates:
+    axis_1: -2.7919
+    axis_2: 1.7112
+  role: competitor
+  color: '#CD88CF'
+  attributes:
+    Qualité de publication sans reprise: 2.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 4.0
+    Classification des valeurs nommée: 4.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 3.0
+    Grands jeux de données: 4.0
+    Libre et sans compte: 5.0
+    Installation légère: 2.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: PyGMT
+  coordinates:
+    axis_1: -2.2173
+    axis_2: 3.0493
+  role: competitor
+  color: '#3798D3'
+  attributes:
+    Qualité de publication sans reprise: 5.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 1.0
+    Grands jeux de données: 4.0
+    Libre et sans compte: 5.0
+    Installation légère: 1.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 3.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: Folium / Leaflet
+  coordinates:
+    axis_1: -1.4075
+    axis_2: -1.786
+  role: competitor
+  color: '#EBA858'
+  attributes:
+    Qualité de publication sans reprise: 2.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 2.0
+    Étendue des projections: 1.0
+    Classification des valeurs nommée: 3.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 5.0
+    Installation légère: 4.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
+- name: MapLibre GL JS
+  coordinates:
+    axis_1: -2.3297
+    axis_2: -1.562
+  role: competitor
+  color: '#F39C67'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 2.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 4.0
+    Libre et sans compte: 5.0
+    Installation légère: 3.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: Mapbox GL JS
+  coordinates:
+    axis_1: -1.0656
+    axis_2: -2.5244
+  role: competitor
+  color: '#BAAE46'
+  attributes:
+    Qualité de publication sans reprise: 4.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 1.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 4.0
+    Libre et sans compte: 1.0
+    Installation légère: 3.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
+- name: OpenLayers
+  coordinates:
+    axis_1: -2.8539
+    axis_2: -0.9162
+  role: competitor
+  color: '#F28C91'
+  attributes:
+    Qualité de publication sans reprise: 2.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 2.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 3.0
+    Libre et sans compte: 5.0
+    Installation légère: 3.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: deck.gl
+  coordinates:
+    axis_1: -3.2523
+    axis_2: -2.4044
   role: worst
   color: '#A52A2A'
   attributes:
+    Qualité de publication sans reprise: 3.0
     Fichier lisible sans moteur: 1.0
-    Publiable sans reprise graphique: 2.0
-    Carte de situation / zones de contrôle: 2.0
-    Données quelconques, projection quelconque: 2.0
-    Analyse spatiale: 2.0
-    Panoramique / zoom interactif: 5.0
-    Temps jusqu'à la première carte: 4.0
+    Texte sélectionnable dans la sortie: 1.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 5.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 5.0
+    Libre et sans compte: 4.0
+    Installation légère: 2.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 4.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: kepler.gl
+  coordinates:
+    axis_1: -1.9175
+    axis_2: -2.5293
+  role: competitor
+  color: '#CBA13E'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 1.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 3.0
+    Cartes de flux et de liens: 4.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 5.0
+    Libre et sans compte: 4.0
+    Installation légère: 2.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 3.0
+    À portée de qui ne programme pas: 4.0
+  imputed_attributes: []
+- name: Plotly maps
+  coordinates:
+    axis_1: -1.5446
+    axis_2: -0.2471
+  role: competitor
+  color: '#F18EAE'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 3.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 4.0
+    Classification des valeurs nommée: 2.0
+    Cartes de flux et de liens: 3.0
+    Interactivité, zoom et tuiles: 4.0
+    Grands jeux de données: 3.0
+    Libre et sans compte: 4.0
+    Installation légère: 3.0
+    Reproductibilité: 3.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 3.0
+  imputed_attributes: []
+- name: Highmaps
+  coordinates:
+    axis_1: 0.7597
+    axis_2: -0.6645
+  role: competitor
+  color: '#29B492'
+  attributes:
+    Qualité de publication sans reprise: 4.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 3.0
+    Classification des valeurs nommée: 3.0
+    Cartes de flux et de liens: 3.0
+    Interactivité, zoom et tuiles: 4.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 2.0
+    Installation légère: 4.0
+    Reproductibilité: 3.0
+    Accessibilité intégrée: 4.0
+    Maturité et écosystème: 4.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
 - name: Datawrapper
   coordinates:
-    axis_1: -1.8853
-    axis_2: 1.942
+    axis_1: 3.2523
+    axis_2: -0.938
+  role: right
+  color: '#007AFF'
+  attributes:
+    Qualité de publication sans reprise: 5.0
+    Fichier lisible sans moteur: 3.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 4.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 4.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 2.0
+    Installation légère: 5.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 5.0
+    Maturité et écosystème: 4.0
+    À portée de qui ne programme pas: 5.0
+  imputed_attributes: []
+- name: Flourish
+  coordinates:
+    axis_1: 1.3819
+    axis_2: -2.2804
+  role: competitor
+  color: '#5AB87E'
+  attributes:
+    Qualité de publication sans reprise: 4.0
+    Fichier lisible sans moteur: 2.0
+    Texte sélectionnable dans la sortie: 2.0
+    Étendue des projections: 2.0
+    Classification des valeurs nommée: 3.0
+    Cartes de flux et de liens: 3.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 2.0
+    Installation légère: 5.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 3.0
+    Maturité et écosystème: 4.0
+    À portée de qui ne programme pas: 5.0
+  imputed_attributes: []
+- name: Felt
+  coordinates:
+    axis_1: 0.7885
+    axis_2: -3.0882
+  role: competitor
+  color: '#669D4F'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 1.0
+    Étendue des projections: 1.0
+    Classification des valeurs nommée: 3.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 4.0
+    Libre et sans compte: 1.0
+    Installation légère: 5.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 2.0
+    À portée de qui ne programme pas: 5.0
+  imputed_attributes: []
+- name: CARTO
+  coordinates:
+    axis_1: 0.0159
+    axis_2: -3.6353
+  role: competitor
+  color: '#809432'
+  attributes:
+    Qualité de publication sans reprise: 3.0
+    Fichier lisible sans moteur: 1.0
+    Texte sélectionnable dans la sortie: 1.0
+    Étendue des projections: 1.0
+    Classification des valeurs nommée: 4.0
+    Cartes de flux et de liens: 3.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 5.0
+    Libre et sans compte: 1.0
+    Installation légère: 5.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 4.0
+    À portée de qui ne programme pas: 4.0
+  imputed_attributes: []
+- name: QGIS
+  coordinates:
+    axis_1: -1.1813
+    axis_2: 1.2934
+  role: competitor
+  color: '#8877CB'
+  attributes:
+    Qualité de publication sans reprise: 4.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 5.0
+    Cartes de flux et de liens: 2.0
+    Interactivité, zoom et tuiles: 4.0
+    Grands jeux de données: 4.0
+    Libre et sans compte: 5.0
+    Installation légère: 1.0
+    Reproductibilité: 3.0
+    Accessibilité intégrée: 2.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 3.0
+  imputed_attributes: []
+- name: ArcGIS Pro
+  coordinates:
+    axis_1: 0.0957
+    axis_2: 0.0085
+  role: competitor
+  color: '#00B7AE'
+  attributes:
+    Qualité de publication sans reprise: 5.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 5.0
+    Classification des valeurs nommée: 5.0
+    Cartes de flux et de liens: 3.0
+    Interactivité, zoom et tuiles: 4.0
+    Grands jeux de données: 5.0
+    Libre et sans compte: 1.0
+    Installation légère: 1.0
+    Reproductibilité: 2.0
+    Accessibilité intégrée: 3.0
+    Maturité et écosystème: 5.0
+    À portée de qui ne programme pas: 3.0
+  imputed_attributes: []
+- name: tmap (R)
+  coordinates:
+    axis_1: -0.9454
+    axis_2: 2.7833
+  role: competitor
+  color: '#00A5CD'
+  attributes:
+    Qualité de publication sans reprise: 4.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 4.0
+    Classification des valeurs nommée: 5.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 3.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 5.0
+    Installation légère: 2.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 3.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: mapsf (R)
+  coordinates:
+    axis_1: -0.3807
+    axis_2: 3.6353
   role: top
   color: '#AF52DE'
   attributes:
+    Qualité de publication sans reprise: 5.0
+    Fichier lisible sans moteur: 5.0
+    Texte sélectionnable dans la sortie: 3.0
+    Étendue des projections: 4.0
+    Classification des valeurs nommée: 5.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 1.0
+    Grands jeux de données: 2.0
+    Libre et sans compte: 5.0
+    Installation légère: 2.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 2.0
+    À portée de qui ne programme pas: 1.0
+  imputed_attributes: []
+- name: Protomaps / PMTiles
+  coordinates:
+    axis_1: -2.3822
+    axis_2: -1.4333
+  role: competitor
+  color: '#FFA28A'
+  attributes:
+    Qualité de publication sans reprise: 3.0
     Fichier lisible sans moteur: 1.0
-    Publiable sans reprise graphique: 5.0
-    Carte de situation / zones de contrôle: 1.0
-    Données quelconques, projection quelconque: 2.0
-    Analyse spatiale: 1.0
-    Panoramique / zoom interactif: 3.0
-    Temps jusqu'à la première carte: 5.0
+    Texte sélectionnable dans la sortie: 1.0
+    Étendue des projections: 1.0
+    Classification des valeurs nommée: 1.0
+    Cartes de flux et de liens: 1.0
+    Interactivité, zoom et tuiles: 5.0
+    Grands jeux de données: 5.0
+    Libre et sans compte: 5.0
+    Installation légère: 4.0
+    Reproductibilité: 4.0
+    Accessibilité intégrée: 1.0
+    Maturité et écosystème: 3.0
+    À portée de qui ne programme pas: 2.0
+  imputed_attributes: []
