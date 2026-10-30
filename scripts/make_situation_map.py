@@ -970,6 +970,75 @@ def countries_as_of(
     return out
 
 
+#: The widest a single piece of one territory may be before it is read as the
+#: seam of an antimeridian wrap rather than as ground. Russia, the widest real
+#: landmass on Earth, spans about 170 degrees inside one hemisphere; nothing
+#: genuine comes close to this.
+_WRAP_SEAM_SPAN_DEGREES = 300.0
+
+#: How thin that piece has to be to be certain. A seam has no thickness; the
+#: one in the vendored atlas is half a tenth of a degree tall.
+_WRAP_SEAM_HEIGHT_DEGREES = 0.5
+
+
+def _drop_antimeridian_seams(poly: Any) -> Any:
+    """Return ``poly`` without the globe-spanning hairline a wrap leaves behind.
+
+    Six countries in the vendored atlas cross the antimeridian. Five are
+    stored split into real halves and are fine. Fiji is not: among its
+    twenty-six parts sits a six-vertex rectangle **358.89 degrees wide and
+    0.05 degrees tall**, lying at 16.5 degrees south. It is not an island. It
+    is the seam a ring leaves when it runs off one edge of the world and has
+    to get home along a parallel.
+
+    Nothing about it shows until a plate happens to sit on that parallel.
+    Shapely normalises Fiji's bounding box to the whole planet, so every plate
+    on Earth loads it and asks whether it is in frame; and the Andes plate --
+    the equator to Cape Horn, nowhere near the Pacific -- answered yes. It
+    drew Fiji's seam as a dashed international frontier straight across the
+    South Atlantic, through La Paz, and out over the Pacific the other side:
+    eleven hundred pixels of open ocean in the house border style, on a plate
+    whose whole subject is a mountain range.
+
+    The test is on the part, not the territory, and it asks two things at
+    once: no real ground is three hundred degrees wide, and none that wide is
+    half a degree tall. Both have to hold, so a genuinely enormous country
+    keeps every piece it owns.
+
+    A seam arrives in one of two shapes, and the guard written for the first
+    alone would have missed the second. Fiji's survives ``make_valid`` as a
+    hairline *polygon*, so it sits among the twenty-six parts of a
+    MultiPolygon. Antarctica's does not close, so ``make_valid`` hands back a
+    **GeometryCollection** -- a real MultiPolygon of 4013 square degrees
+    beside a MultiLineString 358.59 degrees wide and zero tall. Keeping only
+    the polygonal parts answers both, and it repairs a third thing on the way:
+    ``.boundary`` is ``None`` on a GeometryCollection, and the frontier layer
+    calls it without checking, so any plate wide enough to include Antarctica
+    did not draw a wrong border -- it raised ``AttributeError`` and drew
+    nothing at all.
+
+    Applied in both TopoJSON decoders -- countries and the shared admin-1 one
+    -- because the wrap is a property of how a ring was stored, not of which
+    file it came from, and Alaska crosses the antimeridian too. Repairing here
+    rather than where the geometry is clipped means the frontier layer, the
+    neighbour labels and anything added later all get the same atlas: a guard
+    at one clip site is a guard the next clip site does not have.
+    """
+    parts = list(getattr(poly, "geoms", [])) or [poly]
+    kept = [
+        g
+        for g in parts
+        if g.geom_type in ("Polygon", "MultiPolygon")
+        and not (
+            g.bounds[2] - g.bounds[0] > _WRAP_SEAM_SPAN_DEGREES
+            and g.bounds[3] - g.bounds[1] < _WRAP_SEAM_HEIGHT_DEGREES
+        )
+    ]
+    if len(kept) == len(parts):
+        return poly
+    return unary_union(kept) if kept else poly
+
+
 def load_countries(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     """Return ``(name, polygon)`` for every country in the vendored basemap (WGS84).
 
@@ -1021,7 +1090,7 @@ def load_countries(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]
                 poly = make_valid(MultiPolygon(polys))
         except Exception:  # skip a malformed geometry rather than fail the plate
             continue
-        out.append((name, poly))
+        out.append((name, _drop_antimeridian_seams(poly)))
     return out
 
 
@@ -1106,7 +1175,7 @@ def _named_polygons_from_topojson(topo: dict[str, Any], object_name: str) -> lis
                 poly = make_valid(MultiPolygon(polys))
         except Exception:  # skip a malformed geometry rather than fail the plate
             continue
-        out.append((name, poly))
+        out.append((name, _drop_antimeridian_seams(poly)))
     return out
 
 
@@ -1434,10 +1503,29 @@ def build_projection(bbox: list[float], epsg: str | None) -> Transformer:
     lat0 = (south + north) / 2.0
     lat1 = south + (north - south) / 6.0
     lat2 = north - (north - south) / 6.0
-    proj4 = (
-        f"+proj=lcc +lat_1={lat1} +lat_2={lat2} +lat_0={lat0} +lon_0={lon0} "
-        "+x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
-    )
+    if abs(lat1 + lat2) < _LCC_DEGENERATE_DEG:
+        # A conic whose two standard parallels are mirror images has no
+        # apex: the cone opens to a cylinder, and PROJ refuses it outright
+        # ("|lat_1 + lat_2| should be > 0") rather than quietly drawing
+        # something else. Any region balanced on the equator lands here --
+        # Gabon, Kenya, Sumatra -- and so does the near-global context a
+        # locator inset builds for a plate centred near it, which is how
+        # this was found: switching the inset on by default took the Andes
+        # plate from rendering to raising.
+        #
+        # An equidistant cylindrical is the plain answer and the
+        # conventional one for a locator. Mercator is the other conformal
+        # option and is not usable here: these boxes reach 84 degrees,
+        # where it inflates without bound.
+        proj4 = (
+            f"+proj=eqc +lat_ts={abs(lat1):.6f} +lat_0={lat0} +lon_0={lon0} "
+            "+x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+        )
+    else:
+        proj4 = (
+            f"+proj=lcc +lat_1={lat1} +lat_2={lat2} +lat_0={lat0} +lon_0={lon0} "
+            "+x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+        )
     return Transformer.from_crs("EPSG:4326", proj4, always_xy=True)
 
 
@@ -1547,6 +1635,12 @@ def make_viewport(
         # plate does not end up with tiny print. Calibrated to a 1000-unit plate.
         "ts": max(1.0, width / 1000.0),
         "bbox": bbox,
+        # The projected rectangle the viewport covers, in planar metres. A
+        # conic turns the requested bbox into a fan, and the plate is this
+        # rectangle around it; ``build_map`` draws the map out to the corners
+        # rather than leaving them blank. Kept here because it is the one
+        # place the four numbers exist.
+        "extent": (minx, miny, maxx, maxy),
         "proj": proj,
         # Vertex-thinning tolerance in SVG units, carried on the viewport so
         # every layer that draws a path picks it up without a new argument.
@@ -1600,6 +1694,22 @@ def _project_geom(geom: Any, proj: Transformer) -> Any:
         return np.column_stack([xs, ys])
 
     return shp_transform(geom, project)
+
+
+def _unproject_geom(geom: Any, proj: Transformer) -> Any:
+    """Return ``geom`` carried back from planar metres into lon/lat.
+
+    The exact mirror of :func:`_project_geom`. One caller: ``build_map``
+    needs the plate's rectangle as a geographic shape so every layer can
+    clip its source data to it. A Lambert conformal conic has a closed-form
+    inverse, so this is one ``pyproj`` call and no iteration.
+    """
+
+    def unproject(points: Any) -> Any:
+        xs, ys = proj.transform(points[:, 0], points[:, 1], direction="INVERSE")
+        return np.column_stack([xs, ys])
+
+    return shp_transform(geom, unproject)
 
 
 def _projected_ring_to_path(
@@ -2770,20 +2880,35 @@ def build_map(cfg: dict[str, Any]) -> str:
     # threading a new argument through nine call sites.
     cfg["_plate"] = palette
 
+    # The map fills its frame. A Lambert conformal conic fans its meridians
+    # out from the cone apex, so the requested bbox projects to a trapezoid,
+    # and drawing only that left four blank triangles in the corners of every
+    # plate -- a perspective effect the projection does not mean and the
+    # reader has no use for. So the drawn region is the plate's own
+    # rectangle: ``region_proj`` is the projected extent the viewport fits,
+    # and ``region_box`` is that rectangle carried back into lon/lat, which
+    # is a slightly curved quadrilateral a little wider than the bbox asked
+    # for. Every layer below clips to it, so the corners carry the same land,
+    # borders, relief and sea as the middle.
+    #
+    # Densified before inverting: the rectangle's edges are straight in
+    # metres and curved in degrees, and a four-corner quad would cut the
+    # bulge off its own top and bottom edges.
+    minx, miny, maxx, maxy = vp["extent"]
+    region_proj = box(minx, miny, maxx, maxy)
+    region_box = _unproject_geom(
+        region_proj.segmentize(max(maxx - minx, maxy - miny) / 48.0), proj
+    )
+
     # The rectangle every name is measured against, built before any layer
-    # runs. Under a conic the drawn map is a trapezoid narrower than the
-    # plate at top and bottom, so the plate rectangle is the wrong shape to
-    # ask "will the reader see this" -- it answers yes for paper the map
-    # does not cover. It lives on the viewport rather than travelling as an
-    # argument for the same reason ``reserved`` and ``ink`` do: a rule that
-    # has to be passed at each call site is a rule that gets missed at one,
-    # and it was. The river layer asked without it and set ``Danube`` half
-    # outside the Western-Europe plate's edge, where the region clip then
-    # cut the last letter off; the hand-placed layer asked the plate and let
+    # runs. It lives on the viewport rather than travelling as an argument
+    # for the same reason ``reserved`` and ``ink`` do: a rule that has to be
+    # passed at each call site is a rule that gets missed at one, and it was.
+    # The river layer asked without it and set ``Danube`` half outside the
+    # Western-Europe plate's edge, where the region clip then cut the last
+    # letter off; the hand-placed layer asked the plate and let
     # ``EL GENEINA``, ``MEDITERRANEAN SEA`` and ``LISBON`` begin out on the
     # margin, and ``BLACK SEA`` rest its whole baseline on the neat line.
-    region_box = box(bbox[0], bbox[1], bbox[2], bbox[3])
-    region_proj = _project_geom(region_box, proj)
     plate_region = vp["region"] = Polygon(
         [vp["to_svg"](px, py) for px, py in region_proj.exterior.coords]
     )
@@ -2808,9 +2933,12 @@ def build_map(cfg: dict[str, Any]) -> str:
     front = _front_line_layer(cfg, proj, vp)
     advances = _arrows_layer(cfg, proj, vp)
 
-    # bbox already carries the region's real extent -- reuse it to pick the
-    # 10m/50m basemap tier instead of re-deriving it from region_box.
-    land = load_land(bbox=bbox).intersection(region_box)
+    # The rectangle, not the requested bbox: the corners the conic used to
+    # leave blank lie outside ``bbox``, and land loaded for ``bbox`` alone
+    # would stop at the old trapezoid's edge. ``region_box.bounds`` also
+    # picks the 10m/50m basemap tier, off a span a few per cent wider than
+    # before, which changes no plate's tier in this repository.
+    land = load_land(bbox=list(region_box.bounds)).intersection(region_box)
     land_proj = _project_geom(land, proj)
     # Projecting a coastline into a conic can leave the result
     # self-touching, and GEOS answers a boolean op on an invalid operand with
@@ -5480,6 +5608,111 @@ _INSET_ZOOM = 6.0
 #: furniture, large enough that a country outline in it is still a country.
 _INSET_WIDTH = 0.2
 
+#: Widest region, in degrees of longitude, that still gets a locator inset
+#: by default. Past this the plate already shows a continent and the
+#: locator has nothing left to tell anyone -- it would be a small picture
+#: of the same thing. Measured against the shipped plates: the widest of
+#: them, western Europe, spans 41 degrees and keeps its inset; a plate of
+#: the whole of Eurasia would not.
+_INSET_DEFAULT_MAX_SPAN = 60.0
+
+#: Corners the locator may take when the config does not name one, in
+#: preference order. Top-left never appears: the title block lives there
+#: on every plate this generator draws.
+_INSET_CORNERS: tuple[str, ...] = ("top-right", "bottom-right", "bottom-left")
+
+#: The colour of the mapped area inside the locator. Red, because the
+#: guidelines say red and because at a fifth of the plate's width the
+#: rectangle has to win against a continent in two seconds. Dark enough
+#: to hold its own stroke against the cream land fill, and the same hue
+#: family as the contested hatch so the plate keeps one warm accent.
+_INSET_REGION_INK = "#b03a3a"
+
+
+def _inset_settings(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the locator inset's resolved options, or ``None`` for no inset.
+
+    **A plate gets a locator unless it says otherwise.** That is the change
+    this function exists to make. The inset was written, tested, documented
+    -- and opt-in, so across thirteen shipped plates it was used exactly
+    zero times. The UNHCR Mapping Guidelines make it a required element
+    with a size in millimetres attached, and the reason is not house style:
+    a reader who does not already know where North Kivu is learns nothing
+    from a map of North Kivu. An option nobody switches on is a capability
+    the package does not have.
+
+    Two plates still get none. A panel of a sheet of small multiples, which
+    would repeat the same locator once per frame to say one thing; and a
+    plate already wide enough to place itself, where a sixth-scale copy of
+    the same continent answers a question the plate has answered.
+
+    Parameters
+    ----------
+    cfg : dict
+        The map config. Reads ``inset`` (``show``, ``bbox``, ``position``,
+        ``width``, ``zoom``) and ``region``.
+
+    Returns
+    -------
+    dict or None
+        The ``inset`` options with defaults filled in, or ``None``.
+
+    Examples
+    --------
+    A plain regional config now carries one without asking:
+
+    >>> _inset_settings({"region": {"bbox": [29.0, 45.0, 41.0, 53.0]}}) is None
+    False
+
+    Saying no is still saying no:
+
+    >>> _inset_settings({"region": {"bbox": [29.0, 45.0, 41.0, 53.0]},
+    ...                  "inset": {"show": False}}) is None
+    True
+
+    And a plate spanning a hemisphere places itself:
+
+    >>> _inset_settings({"region": {"bbox": [-20.0, 10.0, 110.0, 60.0]}}) is None
+    True
+    """
+    inset = cfg.get("inset")
+    if isinstance(inset, dict) and inset.get("show", True) is False:
+        return None
+    if cfg.get("_panel"):
+        return None
+    if inset is None:
+        bbox = cfg.get("region", {}).get("bbox")
+        if not bbox:
+            return None
+        west, _south, east, _north = (float(v) for v in bbox)
+        if east - west > _INSET_DEFAULT_MAX_SPAN:
+            return None
+        inset = {}
+    return dict(inset)
+
+
+def _inset_corner(cfg: dict[str, Any], ts: float, W: float) -> str:
+    """Return the corner a locator takes when the config does not name one.
+
+    The legend card and the scale bar are placed before this runs and both
+    have fixed homes, so the locator takes the first corner neither of them
+    wants. Deliberately *not* routed through :func:`_reserved_boxes`, which
+    asks :func:`_inset_box` where the locator is: the two would call each
+    other until the stack ran out.
+    """
+    taken = {"top-left"}  # the title block
+    legend = _resolve_legend_position(cfg, ts, W)
+    if cfg.get("areas_of_control", {}).get("palette"):
+        # ``right`` floats the card against the plate's right edge, top-
+        # aligned, so it owns that corner as surely as ``top-right`` does.
+        taken.add("top-right" if legend == "right" else legend)
+    scale_x, _scale_y = _scale_bar_origin(cfg, {"ts": ts, "width": W, "height": 0.0})
+    taken.add("bottom-left" if scale_x < W / 2 else "bottom-right")
+    for corner in _INSET_CORNERS:
+        if corner not in taken:
+            return corner
+    return "top-right"
+
 
 def _inset_context_bbox(bbox: list[float], zoom: float = _INSET_ZOOM) -> list[float]:
     """Return the wider extent an inset shows, centred on ``bbox``.
@@ -5516,8 +5749,8 @@ def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, f
     which keeps labels out of it, and the north arrow, which would otherwise
     print straight on top of it: both default to the top-right corner.
     """
-    inset = cfg.get("inset")
-    if not inset or inset.get("show", True) is False:
+    inset = _inset_settings(cfg)
+    if inset is None:
         return None
     ts, W, H = vp["ts"], vp["width"], vp["height"]
     region_bbox = [float(v) for v in cfg["region"]["bbox"]]
@@ -5528,7 +5761,7 @@ def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, f
     sub = make_viewport(build_projection(context, "auto"), context, box_w, 0.0)
     box_h = sub["height"]
     margin = 22 * ts
-    position = str(inset.get("position", "top-right"))
+    position = str(inset.get("position") or _inset_corner(cfg, ts, W))
     ox = margin if position.endswith("-left") else W - box_w - margin
     oy = margin if position.startswith("top") else H - box_h - margin - _caption_height(cfg, ts)
     return ox, oy, ox + box_w, oy + box_h
@@ -5562,8 +5795,8 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     str
         An SVG group, empty when no inset is configured.
     """
-    inset = cfg.get("inset")
-    if not inset or inset.get("show", True) is False:
+    inset = _inset_settings(cfg)
+    if inset is None:
         return '<g id="inset"></g>'
     unknown = sorted(set(inset) - {"show", "bbox", "position", "width", "zoom"})
     if unknown:
@@ -5601,22 +5834,150 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     region_d = projected_geom_to_path(_project_geom(box(*region_bbox), proj), sub)
 
     clip_id = "inset-clip"
+    radius = 3 * ts
+    # The locator is a *card*, the same object the legend is, and for the
+    # same reason: it is furniture resting on the map, not a window cut
+    # into it. It used to paint its sea at 0.55 opacity, which let the
+    # plate underneath through -- over the Black Sea on the Ukraine plate
+    # the whole locator came out dark and murky, and its hairline border
+    # disappeared into the water. Opaque ground, the panel's own shadow,
+    # the panel's own edge.
     return (
         f'<g id="inset" transform="translate({ox:.1f},{oy:.1f})">'
         f'<clipPath id="{clip_id}"><rect x="0" y="0" width="{box_w:.1f}" '
-        f'height="{box_h:.1f}" rx="{3 * ts:.1f}"/></clipPath>'
+        f'height="{box_h:.1f}" rx="{radius:.1f}"/></clipPath>'
+        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" '
+        f'rx="{radius:.1f}" fill="{palette["panel"]}"'
+        f'{_drop_shadow(vp, "panel-shadow")}/>'
         f'<g clip-path="url(#{clip_id})">'
         f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" fill="{palette["sea"]}" '
-        f'fill-opacity="0.55"/>'
+        f'fill-opacity="0.45"/>'
         f'<path d="{land_d}" fill="{palette["land"]}" stroke="{palette["coast"]}" '
         f'stroke-width="0.5" stroke-opacity="0.7"/>'
-        f'<path d="{region_d}" fill="{palette["chrome_ink"]}" fill-opacity="0.22" '
-        f'stroke="{palette["chrome_ink"]}" stroke-width="{1.4 * ts:.1f}"/>'
+        # The mapped area in red, which is what the guidelines ask for and
+        # what the eye finds first. In the plate's own ink it was a small
+        # dark trapezoid among other small dark shapes, and a locator whose
+        # locator has to be looked for is not doing its one job.
+        f'<path d="{region_d}" fill="{_INSET_REGION_INK}" fill-opacity="0.30" '
+        f'stroke="{_INSET_REGION_INK}" stroke-width="{1.6 * ts:.1f}"/>'
         f"</g>"
-        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" rx="{3 * ts:.1f}" '
+        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" rx="{radius:.1f}" '
         f'fill="none" stroke="{palette["panel_edge"]}" stroke-width="1"/>'
         f"</g>"
     )
+
+
+#: Boundaries the UNHCR Mapping Guidelines attach a *named* disclaimer to,
+#: with the window each one is visible in and the sentence owed.
+#:
+#: The same reasoning as ``_attribution_layer``'s automatic ODbL credit,
+#: applied to a heavier obligation: a requirement a caller has to remember
+#: is a requirement the plates will not meet. A package that draws the
+#: Line of Control and says nothing has taken a position by omission, and
+#: it will take it on every plate of the region anybody ever renders.
+#:
+#: Three entries, not thirty. These are the boundaries the guidelines name
+#: a standard sentence for. Crimea, Western Sahara, Taiwan, the Kurils and
+#: the rest are real disputes with no standard sentence, so saying
+#: something about them is a cartographer's judgement and not a lookup
+#: table's -- ``attribution`` takes a caller's own line for those.
+_NAMED_DISCLAIMERS: tuple[tuple[str, tuple[float, float, float, float], str], ...] = (
+    (
+        "Jammu and Kashmir",
+        (72.0, 32.0, 81.0, 37.5),
+        "Boundaries shown in Jammu and Kashmir are approximate; the final "
+        "status of the territory has not yet been agreed by the parties.",
+    ),
+    (
+        "Sudan and South Sudan",
+        (23.0, 8.0, 36.0, 13.0),
+        "The final boundary between the Republic of the Sudan and the "
+        "Republic of South Sudan has not yet been determined.",
+    ),
+    (
+        "Abyei",
+        (27.3, 9.0, 29.7, 10.8),
+        "The final status of the Abyei area is not yet determined.",
+    ),
+)
+
+
+def _required_disclaimers(cfg: dict[str, Any]) -> list[str]:
+    """Return the standard sentences this plate's extent obliges it to carry.
+
+    Keyed on the region the plate draws rather than on the names it
+    happens to label: a plate can show the Line of Control without
+    printing the word Kashmir anywhere, and the obligation is about the
+    line, not the label.
+
+    Silent for a plate that draws no frontiers at all -- a pure relief or
+    accumulation plate makes no statement about where a boundary runs, so
+    it owes no sentence about one.
+
+    Parameters
+    ----------
+    cfg : dict
+        The map config; reads ``region.bbox`` and ``frontiers.show``.
+
+    Returns
+    -------
+    list of str
+        In the order of :data:`_NAMED_DISCLAIMERS`; usually empty.
+
+    Examples
+    --------
+    >>> _required_disclaimers({"region": {"bbox": [70.0, 25.0, 100.0, 40.0]}})
+    ['Boundaries shown in Jammu and Kashmir are approximate; the final status of the territory has not yet been agreed by the parties.']
+
+    >>> _required_disclaimers({"region": {"bbox": [-10.0, 40.0, 5.0, 52.0]}})
+    []
+
+    A plate that draws no boundaries makes no claim about one:
+
+    >>> _required_disclaimers({"region": {"bbox": [70.0, 25.0, 100.0, 40.0]},
+    ...                        "frontiers": {"show": False}})
+    []
+    """
+    if cfg.get("_panel"):  # said once on the sheet, not once per frame
+        return []
+    if (cfg.get("frontiers") or {}).get("show", True) is False:
+        return []
+    bbox = (cfg.get("region") or {}).get("bbox")
+    if not bbox:
+        return []
+    return [
+        sentence
+        for _name, window, sentence in _NAMED_DISCLAIMERS
+        if _bbox_overlaps(bbox, window)
+    ]
+
+
+def _caption_lines(cfg: dict[str, Any]) -> list[str]:
+    """Every line the provenance footer prints, in order.
+
+    One function so :func:`_caption_height` and :func:`_caption_block`
+    cannot disagree about how many there are -- they did not, but they
+    each held their own copy of the list, which is the same thing waiting
+    to happen the next time a line is added.
+    """
+    lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
+    lines.extend(_required_disclaimers(cfg))
+    return lines
+
+
+def _caption_mode(cfg: dict[str, Any]) -> str:
+    """Resolve ``caption``, with a disclaimer overriding ``none``.
+
+    A caller can decline a provenance footer. A caller cannot decline a
+    required disclaimer by declining the footer that would carry it, so
+    an owed sentence turns the footer on.
+    """
+    mode = str(cfg.get("caption", "none")).lower()
+    if mode not in {"none", "full"}:
+        raise ValueError(f"unknown caption {mode!r}; known: none, full")
+    if mode == "none" and _required_disclaimers(cfg):
+        return "full"
+    return mode
 
 
 def _caption_height(cfg: dict[str, Any], ts: float) -> float:
@@ -5627,10 +5988,9 @@ def _caption_height(cfg: dict[str, Any], ts: float) -> float:
     bottom-left corner, and the two landed on top of each other the first
     time — legible text over a legible bar, both unreadable.
     """
-    if str(cfg.get("caption", "none")).lower() != "full":
+    if _caption_mode(cfg) != "full":
         return 0.0
-    lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
-    return len(lines) * 11.5 * ts + 17 * ts
+    return len(_caption_lines(cfg)) * 11.5 * ts + 17 * ts
 
 
 def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
@@ -5659,18 +6019,16 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     str
         An SVG group, empty when the caption is off.
     """
-    mode = str(cfg.get("caption", "none")).lower()
+    mode = _caption_mode(cfg)
     if mode == "none":
         # Nothing at all, not an empty group: a plate that never asked for
         # a caption has to come out of this byte-for-byte as it did before,
         # and twenty bytes of empty <g> is still a difference.
         return ""
-    if mode != "full":
-        raise ValueError(f"unknown caption {mode!r}; known: none, full")
 
     palette = _pal(cfg)
     ts, W, H = vp["ts"], vp["width"], vp["height"]
-    lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
+    lines = _caption_lines(cfg)
     if not lines:
         # Refusing beats printing an empty rule: a caption that says nothing
         # is worse than no caption, because it looks like provenance.
@@ -6907,6 +7265,12 @@ _INTERNAL_KEYS: frozenset[str] = frozenset(
     }
 )
 
+
+#: How close the two standard parallels may come to cancelling out before
+#: the conic stops being one. PROJ's own test is ``|lat_1 + lat_2| > 0``;
+#: a degree of slack keeps a plate off the edge of a projection that is
+#: valid in arithmetic and degenerate in practice.
+_LCC_DEGENERATE_DEG = 1.0
 
 #: The widest longitude span a Lambert conformal conic will take before
 #: pyproj refuses the projection outright. A conic is a regional projection

@@ -23,13 +23,48 @@ they are the questions a map most often gets wrong:
                    schematic. A map with neither is read as current,
                    forever. Saying "synthetic illustrative values" counts,
                    and counts for more than a date would: stamping a vintage
-                   on invented data would be a fabrication.
+                   on invented data would be a fabrication. So does
+                   "a reference plate ... no thematic layer": a map of where
+                   the Alps are is not a claim about a moment either, and
+                   the eight physical plates this package ships were being
+                   told to date something undateable.
 ``untitled``       No title text, which in an article means a plate nobody
                    can attribute or caption.
 ``unlabelled``     No ``role="img"`` with an accessible name on the root. A
                    screen reader announces "graphic" and nothing else, in a
                    suite whose whole point is that this does not happen.
 ================== =======================================================
+
+Four more apply only to a **regional situation plate** -- one that clips its
+geography to a region rather than drawing the world. They come from the
+standards a plate like that gets read against: the UNHCR Mapping Guidelines
+for the furniture, the Institute for the Study of War for the evidence
+model. Each is written up, with its source, in
+``references/situation-map-requirements.md``.
+
+====================== ===================================================
+``no-locator``         No locator inset. "Zoom out for perspective, zoom in
+                       for detail" is the locator map's one rule, and a
+                       plate that only zooms in answers half of it: a
+                       reader who does not already know where North Kivu
+                       is learns nothing from a map of North Kivu.
+``undated-control``    The plate draws areas of control and never says as
+                       of when. Looser than ``no-provenance``, which any
+                       stray year satisfies: a control map is a claim about
+                       a moment, and without the moment it is read as
+                       current for as long as the file exists.
+``evidence-unclassed`` Every control zone is drawn at one confidence, so a
+                       belligerent's claim and a geolocated observation
+                       look identical. ISW's published method separates
+                       assessed from claimed control for exactly this
+                       reason, and conflating them is the commonest failure
+                       in conflict cartography.
+``disputed-unflagged`` The plate draws a boundary the guidelines name a
+                       required disclaimer for -- Jammu and Kashmir, Sudan
+                       and South Sudan, Abyei -- and does not carry it.
+                       Drawing one of those lines without its sentence is a
+                       position taken by omission.
+====================== ===================================================
 
 Static: it reads the SVG the generator wrote and nothing else. No rendering,
 no network, no geometry.
@@ -79,11 +114,59 @@ _DATE_RE = re.compile(r"\b(?:as of|à jour|situation)\b|\b(?:19|20)\d{2}\b", re.
 #: fabrication, not an improvement.
 _SYNTHETIC_RE = re.compile(
     r"\b(?:synthetic|illustrative|schematic|demo|sample|example|"
-    r"synthétique|illustratif|fictif)\b", re.I
+    r"reference plate|no thematic layer|"
+    r"synthétique|illustratif|fictif|planche de référence)\b", re.I
 )
 
 #: Discrete class swatches, as the classed legend draws them.
 _SWATCH_RE = re.compile(r"<rect[^>]*\bclass=\"(?:legend-)?swatch\"")
+
+#: A plate that clips its geography to a region, rather than drawing the
+#: world: that clip is what makes it a *situation* plate, and the four
+#: rules below only apply to one.
+_REGIONAL_RE = re.compile(r'<clipPath id="region-clip"')
+
+#: "as of 25 September 2026", "Positions as of ~2024", "a jour au ...".
+#: Deliberately narrower than :data:`_DATE_RE`: a control map has to say
+#: *as of when*, and a year printed anywhere on the plate -- in a source
+#: citation, in a place name -- is not that.
+_AS_OF_RE = re.compile(
+    r"\b(?:as of|as at|à jour au|au)\b[^<]{0,48}?(?:19|20)\d{2}", re.I
+)
+
+#: The confidence vocabulary the evidence model turns on. One of these
+#: words on the plate means somebody drew the distinction; none of them
+#: means every polygon is making the same, strongest claim.
+_EVIDENCE_RE = re.compile(
+    r"\b(?:assessed|claimed|reported|unverified|infiltration|"
+    r"évalué|revendiqué|rapporté)\b", re.I
+)
+
+#: Boundaries the UNHCR Mapping Guidelines attach a named disclaimer to,
+#: and the words on a plate that give one away. Keyed by the dispute, each
+#: with the places whose appearance means the line is in view and a phrase
+#: that, present, counts as the sentence being carried.
+#:
+#: Deliberately short. It holds the three disputes the guidelines name
+#: *specifically*, not every contested line on Earth -- a list that tried
+#: to be complete would be wrong in a hundred places and would fire on
+#: plates that owe nothing. Crimea, Western Sahara, Taiwan and the rest
+#: are real disputes with no named standard sentence, so they are a
+#: cartographer's decision and not a linter's.
+_NAMED_DISCLAIMERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "Jammu and Kashmir": (
+        ("kashmir", "jammu", "srinagar", "line of control", "siachen"),
+        ("line of control", "not yet agreed", "final status"),
+    ),
+    "Sudan and South Sudan": (
+        ("south sudan", "s. sudan", "soudan du sud"),
+        ("not yet determined", "not yet been determined", "final boundary"),
+    ),
+    "Abyei": (
+        ("abyei",),
+        ("final status", "not yet determined", "not yet been determined"),
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -197,6 +280,90 @@ def audit(svg: str) -> list[Finding]:
             "the plate says neither when it was true nor that it is a "
             "schematic; a map with neither is read as current, forever, "
             "including years after it stopped being so",
+        ))
+
+    findings.extend(_situation_findings(text, labels))
+    return findings
+
+
+def _layer_is_drawn(text: str, layer_id: str) -> bool:
+    """Whether ``<g id="layer_id">`` exists and has anything inside it.
+
+    The generators emit every layer whether or not it drew, so presence is
+    not the question -- an empty group is how a plate says "no inset", and
+    the check has to see the difference.
+    """
+    opened = re.search(rf'<g id="{re.escape(layer_id)}"[^>]*>', text)
+    if opened is None:
+        return False
+    return not text[opened.end():].lstrip().startswith("</g>")
+
+
+def _situation_findings(text: str, labels: list[str]) -> list[Finding]:
+    """The four rules that only apply to a regional situation plate.
+
+    Split out of :func:`audit` rather than inlined, because they share one
+    precondition -- the region clip -- and because a reader of that
+    function should be able to see at a glance that none of them can fire
+    on a world choropleth.
+
+    Parameters
+    ----------
+    text : str
+        The SVG with base64 payloads already stripped.
+    labels : list of str
+        Visible text, in document order.
+
+    Returns
+    -------
+    list of Finding
+        Empty for a plate that is not regional, and for a regional plate
+        that carries its furniture.
+    """
+    if not _REGIONAL_RE.search(text):
+        return []
+
+    findings: list[Finding] = []
+    joined = " ".join(labels)
+
+    if not _layer_is_drawn(text, "inset"):
+        findings.append(Finding(
+            "no-locator",
+            "the plate is a regional one and carries no locator inset, so "
+            "a reader who does not already know where this is cannot place "
+            "it; zoom out for perspective is half the locator rule and this "
+            "plate only does the other half",
+        ))
+
+    draws_control = _layer_is_drawn(text, "areas-of-control")
+    if draws_control and not _AS_OF_RE.search(joined):
+        findings.append(Finding(
+            "undated-control",
+            "the plate draws areas of control and never says as of when; a "
+            "front is a claim about a moment, and a plate that omits the "
+            "moment keeps making the claim long after it stopped holding",
+        ))
+
+    if draws_control and not _EVIDENCE_RE.search(joined):
+        findings.append(Finding(
+            "evidence-unclassed",
+            "every control zone is drawn at the same confidence, so ground "
+            "a force is assessed to hold and ground a belligerent merely "
+            "claims are the same colour; the strongest reading is the one "
+            "a flat fill gives, and it is the one nobody checked",
+        ))
+
+    for dispute, (tells, sentence) in _NAMED_DISCLAIMERS.items():
+        lowered = joined.lower()
+        if not any(tell in lowered for tell in tells):
+            continue
+        if any(phrase in lowered for phrase in sentence):
+            continue
+        findings.append(Finding(
+            "disputed-unflagged",
+            f"the plate draws {dispute} and carries none of the standard "
+            "disclaimer; the guidelines name a sentence for this boundary "
+            "precisely because drawing it silently is a position",
         ))
 
     return findings
