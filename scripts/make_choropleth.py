@@ -119,6 +119,11 @@ NO_DATA_EDGE = "#D1D1D6"
 # reads as texture without a viewer mistaking it for noise in the data.
 _COUNTRY_FILL_OPACITY = 0.7
 
+#: ISO-3166-1 numeric for Antarctica, the one country record a
+#: per-country indicator never has a row for. See ``build_svg``'s
+#: ``antarctica`` parameter.
+_ANTARCTICA_ID = "010"
+
 # 50m: same vendored Natural Earth atlas make_situation_map.py already uses,
 # just switched on for the world view too (110m was a first-pass choice).
 _GEO = geo_dir() / "countries-50m.json"
@@ -568,6 +573,176 @@ def _tick_label(value: float) -> str:
     return f"{value:.2g}"
 
 
+def seam_segments(
+    ring: Sequence[tuple[float, float]], project: Any
+) -> list[list[tuple[float, float]]]:
+    """Project ``ring`` and cut it wherever it crosses the antimeridian.
+
+    Four rings in the vendored atlas run past +-180 -- Russia's mainland
+    and its 43-point companion, Fiji, and both of Antarctica's -- storing
+    the wrap as a single step of about 360 degrees of longitude. Drawn
+    straight through, that step is a line across the whole map, so the
+    ring has to be cut there.
+
+    **A closed ring cut at k seams has k pieces, not k + 1.** That is the
+    bug this function exists to fix, and it is not the cut itself: the
+    cut was already being made. A ring is a cycle, and its stored start
+    vertex is an arbitrary point *inside* one of the pieces, so slicing
+    the list leaves that piece in two halves, one at each end of the
+    list. Closed separately, each half gets a chord from its own last
+    vertex back to its own first -- and for Russia that chord ran
+    diagonally across the Sea of Okhotsk to Japan, drawn in the
+    confident blue of a real value. Rejoining the tail to the head puts
+    the piece back together, and then every closing chord lies along the
+    seam at the edge of the map, where it belongs and cannot be seen.
+
+    The cut is tested in longitude rather than in projected x, which is
+    where it actually is: a seam step is a step of more than 180 degrees,
+    at any latitude, under any projection.
+
+    Parameters
+    ----------
+    ring : sequence of (lon, lat)
+        One ring in degrees, closed (first vertex repeated last) or not.
+    project : callable
+        ``(lon, lat) -> (x, y)`` in canvas coordinates.
+
+    Returns
+    -------
+    list of list of (x, y)
+        One entry per piece the ring breaks into; a ring that does not
+        cross the seam comes back as a single piece.
+
+    Examples
+    --------
+    A ring that stays put is one piece:
+
+    >>> seam_segments([(0, 0), (1, 0), (1, 1), (0, 0)], lambda a, b: (a, b))
+    [[(0, 0), (1, 0), (1, 1), (0, 0)]]
+
+    A closed ring that crosses the seam twice -- out and back, the shape
+    of Russia and of Fiji -- is two pieces, not three, because the piece
+    holding the ring's arbitrary start vertex is rejoined from its two
+    halves:
+
+    >>> ident = lambda a, b: (a, b)
+    >>> body = [(170, 60), (179, 60), (-179, 61), (-170, 61),
+    ...         (-179, 62), (179, 62), (170, 61), (170, 60)]
+    >>> [[int(x) for x, _y in piece] for piece in seam_segments(body, ident)]
+    [[179, 170, 170, 179], [-179, -170, -179]]
+
+    An open line has no tail to rejoin, and fusing its two ends would
+    invent the one edge the caller did not draw, so it keeps all three:
+
+    >>> [len(p) for p in seam_segments(
+    ...     [(179, 60), (-179, 60), (-178, 61), (179, 61)], ident)]
+    [1, 2, 1]
+    """
+    cuts = [
+        i + 1
+        for i, (here, nxt) in enumerate(zip(ring, ring[1:], strict=False))
+        if abs(nxt[0] - here[0]) > 180.0
+    ]
+    if not cuts:
+        return [[project(lon, lat) for lon, lat in ring]]
+
+    pieces: list[list[tuple[float, float]]] = []
+    start = 0
+    for cut in cuts:
+        pieces.append(list(ring[start:cut]))
+        start = cut
+    pieces.append(list(ring[start:]))
+
+    if tuple(ring[0]) == tuple(ring[-1]):
+        tail = pieces.pop()
+        # The tail's last vertex and the head's first are the same point
+        # of the same ring, so one of the two is dropped.
+        pieces[0] = tail[:-1] + pieces[0]
+        if len(cuts) % 2 == 1:
+            # An odd number of crossings means the ring went round the
+            # world without coming back, which a ring can only do by
+            # encircling a pole -- Antarctica's coastline does exactly
+            # that. Its two ends are then on *opposite* sides of the
+            # seam, so closing it joins them with a chord straight across
+            # the plate at about 84 degrees south, which both invents a
+            # shoreline and leaves the last six degrees to the pole
+            # unfilled. Walking out to the pole and back along the two
+            # edges of the map is where the boundary actually runs.
+            run = pieces[0]
+            pole = math.copysign(90.0, run[0][1])
+            run.append((math.copysign(180.0, run[-1][0]), pole))
+            run.append((math.copysign(180.0, run[0][0]), pole))
+
+    return [[project(lon, lat) for lon, lat in piece] for piece in pieces]
+
+
+def _land_mask(
+    countries: Sequence[dict[str, Any]],
+    project: Any,
+    side_margin: float,
+    top_margin: float,
+    plot_w: int,
+    plot_h: int,
+) -> np.ndarray:
+    """Return a 0/1 grid of the plot area that the drawn countries cover.
+
+    The relief raster is rectangular and the world is not, so the shading
+    needs an alpha channel saying where ground actually is. Rasterising
+    *the same projected rings this map draws* gives one that cannot drift:
+    a coastline borrowed from a coarser atlas would leave a halo of
+    hillshade a pixel or two outside every country, which against a white
+    sea is more visible than the texture it was meant to carry.
+
+    Interior rings are filled rather than punched out. A country's holes
+    are enclaves and lakes -- ground either way, as far as a hillshade is
+    concerned -- and the fills drawn on top cover them regardless.
+
+    Parameters
+    ----------
+    countries : sequence of dict
+        Decoded atlas records, each with a ``rings`` list of (lon, lat).
+    project : callable
+        ``(lon, lat) -> (x, y)`` in canvas coordinates, the map's own.
+    side_margin, top_margin : float
+        Canvas offset of the plot area, subtracted so the mask is in the
+        raster's own coordinates.
+    plot_w, plot_h : int
+        Mask size in pixels, matching the relief raster exactly.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(plot_h, plot_w)`` of 0.0 / 1.0, ready to multiply into alpha.
+
+    Examples
+    --------
+    A single square degree-aligned country, projected by an identity-ish
+    transform, covers its own quarter of a tiny canvas and nothing else:
+
+    >>> square = [{"rings": [[(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]]}]
+    >>> mask = _land_mask(square, lambda lon, lat: (lon, lat), 0, 0, 8, 8)
+    >>> mask.shape
+    (8, 8)
+    >>> bool(mask[1, 1]), bool(mask[6, 6])
+    (True, False)
+    """
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("1", (plot_w, plot_h), 0)
+    pen = ImageDraw.Draw(canvas)
+    for country in countries:
+        for ring in country["rings"]:
+            if len(ring) < 3:
+                continue
+            for seg in seam_segments(ring, project):
+                if len(seg) < 3:
+                    continue
+                pen.polygon(
+                    [(x - side_margin, y - top_margin) for x, y in seg], fill=1
+                )
+    return np.asarray(canvas, dtype=np.float32)
+
+
 def build_svg(
     data: list[dict[str, Any]] | None = None,
     title: str = "Global Exposure Index, by Country",
@@ -585,6 +760,7 @@ def build_svg(
     rivers: bool = True,
     simplify: float = DEFAULT_TOLERANCE,
     provenance: bool = False,
+    antarctica: bool = False,
 ) -> str:
     """Assemble the full choropleth map SVG document as a string.
 
@@ -633,6 +809,13 @@ def build_svg(
         the version, so switching it on by default would change every
         committed plate at every release. Read back with
         ``sprezzature_maps.plate_provenance`` / ``replay_report``.
+    antarctica : bool, optional
+        Draw Antarctica (default ``False``). A per-country indicator has
+        no row for it, so it renders as the largest shape on the plate
+        and the only one that cannot carry a value; worse, projecting
+        down to 90 degrees south sets the plate's aspect ratio, which
+        squeezes the inhabited world into the middle of the canvas.
+        Switch it on when the subject really is down there.
 
     Returns
     -------
@@ -699,6 +882,21 @@ def build_svg(
             "as no-data grey, which the plate already says it means."
         )
     countries = _load_countries()
+    if not antarctica:
+        # Antarctica is 8.8% of the plate's ink and has no population to
+        # carry an indicator, so on a per-country data map it is the
+        # largest thing a reader looks at and the only one that cannot
+        # mean anything. It is also what sets the plate's own aspect:
+        # projecting down to 90 degrees south squeezes the inhabited
+        # world into the middle two-thirds of the canvas and leaves the
+        # rest white. Dropping it is the house default for exactly the
+        # reason a newspaper drops it; pass ``antarctica=True`` for a map
+        # whose subject is actually down there (station coverage, ice
+        # extent, treaty claims).
+        countries = [c for c in countries if str(c["id"]) != _ANTARCTICA_ID]
+        values_by_id = {
+            cid: v for cid, v in values_by_id.items() if cid != _ANTARCTICA_ID
+        }
     all_values = list(values_by_id.values())
     v_min, v_max = (min(all_values), max(all_values)) if all_values else (0.0, 1.0)
     v_span = (v_max - v_min) or 1.0
@@ -921,6 +1119,28 @@ def build_svg(
         relief_rgba = sample_terrain_shade(
             lon_grid, lat_grid, valid_grid, shade, shade_bounds
         )
+        # Terrain shading is a statement about *ground*, and this raster
+        # covered the whole plot rectangle, so it painted the sea too:
+        # every ocean pixel came out (190, 200, 186), the khaki the duotone
+        # gives flat land at sea level. Three things were wrong with that
+        # at once. The ocean read as a landmass of its own. The no-data
+        # grey sitting next to it was barely a step away, so "no value for
+        # this country" and "not a country" looked alike -- the single most
+        # common way a choropleth misleads, and the one `audit`'s
+        # ``no-data-hidden`` rule exists to catch. And the strip of canvas
+        # outside Equal Earth's own outline, where there is no world at
+        # all, got the same confident fill, which is where the warm band
+        # across the top and bottom of every plate came from.
+        #
+        # Masked to the countries this map actually draws, the sea becomes
+        # the page -- which is what a world choropleth's sea is.
+        relief_rgba[..., 3] = (
+            relief_rgba[..., 3]
+            * _land_mask(
+                countries, project, side_margin, top_margin,
+                int(plot_w), int(plot_h),
+            )
+        ).astype(np.uint8)
         parts.append(
             f'<image x="{side_margin:.1f}" y="{top_margin:.1f}" '
             f'width="{int(plot_w)}" height="{int(plot_h)}" '
@@ -966,17 +1186,12 @@ def build_svg(
         for ring in country["rings"]:
             if len(ring) < 3:
                 continue
-            pts = [project(lon, lat) for lon, lat in ring]
-            # Antimeridian wrap (e.g. Russia, Fiji cross lon +-180): a big
-            # jump in screen x between consecutive points is the seam, not
-            # real geometry -- break into a fresh subpath there instead of
-            # drawing a line straight across the map.
-            segments: list[list[tuple[float, float]]] = [[pts[0]]]
-            for (x0, _y0), (x1, y1) in zip(pts, pts[1:], strict=False):
-                if abs(x1 - x0) > map_w * 0.5:
-                    segments.append([])
-                segments[-1].append((x1, y1))
-            for seg in segments:
+            # Antimeridian wrap (Russia, Fiji and Antarctica all cross
+            # lon +-180): break into a fresh subpath at the seam instead
+            # of drawing a line straight across the map. See
+            # :func:`seam_segments` for why the test is in longitude and
+            # not, as it was, in projected x.
+            for seg in seam_segments(ring, project):
                 if len(seg) < 3:
                     continue
                 # Drop the vertices this canvas cannot show before writing
@@ -1195,6 +1410,7 @@ def make_choropleth(
     rivers: bool = True,
     simplify: float = DEFAULT_TOLERANCE,
     provenance: bool = False,
+    antarctica: bool = False,
 ) -> Path:
     """Render a hand-authored choropleth map and write the SVG to *out*.
 
@@ -1213,7 +1429,7 @@ def make_choropleth(
         picks demo-appropriate vs. neutral wording depending on *data*.
     width, height : int
         Canvas size in pixels.
-    mode, accessibility, diverging, relief, simplify, provenance
+    mode, accessibility, diverging, relief, simplify, provenance, antarctica
         Forwarded to :func:`build_svg`.
 
     Returns
@@ -1245,6 +1461,7 @@ def make_choropleth(
         rivers=rivers,
         simplify=simplify,
         provenance=provenance,
+        antarctica=antarctica,
     )
     dest = Path(out) if out else svg_example_path(__file__, "choropleth")
     return write_svg(dest, svg)
