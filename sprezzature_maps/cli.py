@@ -314,6 +314,76 @@ def density_cmd(
     click.echo(str(make_density(**kwargs)))
 
 
+@main.command("situation-new")
+@click.option("--country", default=None, help="Read the region off the vendored atlas by name.")
+@click.option(
+    "--bbox",
+    default=None,
+    help="west,south,east,north in degrees. Use instead of --country.",
+)
+@click.option("--title", default=None, help="The plate's title. Defaults to the country.")
+@click.option("--subtitle", default="", help="The editorial line under the title.")
+@click.option(
+    "--as-of",
+    "as_of",
+    default=None,
+    help="Vintage stamped in the footer, as YYYY-MM-DD. Defaults to today.",
+)
+@click.option("--out", default=None, help="Where to write the config. Omit for stdout.")
+def situation_new_cmd(
+    country: str | None,
+    bbox: str | None,
+    title: str | None,
+    subtitle: str,
+    as_of: str | None,
+    out: str | None,
+) -> None:
+    """Write a starter config for a new situation plate, already furnished.
+
+    The plate it describes renders as it stands -- basemap, frontiers,
+    towns, scale, locator, provenance footer -- so the work is adding the
+    subject rather than remembering the furniture. The thematic block is
+    there too, commented, with ``confidence`` on every zone, because that
+    is the field most often left out and the one whose absence makes the
+    strongest claim on the plate by default.
+    """
+    from datetime import date
+
+    from sprezzature_maps.starter import country_bbox, situation_starter
+
+    if (country is None) == (bbox is None):
+        raise click.UsageError("give exactly one of --country or --bbox")
+    if country is not None:
+        try:
+            region = country_bbox(country)
+        except KeyError as exc:
+            raise click.UsageError(
+                f"no country named {country!r} in the vendored atlas; "
+                "check the Natural Earth spelling, or pass --bbox"
+            ) from exc
+    else:
+        parts = [p.strip() for p in str(bbox).split(",")]
+        if len(parts) != 4:
+            raise click.UsageError("--bbox needs four numbers: west,south,east,north")
+        try:
+            region = [float(v) for v in parts]
+        except ValueError as exc:
+            raise click.UsageError(f"--bbox must be four numbers; got {bbox!r}") from exc
+    stamp = date.fromisoformat(as_of) if as_of else None
+    text = situation_starter(
+        title=title or country or "Untitled plate",
+        bbox=region,
+        subtitle=subtitle,
+        as_of=stamp,
+        focus=country,
+    )
+    if out:
+        Path(out).write_text(text, encoding="utf-8")
+        click.echo(out)
+    else:
+        click.echo(text, nl=False)
+
+
 @main.command("situation-map")
 @click.option(
     "--config",
@@ -347,6 +417,7 @@ def situation_map_cmd(config_path: str | None, out: str | None, title: str | Non
 # who knows click. Two spellings, one command -- the same bargain as
 # `make-map` and `sprezzature-maps`.
 main.add_command(main.commands["situation-map"], "situation_map")
+main.add_command(main.commands["situation-new"], "situation_new")
 
 if __name__ == "__main__":
     main()

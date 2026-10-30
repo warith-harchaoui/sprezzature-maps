@@ -294,15 +294,30 @@ pixel et revendique une précision qu'une note sur une région n'a pas. La
 note prend la couleur de ce qu'elle décrit, pour se poser sur la carte au
 lieu d'en sauter.
 
-**Elle devrait dire où c'est sur Terre.** « Dézoomer pour la perspective,
-zoomer pour le détail » est la règle unique de la carte de localisation, et
-une planche qui ne fait que zoomer n'en honore que la moitié :
+**Elle dit où c'est sur Terre, sans qu'on le demande.** « Dézoomer pour la
+perspective, zoomer pour le détail » est la règle unique de la carte de
+localisation, et une planche qui ne fait que zoomer n'en honore que la
+moitié. Une planche régionale trace donc un carton de localisation par
+défaut — la zone cartographiée en rouge sur une vue plus large, dans un
+cinquième de la largeur. Une planche déjà assez large pour se situer
+elle-même n'en reçoit pas, et on peut toujours refuser :
 
 ```yaml
 inset:
-  position: top-right     # ou n'importe quel coin
+  position: top-right     # ou n'importe quel coin ; omis, il prend celui
+                          # que la légende et l'échelle n'ont pas pris
   zoom: 6                 # l'ampleur du dézoom, faute de bbox
+  show: false             # pas de carton sur cette planche
 ```
+
+**Elle porte la clause que son étendue lui impose.** Trois frontières ont
+une phrase standard attachée — le Jammu-et-Cachemire, le Soudan et le
+Soudan du Sud, Abyei. Tracer une de ces lignes sans rien dire est une
+position prise par omission, donc la phrase s'ajoute au pied de planche dès
+que la région atteint la frontière, au même titre que la mention
+OpenStreetMap automatique : une obligation qu'un appelant doit se rappeler
+est une obligation que les planches ne tiendront pas. Refuser le pied de
+planche ne refuse pas la phrase.
 
 **La page autour a besoin de mots et de chiffres.** `article_sidecar(svg)`
 les relit dans le fichier fini, pour qu'une légende saisie dans un CMS ne

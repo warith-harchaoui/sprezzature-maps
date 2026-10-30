@@ -150,27 +150,62 @@ def test_a_plate_with_no_accessible_name_is_reported() -> None:
 # ── The shipped plates ─────────────────────────────────────────────────────
 
 
-def test_the_shipped_plates_have_only_the_gap_we_know_about() -> None:
+#: Plates that still report, with the reason each one is still open.
+#:
+#: Recorded rather than hidden, and recorded *per rule* rather than per
+#: plate: a blanket exemption for a file would let the next defect in it
+#: through unseen, which is the failure mode an allowlist usually has.
+#:
+#: All four are the same shape of gap and none of them is the renderer's
+#: to close. ``evidence-unclassed`` wants the plate to say on what footing
+#: its zones are drawn -- every one of these is hand-traced from reporting
+#: at a single confidence, which is a perfectly honest thing to be and an
+#: unstated one. ``undated-control`` wants a vintage, and the two Syrian
+#: and Libyan plates carry no provenance footer at all. Both are sentences
+#: an author has to write; the generator inventing either would be the
+#: fabrication the auditor exists to catch.
+_OPEN_GAPS: dict[str, set[str]] = {
+    "drc.svg": {"evidence-unclassed"},
+    "libya.svg": {"evidence-unclassed", "undated-control"},
+    "syria.svg": {"evidence-unclassed", "undated-control"},
+    "ukraine.svg": {"evidence-unclassed"},
+}
+
+
+def test_the_shipped_plates_have_only_the_gaps_we_know_about() -> None:
     """
     Run the audit over this repository's own assets.
 
-    Four situation maps say neither when they were true nor that they are
-    schematics; they are demo plates and re-rendering them is expensive, so
-    the gap is recorded here rather than hidden. What this test actually
-    guards is that no *other* kind of defect appears in them — a plate that
-    loses its classification note or its accessible name fails immediately.
+    What this guards is that no *other* kind of defect appears in them. A
+    plate that loses its classification note, its accessible name or its
+    locator fails here immediately -- which is how the locator being
+    absent from all fourteen of them stopped being invisible.
     """
-    known_gap = {
-        "himalaya.svg", "iberia.svg", "switzerland.svg", "western-europe.svg",
-    }
     unexpected: list[str] = []
     plates = sorted((ROOT / "assets").rglob("*.svg"))
     assert plates, "no shipped plates found — the glob has stopped matching"
 
     for path in plates:
         for finding in audit(path.read_text(encoding="utf-8", errors="replace")):
-            if finding.rule == "no-provenance" and path.name in known_gap:
+            if finding.rule in _OPEN_GAPS.get(path.name, set()):
                 continue
             unexpected.append(f"{path.name}: {finding}")
 
     assert not unexpected, "\n".join(unexpected)
+
+
+def test_the_recorded_gaps_are_still_real() -> None:
+    """An allowlist that outlives its entries is a lie about the state.
+
+    A gap that has been closed must come off the list, or the list stops
+    describing the repository and starts excusing it.
+    """
+    stale: list[str] = []
+    for name, rules in _OPEN_GAPS.items():
+        matches = sorted((ROOT / "assets").rglob(name))
+        if not matches:
+            continue  # the plate is gitignored and may simply not be built
+        found = {f.rule for f in audit(matches[0].read_text(errors="replace"))}
+        for rule in sorted(rules - found):
+            stale.append(f"{name}: {rule} no longer reports — take it off the list")
+    assert not stale, "\n".join(stale)

@@ -369,15 +369,29 @@ claims a precision a note about a region does not have. The note takes the
 colour of the thing it describes, so it sits back onto the map instead of
 jumping off it.
 
-**It should say where on Earth it is.** *"Zoom out for perspective, zoom in
-for detail"* is the locator map's one rule, and a plate that only ever zooms
-in answers half of it:
+**It says where on Earth it is, without being asked.** *"Zoom out for
+perspective, zoom in for detail"* is the locator map's one rule, and a plate
+that only ever zooms in answers half of it. So a regional plate draws a
+locator by default — the mapped area in red on a wider view, in a fifth of
+the plate's width. A plate already wide enough to place itself gets none,
+and a caller can always decline:
 
 ```yaml
 inset:
-  position: top-right     # or any corner
+  position: top-right     # or any corner; omitted, it takes one the
+                          # legend and the scale bar have not
   zoom: 6                 # how far out, when no bbox is given
+  show: false             # no locator on this plate
 ```
+
+**It carries the disclaimer its extent owes.** Three boundaries have a
+standard sentence attached to them — Jammu and Kashmir, Sudan and South
+Sudan, Abyei. Drawing one of those lines and saying nothing is a position
+taken by omission, so the sentence is added to the provenance footer
+whenever the plate's region reaches the boundary, on the same principle as
+the automatic OpenStreetMap credit: an obligation a caller has to remember
+is an obligation the plates will not meet. Declining the footer does not
+decline the sentence.
 
 **The page around it needs words and numbers.** `article_sidecar(svg)` reads
 them back out of the finished file, so a caption typed into a CMS cannot

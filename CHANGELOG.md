@@ -2,6 +2,87 @@
 
 All notable changes to sprezzature-maps are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **The choropleth painted the sea, and the sea hid a Russia in diagonal
+  slabs.** Terrain shading is a statement about ground; the raster covered
+  the whole plot rectangle, so every ocean pixel came out `(190, 200, 186)`
+  — the khaki the duotone gives flat land at sea level. The ocean read as a
+  landmass, the no-data grey beside it was barely a step away, and the strip
+  of canvas outside Equal Earth's own outline got the same confident fill
+  (the warm band across the top and bottom of every plate). Masked to the
+  countries the map actually draws, rasterised from the same projected rings,
+  so there is no coastline to drift.
+
+  With the sea gone the real defect was the first thing on the plate. **A
+  closed ring cut at *k* antimeridian seams has *k* pieces, not *k* + 1.** The
+  cut was already being made correctly; but a ring is a cycle, and the vertex
+  it is stored from falls in the middle of one piece, which therefore arrives
+  in two halves at opposite ends of the list. Closed separately, each half
+  drew a chord from its own last vertex to its own first — for Russia, a
+  diagonal across the Sea of Okhotsk to Japan, in the blue of a real value.
+  An *odd* number of crossings means a ring that encircles a pole:
+  Antarctica's coast, closed straight, invented a shoreline at 84 degrees
+  south and lost the six degrees below it.
+
+  `tests/test_no_polygon_closes_itself_across_the_map.py` holds the invariant
+  — no sub-polygon closes with a chord that spans the map — measured in
+  degrees of longitude between a piece's ends: 0.1 for Russia now, 152 before.
+
+### Changed
+
+- **A regional situation plate draws a locator inset by default.** The inset
+  was written, documented, tested and opt-in, and across fourteen shipped
+  plates it was used exactly zero times. The UNHCR Mapping Guidelines make it
+  a required element, and not as house style: a reader who does not already
+  know where North Kivu is learns nothing from a map of North Kivu. An option
+  nobody switches on is a capability the package does not have.
+
+  It takes a corner the legend and the scale bar have not, it is an opaque
+  card like the legend rather than a translucent window (over the Black Sea
+  the old one came out dark and murky, border and all), and the mapped area
+  is marked in red, which is what the guidelines ask for and what the eye
+  finds in two seconds. A plate wider than 60 degrees of longitude already
+  places itself and gets none; `inset: {show: false}` still declines.
+
+- **A plate carries the disclaimer its extent owes, without being asked.**
+  Jammu and Kashmir, Sudan and South Sudan, Abyei: three boundaries the
+  guidelines attach a standard sentence to. The Himalaya plate drew the Line
+  of Control in dashes, labelled Srinagar, and said nothing — a position
+  taken by omission. The sentence now joins the provenance footer whenever
+  the region reaches the boundary, on the pattern `_attribution_layer`
+  already set for the ODbL credit, and declining the footer does not decline
+  the sentence. Keyed on the extent, not on the labels: a plate can draw the
+  line without printing the word.
+
+  Three entries, not thirty. Crimea, Western Sahara, Taiwan and the rest are
+  real disputes with no standard sentence, so what to say about them is a
+  cartographer's judgement and not a lookup table's.
+
+- **The Antarctic is off by default on a world choropleth** (`antarctica=True`
+  for a map whose subject is down there). On a per-country indicator it is the
+  largest shape on the plate and the only one that cannot carry a value, and
+  projecting to 90 degrees south set the aspect, squeezing the inhabited world
+  into the middle of the canvas.
+
+### Added
+
+- **Four audit rules for a regional situation plate**, from the standards such
+  a plate gets read against — the UNHCR guidelines for the furniture, the
+  Institute for the Study of War for the evidence model. `no-locator`;
+  `undated-control`, stricter than `no-provenance` because a front is a claim
+  about a moment and a publication year somewhere else is not that date;
+  `evidence-unclassed`, where every zone is drawn at one confidence so a
+  belligerent's claim and a geolocated observation look alike; and
+  `disputed-unflagged`. None of them can fire on a world plate.
+
+  `no-provenance` stopped asking the eight physical reference plates to date
+  something undateable: "a reference plate … no thematic layer" says the same
+  thing "synthetic illustrative values" does — this is not a claim about a
+  moment.
+
 ## [1.0.0] — 2026-10-19
 
 **Why the number moves, and why it took this long.**
