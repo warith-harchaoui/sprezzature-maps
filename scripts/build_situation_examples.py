@@ -85,6 +85,24 @@ from shapely.ops import unary_union  # noqa: E402
 # have one -- and then wrote this repo's own examples into the other repo.
 SHIP = REPO / "assets" / "situation-maps"
 
+#: What every areas-of-control plate here is, evidentially, said once.
+#:
+#: ISW's published method separates **assessed** control -- geolocated
+#: visual evidence matched against imagery -- from **claimed** control,
+#: which rests on a belligerent saying so. The renderer draws that ladder
+#: (solid, hatched, dotted) and these plates do not use it, because they
+#: are hand-traced from reporting at one footing throughout.
+#:
+#: That is a perfectly honest thing for a schematic to be, and it was an
+#: unstated one, which is not. A flat fill makes the strongest available
+#: claim by default; ``audit``'s ``evidence-unclassed`` rule exists to ask
+#: whether anybody decided that or whether it just happened. Saying so is
+#: the answer. Tagging the polygons with confidences nobody assessed would
+#: not be -- it would be the fabrication the rule is there to prevent.
+_EVIDENCE_BASIS = (
+    "Every zone is drawn as assessed control from open-source reporting; no claimed-only or reported-only ground is shown separately"
+)
+
 
 def _feat(name: str, geom: Any) -> dict[str, Any]:
     return {"type": "Feature", "properties": {"actor": name}, "geometry": mapping(geom)}
@@ -242,7 +260,10 @@ def build_ukraine() -> dict[str, Any]:
         },
         "legend_footer": "As of ~2024 · schematic, open-source geography",
         "caption": "full",
-        "method": "Schematic polygons drawn by hand from open-source reporting, not a geocoded dataset",
+        "method": (
+            "Schematic polygons drawn by hand from open-source reporting, not a "
+            "geocoded dataset. " + _EVIDENCE_BASIS
+        ),
         "source": (
             "Natural Earth basemap; the Kakhovka Reservoir is drawn as former "
             "(drained after the dam breach of 6 June 2023)"
@@ -371,6 +392,15 @@ def build_syria() -> dict[str, Any]:
         },
         "frontiers": {"focus": "Syria"},
         "rivers": {"always_label": ["Euphrates", "Tigris"]},
+        "caption": "full",
+        "method": (
+            "Schematic polygons drawn by hand from open-source geopolitical "
+            "literature, not a geocoded dataset. " + _EVIDENCE_BASIS
+        ),
+        "source": "Open-source geopolitical literature; Natural Earth basemap",
+        "as_of": (
+            "As of ~1 June 2018 · illustrative, not an operational assessment"
+        ),
         "areas_of_control": {
             "category_field": "actor",
             "palette": palette,
@@ -494,6 +524,15 @@ def build_libya() -> dict[str, Any]:
             "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.45},
         },
         "frontiers": {"focus": "Libya"},
+        "caption": "full",
+        "method": (
+            "Schematic polygons drawn by hand from open-source reporting of the "
+            "2011 uprising, not a geocoded dataset. " + _EVIDENCE_BASIS
+        ),
+        "source": "Open-source reporting, First Libyan Civil War; Natural Earth basemap",
+        "as_of": (
+            "As of ~1 April 2011 · illustrative, not an operational assessment"
+        ),
         "areas_of_control": {
             "category_field": "actor",
             "palette": palette,
@@ -662,7 +701,10 @@ def build_sudan() -> dict[str, Any]:
         "subtitle": (
             "Schematic · the war's east-west partition, with the fighting in Kordofan"
         ),
-        "method": "Schematic polygons drawn by hand from the sources below, not a geocoded dataset",
+        "method": (
+            "Schematic polygons drawn by hand from the sources below, not a "
+            "geocoded dataset. " + _EVIDENCE_BASIS
+        ),
         "source": "Open-source reporting (ACLED, Sudans Post territorial-control tracking)",
         "as_of": "As of ~25 September 2026 · illustrative, not an operational assessment",
         "caption": "full",
@@ -857,7 +899,10 @@ def build_drc() -> dict[str, Any]:
     return {
         "title": "Eastern DRC: Areas of Control",
         "subtitle": "Schematic · North and South Kivu, along the Albertine Rift",
-        "method": "Schematic polygons drawn by hand from the sources below, not a geocoded dataset",
+        "method": (
+            "Schematic polygons drawn by hand from the sources below, not a "
+            "geocoded dataset. " + _EVIDENCE_BASIS
+        ),
         "source": "Open-source reporting (Critical Threats Congo Security Review, IPIS, Al Jazeera)",
         "as_of": "As of ~25 September 2026 · illustrative, not an operational assessment",
         "caption": "full",
@@ -1219,6 +1264,326 @@ def build_himalaya() -> dict[str, Any]:
     }
 
 
+def build_caribbean() -> dict[str, Any]:
+    """The Caribbean basin: the one plate where the sea is the subject.
+
+    Every other reference plate here shades land. This one is mostly water,
+    and it is the plate that says what the water layer can and cannot do.
+    The depth rings here are distance from the coast, not a sounding, so the
+    first draft's label for the Cayman Trough came off: seven kilometres of
+    trench is real, and nothing on this plate draws it.
+
+    It is also the Americas' chokepoint. The Panama Canal is forty-eight
+    miles of the isthmus at its narrowest, and the plate is framed so that
+    the two oceans it joins are both in the picture.
+    """
+    return {
+        "title": "The Caribbean and the Panama land bridge",
+        "subtitle": "A reference plate: two oceans, one isthmus, and the sea between them",
+        "region": {"bbox": [-92.0, 5.0, -58.0, 27.5]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 4, "color": "#ffffff", "opacity": 0.28},
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "rivers": {"show": False},
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 7},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; GMTED2010-derived texture-shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": -75.5, "lat": 14.6, "text": "CARIBBEAN SEA", "size": 15, "tracking": 5},
+                {"lon": -88.5, "lat": 24.4, "text": "GULF OF MEXICO", "size": 12, "tracking": 3.5},
+                {"lon": -63.0, "lat": 24.5, "text": "ATLANTIC OCEAN", "size": 12, "tracking": 3.5},
+                {"lon": -79.6, "lat": 6.1, "text": "PACIFIC OCEAN", "size": 11, "tracking": 3},
+                {"lon": -73.6, "lat": 19.9, "text": "Windward Passage", "size": 9},
+                {"lon": -85.6, "lat": 21.6, "text": "Yucatán Channel", "size": 9},
+            ],
+            "places": [
+                {"lon": -79.5199, "lat": 8.9824, "text": "Panama City", "capital": True, "anchor": "start"},
+                {"lon": -82.3666, "lat": 23.1136, "text": "Havana", "capital": True},
+                {"lon": -69.9312, "lat": 18.4861, "text": "Santo Domingo", "capital": True, "anchor": "below"},
+                {"lon": -72.3388, "lat": 18.5944, "text": "Port-au-Prince", "capital": True, "anchor": "end"},
+                {"lon": -76.7936, "lat": 17.9712, "text": "Kingston", "capital": True, "anchor": "below"},
+                {"lon": -66.1057, "lat": 18.4655, "text": "San Juan", "size": 11, "anchor": "above"},
+                {"lon": -66.9036, "lat": 10.4806, "text": "Caracas", "capital": True},
+                {"lon": -75.4794, "lat": 10.3910, "text": "Cartagena", "size": 11, "anchor": "end"},
+                {"lon": -86.2514, "lat": 12.1364, "text": "Managua", "size": 11, "anchor": "end"},
+                {"lon": -84.0907, "lat": 9.9281, "text": "San José", "size": 11, "anchor": "below"},
+            ],
+            "territories": [
+                {"lon": -70.0, "lat": 21.8, "text": "GREATER ANTILLES", "size": 11, "tracking": 3},
+                {"lon": -61.6, "lat": 14.0, "text": "LESSER ANTILLES", "size": 10, "tracking": 2.5, "rotate": -78},
+                                {"lon": -89.3, "lat": 19.6, "text": "YUCATÁN", "size": 10, "tracking": 2.5},
+                {"lon": -81.6, "lat": 7.6, "text": "ISTHMUS OF PANAMA", "size": 9, "tracking": 2},
+            ],
+        },
+    }
+
+
+def build_andes() -> dict[str, Any]:
+    """South America, and the longest continental mountain range on Earth.
+
+    Seven thousand kilometres of Andes down the western edge, the Amazon
+    basin draining east off it, and the Atacama, the driest non-polar desert
+    there is, sitting in its rain shadow. Three climates that exist because
+    of one wall of rock, which is exactly what a relief layer is for.
+
+    It is also the widest plate in the set, and the honest test of the
+    Lambert conformal conic's limits: fifty-eight degrees of latitude in one
+    frame, where any projection has to give something up.
+    """
+    return {
+        "title": "The Andes and the Southern Cone",
+        "subtitle": "A reference plate: one mountain wall, and the three climates it makes",
+        "region": {"bbox": [-88.0, -56.0, -32.0, 3.0]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 5, "color": "#ffffff", "opacity": 0.3},
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "rivers": {"always_label": ["Amazonas", "Paraná"], "label_max_scalerank": 5},
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 7},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; GMTED2010-derived texture-shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": -84.5, "lat": -22.0, "text": "PACIFIC OCEAN", "size": 14, "tracking": 4.5, "rotate": -90},
+                {"lon": -38.0, "lat": -30.0, "text": "ATLANTIC OCEAN", "size": 14, "tracking": 4.5},
+            ],
+            "places": [
+                {"lon": -77.0428, "lat": -12.0464, "text": "Lima", "capital": True, "anchor": "end"},
+                {"lon": -70.6693, "lat": -33.4489, "text": "Santiago", "capital": True, "anchor": "end"},
+                {"lon": -58.3816, "lat": -34.6037, "text": "Buenos Aires", "capital": True, "anchor": "below"},
+                {"lon": -46.6333, "lat": -23.5505, "text": "São Paulo", "size": 12},
+                {"lon": -68.1193, "lat": -16.4897, "text": "La Paz", "capital": True},
+                {"lon": -47.8825, "lat": -15.7942, "text": "Brasília", "capital": True},
+                {"lon": -56.1645, "lat": -34.9011, "text": "Montevideo", "size": 11, "anchor": "start"},
+                {"lon": -57.5759, "lat": -25.2637, "text": "Asunción", "size": 11, "anchor": "end"},
+                {"lon": -78.4678, "lat": -0.1807, "text": "Quito", "capital": True, "anchor": "end"},
+            ],
+            "territories": [
+                {"lon": -69.5, "lat": -27.0, "text": "A N D E S", "size": 14, "tracking": 5, "rotate": -76},
+                {"lon": -61.0, "lat": -4.5, "text": "AMAZON BASIN", "size": 13, "tracking": 4},
+                {"lon": -69.5, "lat": -46.0, "text": "PATAGONIA", "size": 12, "tracking": 3.5},
+                {"lon": -67.5, "lat": -19.5, "text": "ALTIPLANO", "size": 10, "tracking": 2.5},
+                {"lon": -70.2, "lat": -25.2, "text": "ATACAMA", "size": 9, "tracking": 2},
+                {"lon": -62.5, "lat": -34.0, "text": "PAMPAS", "size": 10, "tracking": 2.5},
+            ],
+        },
+    }
+
+
+def build_sahel() -> dict[str, Any]:
+    """The Sahel, and the line the Sahara draws across a continent.
+
+    The band is a climate, not a border: a thousand kilometres wide, running
+    from the Atlantic to the Red Sea, where the desert gives way to savannah
+    over a few hundred kilometres of rainfall gradient. Relief here is almost
+    flat, and the massifs that break it -- the Aïr, the Adrar des Ifoghas,
+    the Hoggar -- are precisely the ground that is hardest to govern.
+
+    The Niger makes the plate's strangest feature: it rises four hundred
+    kilometres from the sea, runs the wrong way into the desert, turns at
+    Timbuktu, and comes back. The inner delta is where it spreads out.
+    """
+    return {
+        "title": "The Sahel",
+        "subtitle": "A reference plate: where the Sahara ends, and the river that runs into it",
+        "region": {"bbox": [-19.5, 7.5, 25.0, 28.0]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 5, "color": "#ffffff", "opacity": 0.3},
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "rivers": {"always_label": ["Niger", "Sénégal", "Volta"], "label_max_scalerank": 6},
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 7},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; GMTED2010-derived texture-shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": -18.6, "lat": 20.5, "text": "ATLANTIC OCEAN", "size": 11, "tracking": 3, "rotate": -90},
+            ],
+            "places": [
+                {"lon": -8.0029, "lat": 12.6392, "text": "Bamako", "capital": True, "anchor": "end"},
+                {"lon": -1.5197, "lat": 12.3714, "text": "Ouagadougou", "capital": True, "anchor": "below"},
+                {"lon": 2.1098, "lat": 13.5116, "text": "Niamey", "capital": True},
+                {"lon": 15.0557, "lat": 12.1348, "text": "N'Djamena", "capital": True},
+                {"lon": -17.4467, "lat": 14.6928, "text": "Dakar", "capital": True, "anchor": "below"},
+                {"lon": -15.9785, "lat": 18.0735, "text": "Nouakchott", "capital": True, "anchor": "start"},
+                {"lon": -3.0026, "lat": 16.7735, "text": "Timbuktu", "size": 11},
+                {"lon": 7.9900, "lat": 16.9742, "text": "Agadez", "size": 11},
+                {"lon": 8.5167, "lat": 12.0000, "text": "Kano", "size": 11, "anchor": "below"},
+            ],
+            "territories": [
+                {"lon": 4.0, "lat": 24.0, "text": "S  A  H  A  R  A", "size": 15, "tracking": 6},
+                {"lon": 6.0, "lat": 14.6, "text": "S  A  H  E  L", "size": 13, "tracking": 5},
+                {"lon": 8.5, "lat": 18.3, "text": "AÏR", "size": 9, "tracking": 2},
+                {"lon": 1.5, "lat": 19.5, "text": "ADRAR DES IFOGHAS", "size": 9, "tracking": 2},
+                {"lon": 5.5, "lat": 23.3, "text": "HOGGAR", "size": 9, "tracking": 2},
+                {"lon": -4.4, "lat": 15.0, "text": "INNER NIGER DELTA", "size": 9, "tracking": 2},
+            ],
+        },
+    }
+
+
+def build_hormuz() -> dict[str, Any]:
+    """The Strait of Hormuz: twenty-one nautical miles at its narrowest.
+
+    Roughly a fifth of the world's petroleum passes through a gap between
+    the Musandam peninsula and the Iranian coast that is narrower than the
+    English Channel at Dover. The plate is framed to hold the whole Gulf and
+    the open water on the other side, because the point of a chokepoint is
+    what is on both ends of it.
+
+    The relief does the explaining: the Zagros rises straight out of the
+    water along the northern shore, and the Rub' al Khali runs flat to the
+    south. The strait is where those two meet.
+    """
+    return {
+        "title": "The Strait of Hormuz",
+        "subtitle": "A reference plate: the Gulf, the Zagros, and twenty-one miles of water",
+        "region": {"bbox": [45.8, 21.0, 62.5, 31.5]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.32},
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 8},
+        "legend_position": "right",
+        "caption": "full",
+        "method": "Natural Earth physical geography; no thematic layer",
+        "source": "Natural Earth 1:50m physical and cultural vectors; GMTED2010-derived texture-shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": 51.5, "lat": 27.4, "text": "PERSIAN GULF", "size": 13, "tracking": 4, "rotate": -38},
+                {"lon": 59.0, "lat": 24.6, "text": "GULF OF OMAN", "size": 11, "tracking": 3},
+                {"lon": 56.45, "lat": 26.45, "text": "Strait of Hormuz", "size": 9, "rotate": -42},
+                {"lon": 60.5, "lat": 21.6, "text": "ARABIAN SEA", "size": 11, "tracking": 3},
+            ],
+            "places": [
+                {"lon": 55.2708, "lat": 25.2048, "text": "Dubai", "size": 12, "anchor": "below"},
+                {"lon": 54.3773, "lat": 24.4539, "text": "Abu Dhabi", "capital": True, "anchor": "end"},
+                {"lon": 51.5310, "lat": 25.2854, "text": "Doha", "capital": True, "anchor": "below"},
+                {"lon": 50.5860, "lat": 26.2285, "text": "Manama", "capital": True, "anchor": "end"},
+                {"lon": 47.9774, "lat": 29.3759, "text": "Kuwait City", "capital": True, "anchor": "below"},
+                {"lon": 58.5456, "lat": 23.5880, "text": "Muscat", "capital": True, "anchor": "start"},
+                {"lon": 56.2808, "lat": 27.1865, "text": "Bandar Abbas", "size": 11},
+                {"lon": 52.5311, "lat": 29.5918, "text": "Shiraz", "size": 11},
+                {"lon": 50.1033, "lat": 26.4207, "text": "Dammam", "size": 11, "anchor": "above"},
+            ],
+            "territories": [
+                {"lon": 52.5, "lat": 31.0, "text": "Z A G R O S", "size": 12, "tracking": 4, "rotate": -32},
+                {"lon": 56.25, "lat": 25.95, "text": "MUSANDAM", "size": 9, "tracking": 2},
+                {"lon": 52.5, "lat": 22.2, "text": "RUB' AL KHALI", "size": 11, "tracking": 3},
+                {"lon": 57.3, "lat": 23.2, "text": "HAJAR MTS", "size": 9, "tracking": 2},
+            ],
+        },
+    }
+
+
+def build_south_china_sea() -> dict[str, Any]:
+    """The South China Sea, drawn without a claim line on it.
+
+    Six governments assert overlapping rights across most of this water, and
+    an areas-of-control plate would have to pick between them. This one does
+    not: it draws the physical sea -- the shallow Sunda Shelf, the deep
+    central basin, the reefs and shoals that the claims are anchored to --
+    and leaves the adjudication to the reader. Naming a feature is not
+    assigning it.
+
+    That is a cartographic position, not a neutral absence of one, and the
+    method line on the plate says so.
+    """
+    return {
+        "title": "The South China Sea",
+        "subtitle": "A reference plate: the basin, the shelf, and the reefs — no claim line drawn",
+        "region": {"bbox": [100.8, -1.2, 125.0, 25.5]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "relief": True,
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+            "bathymetry": {"rings": 7, "color": "#ffffff", "opacity": 0.3},
+        },
+        "frontiers": {"show": True, "label_neighbours": True},
+        "rivers": {"always_label": ["Mekong"], "label_max_scalerank": 6},
+        "lakes": {"depth_rings": True},
+        "cities": {"show": True, "max_rank": 7},
+        "legend_position": "right",
+        "caption": "full",
+        "method": (
+            "Natural Earth physical geography; no thematic layer. Maritime claims "
+            "across this sea overlap and are disputed; none is drawn here."
+        ),
+        "source": "Natural Earth 1:50m physical and cultural vectors; GMTED2010-derived texture-shaded relief",
+        "labels": {
+            "waters": [
+                {"lon": 114.0, "lat": 13.5, "text": "SOUTH CHINA SEA", "size": 14, "tracking": 5},
+                {"lon": 107.5, "lat": 19.6, "text": "Gulf of Tonkin", "size": 9},
+                {"lon": 119.6, "lat": 24.2, "text": "Taiwan Strait", "size": 9, "rotate": -45},
+                {"lon": 121.0, "lat": 20.6, "text": "Luzon Strait", "size": 9},
+                {"lon": 120.5, "lat": 8.4, "text": "Sulu Sea", "size": 9},
+            ],
+            "places": [
+                {"lon": 120.9842, "lat": 14.5995, "text": "Manila", "capital": True, "anchor": "start"},
+                {"lon": 106.6297, "lat": 10.8231, "text": "Ho Chi Minh City", "size": 11, "anchor": "end"},
+                {"lon": 105.8342, "lat": 21.0278, "text": "Hanoi", "capital": True, "anchor": "end"},
+                {"lon": 114.1694, "lat": 22.3193, "text": "Hong Kong", "size": 11, "anchor": "below"},
+                {"lon": 121.5654, "lat": 25.0330, "text": "Taipei", "size": 11, "anchor": "start"},
+                {"lon": 103.8198, "lat": 1.3521, "text": "Singapore", "size": 11, "anchor": "below"},
+                {"lon": 116.0735, "lat": 5.9804, "text": "Kota Kinabalu", "size": 10, "anchor": "start"},
+                {"lon": 109.5083, "lat": 18.2528, "text": "Sanya", "size": 10, "anchor": "end"},
+            ],
+            "territories": [
+                {"lon": 112.3, "lat": 16.6, "text": "PARACEL IS.", "size": 9, "tracking": 2},
+                {"lon": 114.2, "lat": 9.4, "text": "SPRATLY IS.", "size": 9, "tracking": 2},
+                {"lon": 117.8, "lat": 15.2, "text": "Scarborough Shoal", "size": 8},
+                {"lon": 109.8, "lat": 5.0, "text": "SUNDA SHELF", "size": 10, "tracking": 2.5},
+                {"lon": 109.7, "lat": 19.3, "text": "HAINAN", "size": 9, "tracking": 2},
+                {"lon": 117.5, "lat": 2.8, "text": "B O R N E O", "size": 12, "tracking": 4},
+                {"lon": 121.2, "lat": 16.6, "text": "LUZON", "size": 9, "tracking": 2},
+            ],
+        },
+    }
+
 BUILDERS = {
     "ukraine": build_ukraine,
     "syria": build_syria,
@@ -1229,6 +1594,11 @@ BUILDERS = {
     "iberia": build_iberia,
     "western-europe": build_western_europe,
     "himalaya": build_himalaya,
+    "caribbean": build_caribbean,
+    "andes": build_andes,
+    "sahel": build_sahel,
+    "hormuz": build_hormuz,
+    "south-china-sea": build_south_china_sea,
 }
 
 PNG_WIDTH = 1300  # export raster width, px

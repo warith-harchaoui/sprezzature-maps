@@ -101,7 +101,20 @@ from pathlib import Path
 _METHOD_RE = re.compile(r">\s*(\d+)\s+classes?,\s*([^<]+?)\s*</text>")
 
 #: Any visible text on the plate.
-_TEXT_RE = re.compile(r">([^<>]{1,200})</text>")
+#:
+#: The upper bound used to be 200 characters, and a cap on a *label* is
+#: reasonable -- no place name is that long. But a plate's longest line is
+#: not a label: it is the method note, the source citation, the required
+#: disclaimer. Those are the sentences every rule here asks after, and any
+#: one of them past 200 characters was dropped before a rule could read
+#: it. Measured on the Ukraine plate: the method line, which states on
+#: what evidence the zones are drawn, is 212 characters, so the plate
+#: carried the answer and still reported ``evidence-unclassed``.
+#:
+#: Two thousand, not unbounded: the pattern runs over a two-megabyte
+#: document and a cap is what keeps it from considering the whole file as
+#: one candidate.
+_TEXT_RE = re.compile(r">([^<>]{1,2000})</text>")
 
 #: A vintage, however it is phrased: "as of 2024", "Positions as of ~2024",
 #: "2019-2023". Deliberately loose — the point is that a date is *there*, not
