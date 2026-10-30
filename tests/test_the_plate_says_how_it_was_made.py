@@ -150,26 +150,14 @@ def test_a_plate_with_no_accessible_name_is_reported() -> None:
 # ── The shipped plates ─────────────────────────────────────────────────────
 
 
-#: Plates that still report, with the reason each one is still open.
+#: Plates that still report, and why each one is still open.
 #:
-#: Recorded rather than hidden, and recorded *per rule* rather than per
-#: plate: a blanket exemption for a file would let the next defect in it
-#: through unseen, which is the failure mode an allowlist usually has.
-#:
-#: All four are the same shape of gap and none of them is the renderer's
-#: to close. ``evidence-unclassed`` wants the plate to say on what footing
-#: its zones are drawn -- every one of these is hand-traced from reporting
-#: at a single confidence, which is a perfectly honest thing to be and an
-#: unstated one. ``undated-control`` wants a vintage, and the two Syrian
-#: and Libyan plates carry no provenance footer at all. Both are sentences
-#: an author has to write; the generator inventing either would be the
-#: fabrication the auditor exists to catch.
-_OPEN_GAPS: dict[str, set[str]] = {
-    "drc.svg": {"evidence-unclassed"},
-    "libya.svg": {"evidence-unclassed", "undated-control"},
-    "syria.svg": {"evidence-unclassed", "undated-control"},
-    "ukraine.svg": {"evidence-unclassed"},
-}
+#: Empty, and kept rather than deleted: this is where a gap gets recorded
+#: when one is real, per *rule* rather than per plate, so that a blanket
+#: exemption for a file can never let the next defect in it through. The
+#: companion test below fails if an entry outlives the gap it names, which
+#: is what stops a list like this from drifting into an excuse.
+_OPEN_GAPS: dict[str, set[str]] = {}
 
 
 def test_the_shipped_plates_have_only_the_gaps_we_know_about() -> None:

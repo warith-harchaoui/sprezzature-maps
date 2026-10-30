@@ -164,3 +164,31 @@ def test_a_dispute_with_no_standard_sentence_is_left_alone() -> None:
     """
     crimea = plate("SEVASTOPOL", "As of 2024 · schematic", extra=_LOCATOR + _CONTROL)
     assert "disputed-unflagged" not in rules(crimea)
+
+
+# ── the auditor's own blind spot ─────────────────────────────────────────
+
+
+def test_a_long_sentence_is_still_read() -> None:
+    """The auditor used to drop any visible text past 200 characters.
+
+    A cap on a *label* is reasonable; no place name is that long. But a
+    plate's longest line is never a label — it is the method note, the
+    source citation, the required disclaimer, which are precisely the
+    sentences every rule here asks after. The Ukraine plate's method line
+    is 212 characters and states on what evidence its zones are drawn, so
+    the plate carried the answer and reported ``evidence-unclassed``
+    anyway. A rule that cannot see the answer is a rule that cannot be
+    satisfied.
+    """
+    sentence = (
+        "Schematic polygons drawn by hand from open-source reporting, not a "
+        "geocoded dataset. Every zone is drawn as assessed control from "
+        "open-source reporting; no claimed-only or reported-only ground is "
+        "shown separately."
+    )
+    assert len(sentence) > 200, "shorten the cap, not the fixture"
+    long_form = plate(
+        "Ukraine: areas of control", "As of 2024", sentence, extra=_LOCATOR + _CONTROL
+    )
+    assert "evidence-unclassed" not in rules(long_form)
