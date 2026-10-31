@@ -1308,6 +1308,11 @@ def build_svg(
             project,
             font_size=9.0,
             bounds_px=plate,
+            # The same 2.4 the <text> below strokes with. Told to the
+            # placer rather than left for it to guess: the box it measures
+            # is the ink, and a haloed name is 1.2 units wider than its
+            # ink on every side.
+            halo=2.4,
         ):
             parts.append(
                 f'<circle cx="{dot_x:.1f}" cy="{dot_y:.1f}" r="1.8" fill="{INK}" '

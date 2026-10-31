@@ -252,6 +252,24 @@ source: "REPLACE ME: the sources, named"
 # labels:
 #   places:
 #     - {{lon: {round((west + east) / 2, 2)}, lat: {round((south + north) / 2, 2)}, text: "Capital", capital: true}}
+#
+# ── the sentence a map can say and a legend cannot ───────────────────────
+# An annotation is a note with a leader line, pointing at the one place on
+# the plate where the reader should look, in the plate's own voice. It is
+# the device a newspaper map is built around and the one a legend can
+# never replace: a legend says what a colour means, an annotation says
+# why this ground matters.
+#
+# Say what the geography does, not what you hope it shows. "The Dnieper is
+# 500 m wide here" is a fact a reader can check; "the decisive axis" is
+# not.
+#
+# annotations:
+#   - lon: {round((west + east) / 2, 2)}
+#     lat: {round((south + north) / 2, 2)}
+#     text: "What happens here, in one sentence"
+#     place: right      # right · left · above · below
+#     wrap: 28          # characters before the note breaks
 """
 
 

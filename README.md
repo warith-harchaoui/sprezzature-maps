@@ -435,6 +435,24 @@ inset:
   show: false             # no locator on this plate
 ```
 
+**Its date is stamped under the title, not only at the foot.** The
+guidelines put "as of DD Month YYYY" directly beneath the strapline,
+because it is the single most important fact on a control plate and the
+one a reader needs before anything else. The footer keeps the whole line
+— the copy that travels with a screenshot; the stamp is the one a reader
+sees while deciding whether to believe the map.
+
+**Every word on it can be read, and that is measured.** A map is mostly
+type, and this package already placed *labels* with real font metrics. It
+did not place the furniture that way: the scale bar, the legend card, the
+break values under a colour strip and the provenance footer were each
+positioned by arithmetic that was right on the plate it was tuned on.
+`make-map audit` now rebuilds every `<text>`'s ink rectangle and reports
+the ones that collide, run off the plate, or are set too small — which is
+how the ruler printing through a colour strip, a footer running eleven
+words off the eastern-DRC plate, and four town names buried under that
+footer were all found at once.
+
 **It carries the disclaimer its extent owes.** Three boundaries have a
 standard sentence attached to them — Jammu and Kashmir, Sudan and South
 Sudan, Abyei. Drawing one of those lines and saying nothing is a position

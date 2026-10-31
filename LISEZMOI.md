@@ -364,6 +364,24 @@ inset:
   show: false             # pas de carton sur cette planche
 ```
 
+**Sa date est estampillée sous le titre, pas seulement au pied.** Les
+guidelines mettent « as of DD Month YYYY » juste sous la ligne de
+chapeau, parce que c'est le fait le plus important d'une planche de
+contrôle et celui qu'un lecteur veut avant tout le reste. Le pied garde
+la ligne entière — la copie qui voyage avec une capture d'écran ;
+l'estampille est celle qu'on voit en décidant de croire la carte.
+
+**Chaque mot y est lisible, et c'est mesuré.** Une carte est surtout de
+la typographie, et ce paquet plaçait déjà ses *étiquettes* avec de vraies
+métriques de fonte. Pas son mobilier : la barre d'échelle, la carte de
+légende, les bornes sous une bande de couleurs et le pied de planche
+étaient chacun posés par un calcul juste sur la planche où il avait été
+réglé. `make-map audit` reconstruit désormais la boîte d'encre de chaque
+`<text>` et signale celles qui se touchent, qui débordent ou qui sont
+trop petites — c'est ainsi que la règle imprimée à travers une bande de
+couleurs, un pied qui perdait onze mots sur la planche du Kivu, et quatre
+noms de villes enterrés sous ce pied ont été trouvés d'un coup.
+
 **Elle porte la clause que son étendue lui impose.** Trois frontières ont
 une phrase standard attachée — le Jammu-et-Cachemire, le Soudan et le
 Soudan du Sud, Abyei. Tracer une de ces lignes sans rien dire est une

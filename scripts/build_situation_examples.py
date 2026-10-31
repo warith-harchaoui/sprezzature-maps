@@ -302,8 +302,19 @@ def build_ukraine() -> dict[str, Any]:
                 # the edge of the drawn map. 44.60 lifts it clear -- and that
                 # alone walked it into SEVASTOPOL, so it moves west as well, to
                 # open sea south of Odesa and well off the peninsula.
-                {"lon": 30.6, "lat": 44.60, "text": "Black Sea", "size": 19, "tracking": 7},
-                {"lon": 37.0, "lat": 46.35, "text": "Sea of Azov", "size": 11, "tracking": 2.4},
+                # 0.3 degrees further north than it was. The provenance
+                # footer paints an opaque band across the foot of the
+                # plate and is drawn last, so this name -- the plate's
+                # whole orientation cue -- went under it when the footer
+                # grew a line. The generator refuses that now rather than
+                # losing it silently; this is the plate's answer.
+                {"lon": 30.6, "lat": 44.90, "text": "Black Sea", "size": 19, "tracking": 7},
+                # West and a touch north of where it was: the locator
+                # inset takes the bottom-right corner on this plate, and
+                # a name under an opaque card is a name the reader does
+                # not get. The sea is wide enough to carry its own name
+                # here just as well.
+                {"lon": 35.9, "lat": 46.55, "text": "Sea of Azov", "size": 11, "tracking": 2.4},
             ],
             "places": [
                 {"lon": 30.5233, "lat": 50.4500, "text": "Kyiv", "size": 16, "capital": True},
@@ -524,6 +535,12 @@ def build_libya() -> dict[str, Any]:
             "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.45},
         },
         "frontiers": {"focus": "Libya"},
+        # A band under the map rather than a card on it. This plate ran
+        # out of corners: the title holds top-left, the scale bar
+        # bottom-left, the locator inset the last one free, and the
+        # legend card was left squatting on Nalut. A band takes no
+        # corner, and with four classes it reads across in one line.
+        "legend_position": "below",
         "caption": "full",
         "method": (
             "Schematic polygons drawn by hand from open-source reporting of the "

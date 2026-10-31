@@ -553,8 +553,6 @@
 <text x="297.9" y="308.3" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">São Paulo</text>
 <circle cx="572.9" cy="177.4" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
 <text x="527.6" y="180.2" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Shanghai</text>
-<circle cx="523.5" cy="196.8" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
-<text x="528.3" y="199.6" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Kolkata</text>
 <circle cx="180.1" cy="171.2" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
 <text x="184.9" y="174.0" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Los Angeles</text>
 <circle cx="424.3" cy="179.9" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
@@ -587,8 +585,6 @@
 <text x="623.6" y="331.2" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Sydney</text>
 <circle cx="451.8" cy="192.1" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
 <text x="456.6" y="194.9" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Riyadh</text>
-<circle cx="250.6" cy="160.9" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
-<text x="168.5" y="163.7" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Washington,  D.C.</text>
 <circle cx="391.9" cy="154.7" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>
 <text x="362.1" y="157.5" font-size="9" fill="#1D1D1F" fill-opacity="0.8" paint-order="stroke" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round">Rome</text>
 <circle cx="402.5" cy="328.5" r="1.8" fill="#1D1D1F" fill-opacity="0.75"/>

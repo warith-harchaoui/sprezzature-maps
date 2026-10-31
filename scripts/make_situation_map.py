@@ -268,7 +268,7 @@ from _relief import (
 from _render import svg_example_path, write_svg
 from _sidecar import provenance_metadata
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
-from _textbox import box_inside, boxes_overlap, text_box, text_width
+from _textbox import box_inside, boxes_overlap, mono_wrap, text_box, text_width
 from _topojson import decode_arcs, stitch_ring
 
 # tooltip_bubble lives in sprezzature-figures/scripts/_svg.py -- a genuinely
@@ -1548,6 +1548,151 @@ _SUBTITLE_BASELINE: float = 60.0
 _HEADER_CLEARANCE: float = 14.0
 
 
+#: Room the north arrow and its "N" own at the top right, in units at
+#: ts=1: the arrow's home is ``width - 30`` and it is about ten wide, so
+#: the header's text may not pass ``width - _ARROW_GUTTER``.
+_ARROW_GUTTER: float = 52.0
+
+#: The subtitle's type size, in units at ts=1. Read by both the wrap and
+#: the drawing, because a wrap computed at one size and drawn at another
+#: is a wrap that does not hold.
+_SUBTITLE_SIZE: float = 12.5
+
+
+#: Type size of the date stamp under the header, in units at ts=1.
+_STAMP_SIZE: float = 11.0
+
+
+def _as_of_stamp(cfg: dict[str, Any]) -> str:
+    """The vintage, short enough to sit under the title.
+
+    The UNHCR guidelines put "as of DD Month YYYY" directly beneath the
+    title, and they are right about why: it is the single most important
+    fact on a control plate and the one a reader needs before anything
+    else. This package had it only in the provenance footer -- small,
+    grey, monospace, at the foot, next to the licence. True, and filed.
+
+    The two are different registers and both belong. The footer is the
+    copy that travels with a screenshot; the stamp is the one a reader
+    sees while deciding whether to believe the map. So the stamp is the
+    first segment of ``as_of``, up to the middle dot these plates already
+    use to separate the vintage from its caveat --
+
+        "As of ~25 September 2026 · illustrative, not an operational
+        assessment"
+
+    -- and the footer keeps the whole line. A convention rather than a
+    parse, and a config with no dot simply stamps all of what it wrote.
+
+    Examples
+    --------
+    >>> _as_of_stamp({"as_of": "As of ~25 September 2026 · illustrative"})
+    'As of ~25 September 2026'
+    >>> _as_of_stamp({"as_of": "As of 1 April 2011"})
+    'As of 1 April 2011'
+    >>> _as_of_stamp({})
+    ''
+    """
+    raw = str(cfg.get("as_of") or "").strip()
+    if not raw:
+        return ""
+    return raw.split("·")[0].strip()
+
+
+def _header_right_limit(cfg: dict[str, Any], width: float) -> float:
+    """How far right the header's text may run before it meets furniture.
+
+    The north arrow's home is the top-right corner, and a first pass at
+    this assumed it stayed there. It does not: ``_furniture_layer``
+    already steps the arrow left of a top-right legend card and left of
+    the locator inset, both of which live in that same corner. On the
+    Libyan plate the locator pushed the arrow 252 units inboard and the
+    subtitle, wrapped to a limit that did not know, ran into it anyway.
+
+    Computed from the config and the width alone, with no viewport: it is
+    needed to decide the header's own height, which is needed to build
+    the viewport. The three things that can take the corner all size
+    themselves from ``cfg`` and ``width``, so the circle is avoidable
+    rather than real.
+
+    Examples
+    --------
+    >>> _header_right_limit({}, 1000.0)
+    948.0
+    >>> _header_right_limit({"region": {"bbox": [10.0, 40.0, 20.0, 50.0]}}, 1000.0) < 948.0
+    True
+    """
+    ts = max(1.0, width / 1000.0)
+    limit = width - _ARROW_GUTTER * ts
+    if _resolve_legend_position(cfg, ts, width) == "top-right" and (
+        cfg.get("areas_of_control", {}).get("palette")
+    ):
+        card_w, _card_h, corner = _legend_panel_dims(cfg, ts)
+        limit = min(limit, width - (card_w + corner + _ARROW_GUTTER * ts))
+    inset = _inset_settings(cfg)
+    if inset is not None and str(
+        inset.get("position") or _inset_corner(cfg, ts, width)
+    ).endswith("-right"):
+        box_w = float(inset.get("width", _INSET_WIDTH)) * width
+        limit = min(limit, width - (box_w + 22 * ts + _ARROW_GUTTER * ts))
+    return limit
+
+
+def _subtitle_lines(cfg: dict[str, Any], width: float) -> list[str]:
+    """The strapline, broken to clear the north arrow.
+
+    The header was laid out as a single line of whatever length the
+    caller wrote, and the arrow sits at a fixed corner on roughly the
+    same baseline. Two of the shipped plates had the two meet: the Libyan
+    subtitle -- "Schematic · approximate, First Libyan Civil War ~spring
+    2011 (after UNSCR 1973) · open-source reporting, not operational
+    intelligence" -- ran straight into the arrow's ``N``, and the Syrian
+    one did the same.
+
+    Wrapping rather than shrinking, and rather than moving the arrow: the
+    arrow is a fixed piece of furniture a reader looks for in a known
+    place, and type that shrinks to fit is type that gets smaller every
+    time somebody writes a longer sentence.
+
+    Parameters
+    ----------
+    cfg : dict
+        The map config; reads ``subtitle``.
+    width : float
+        The plate width.
+
+    Returns
+    -------
+    list of str
+        Empty when there is no subtitle.
+
+    Examples
+    --------
+    >>> _subtitle_lines({"subtitle": "Schematic"}, 1000.0)
+    ['Schematic']
+    >>> len(_subtitle_lines({"subtitle": "word " * 40}, 1000.0)) > 1
+    True
+    """
+    raw = str(cfg.get("subtitle") or "")
+    if not raw:
+        return []
+    ts = max(1.0, width / 1000.0)
+    available = _header_right_limit(cfg, width) - _CAPTION_INSET * ts
+    size = _SUBTITLE_SIZE * ts
+    words = raw.split()
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if text_width(candidate, size) <= available:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines
+
+
 def _header_inset(cfg: dict[str, Any], pad: float, width: float) -> float:
     """Return how far down the plate must start to clear its own title.
 
@@ -1566,10 +1711,13 @@ def _header_inset(cfg: dict[str, Any], pad: float, width: float) -> float:
     is still fitted edge to edge.
     """
     ts = max(1.0, width / 1000.0)
-    if cfg.get("subtitle"):
-        return max(pad, (_SUBTITLE_BASELINE + _HEADER_CLEARANCE) * ts)
+    lines = _subtitle_lines(cfg, width)
+    stamp = _STAMP_SIZE * 1.6 if _as_of_stamp(cfg) else 0.0
+    if lines:
+        extra = (len(lines) - 1) * _SUBTITLE_SIZE * 1.3
+        return max(pad, (_SUBTITLE_BASELINE + extra + stamp + _HEADER_CLEARANCE) * ts)
     if cfg.get("title"):
-        return max(pad, (_TITLE_BASELINE + _HEADER_CLEARANCE) * ts)
+        return max(pad, (_TITLE_BASELINE + stamp + _HEADER_CLEARANCE) * ts)
     return pad
 
 
@@ -2101,7 +2249,13 @@ def _nice_round(value: float) -> float:
     return base
 
 
-def scale_bar(x: float, y: float, vp: dict[str, Any], ink: str = "#1b2733") -> str:
+def scale_bar(
+    x: float,
+    y: float,
+    vp: dict[str, Any],
+    ink: str = "#1b2733",
+    paper: str = "#ffffff",
+) -> str:
     """Return a dual-unit (km + mi) scale bar sized to a round distance on the map.
 
     The distances themselves come from :func:`_scale_bar_lengths`, which
@@ -2128,8 +2282,27 @@ def scale_bar(x: float, y: float, vp: dict[str, Any], ink: str = "#1b2733") -> s
             f'font-size="{fs:.1f}" fill="{ink}" text-anchor="end">{total}{unit}</text>'
         )
 
+    # A ground under the whole thing. The bar used to be struck straight
+    # onto whatever the map ended at, and the two numbers that make it
+    # mean anything -- the 0 and the distance -- are 10-unit type with no
+    # halo: on the Ukraine plate they sat on a hillshade, on the eastern
+    # DRC one across the depth rings of Lake Tanganyika. A ruler nobody
+    # can read the numbers on is a decoration of a ruler.
+    #
+    # Deliberately soft rather than a white card: the furniture elsewhere
+    # on these plates is a panel with an edge, and a second panel in the
+    # opposite corner starts to look like a layout. This is the paper
+    # showing through, which is what a printed bar sits on.
+    width = max(km_len, mi_len) + 8 * ts
+    top = y - 20 * ts
+    height = 20 * ts + 2 * hw + 26 * ts
+    ground = (
+        f'<rect x="{x - 5 * ts:.1f}" y="{top:.1f}" width="{width:.1f}" '
+        f'height="{height:.1f}" rx="{4 * ts:.1f}" fill="{paper}" '
+        f'fill-opacity="0.72"/>'
+    )
     return (
-        f'<g id="scale-bar">{bar(y, km_len, _fmt_num(km), "KM")}'
+        f'<g id="scale-bar">{ground}{bar(y, km_len, _fmt_num(km), "KM")}'
         f"{bar(y + 20 * ts, mi_len, _fmt_num(mi), 'MI')}</g>"
     )
 
@@ -2233,7 +2406,7 @@ def _scale_bar_origin(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, f
         taken_bottom_left = True
     if taken_bottom_left:
         x = W - 176 * ts
-    return x, H - 44 * ts - _caption_height(cfg, ts)
+    return x, H - 44 * ts - _caption_height(cfg, ts, W)
 
 
 def _value_legend_corner(cfg: dict[str, Any]) -> str | None:
@@ -2292,13 +2465,26 @@ def _reserved_boxes(cfg: dict[str, Any], vp: dict[str, Any]) -> list[tuple[float
             py = (
                 margin
                 if position in ("top-left", "top-right")
-                else H - panel_h - margin - _caption_height(cfg, ts)
+                else H - panel_h - margin - _caption_height(cfg, ts, W)
             )
             boxes.append((px, py, px + panel_w, py + panel_h))
 
     inset = _inset_box(cfg, vp)
     if inset is not None:
         boxes.append(inset)
+
+    # The provenance footer. It paints an opaque band across the foot of
+    # the plate and it is drawn *after* every map layer, so a name placed
+    # under it is not overprinted -- it is gone, and nothing in the file
+    # says a name was lost. Measured on the plates as shipped: Constanța
+    # on the Ukraine one, Jerusalem on the Syrian, Bouaké on the Sahel,
+    # CENTRAL AFRICAN REP. on the Sudanese. Reserving the band sends each
+    # of those to its other candidate position, or drops it with the rest
+    # of the placer's decisions, which is a decision rather than an
+    # accident.
+    footer = _caption_height(cfg, ts, W)
+    if footer:
+        boxes.append((0.0, H - footer, W, H))
     return boxes
 
 
@@ -4248,6 +4434,13 @@ def _frontiers_layer(
 #: the other, so the ledger keeps a little more than nothing between them.
 _LABEL_CLEARANCE = 1.5
 
+#: The white outline a town name is stroked with, in units at ts=1. Read
+#: by both :func:`_cities_layer`, which draws it, and the placer, which
+#: has to keep a gap between what is *drawn* rather than between the ink
+#: inside the outlines -- two names one unit apart have their halos
+#: overlapping by 1.4 and come out as one grey smear.
+_CITY_HALO = 2.4
+
 
 def _label_fits(
     x: float,
@@ -4624,6 +4817,25 @@ def _ink_hand_label(
             "part of it. Move it inside the region, widen region.bbox to "
             "include it, or remove it."
         )
+    # Inside the drawn map and still invisible is the same fault wearing a
+    # different hat. The furniture is drawn *after* every map layer and
+    # some of it is opaque -- the provenance footer paints a band across
+    # the foot of the plate -- so a hand-placed name underneath is not
+    # overprinted, it is gone, and nothing in the file says a name was
+    # lost. ``BLACK SEA`` on the Ukraine plate, a 25-unit tracked name and
+    # the plate's whole orientation cue, went under the footer the day the
+    # footer grew a line.
+    for taken in vp.get("reserved", ()):
+        if boxes_overlap(box_, taken):
+            raise ValueError(
+                f"{what} is drawn at ({box_[0]:.0f}, {box_[1]:.0f})-"
+                f"({box_[2]:.0f}, {box_[3]:.0f}), under furniture the plate "
+                f"draws on top of it at ({taken[0]:.0f}, {taken[1]:.0f})-"
+                f"({taken[2]:.0f}, {taken[3]:.0f}) -- the scale bar, the "
+                "legend card, the locator or the provenance footer. Move "
+                "the label, or move the furniture with legend_position / "
+                "inset.position."
+            )
     vp.setdefault("ink", []).append(box_)
 
 
@@ -5641,6 +5853,7 @@ def _cities_layer(
         bounds_px=plate,
         avoid=[*vp.get("reserved", ()), *vp.get("ink", ())],
         clearance=_LABEL_CLEARANCE * ts,
+        halo=_CITY_HALO * ts,
     ):
         # The plate rectangle is the outer bound; the region clip is the real
         # one, and it is narrower wherever the projection bends the frame in.
@@ -5657,7 +5870,7 @@ def _cities_layer(
         out.append(
             f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="{size:.1f}" '
             f'fill="#2B2B2E" paint-order="stroke" stroke="#FFFFFF" '
-            f'stroke-width="{2.4 * ts:.1f}" stroke-linejoin="round">'
+            f'stroke-width="{_CITY_HALO * ts:.1f}" stroke-linejoin="round">'
             f"{_esc(city.name)}</text>"
         )
     return '<g id="cities">' + "".join(out) + "</g>"
@@ -5929,9 +6142,20 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
 #: becomes a dot.
 _INSET_ZOOM = 6.0
 
-#: The inset's width as a fraction of the plate's. Small enough to read as
-#: furniture, large enough that a country outline in it is still a country.
-_INSET_WIDTH = 0.2
+#: The inset's width as a fraction of the plate's. Small enough to read
+#: as furniture, large enough that a country outline in it is still a
+#: country.
+#:
+#: Was 0.2, which is two and a half times what the UNHCR guidelines ask
+#: for -- they specify 15 mm on an A5 plate and 20 mm on A4, about eight
+#: per cent of the width. Two fifths of that figure is still generous and
+#: it is what the locator costs the map: at 0.2 the card covered 264 by
+#: 187 units of a 1320-unit plate, and once the locator became a default
+#: that footprint started landing on names somebody had placed -- the Sea
+#: of Azov, Derna, Caracas. Smaller is both closer to the standard and
+#: the general fix for a class of collision the per-plate nudges were
+#: chasing one at a time.
+_INSET_WIDTH = 0.15
 
 #: Widest region, in degrees of longitude, that still gets a locator inset
 #: by default. Past this the plate already shows a continent and the
@@ -6033,10 +6257,84 @@ def _inset_corner(cfg: dict[str, Any], ts: float, W: float) -> str:
         taken.add("top-right" if legend == "right" else legend)
     scale_x, _scale_y = _scale_bar_origin(cfg, {"ts": ts, "width": W, "height": 0.0})
     taken.add("bottom-left" if scale_x < W / 2 else "bottom-right")
-    for corner in _INSET_CORNERS:
-        if corner not in taken:
-            return corner
-    return "top-right"
+    free = [corner for corner in _INSET_CORNERS if corner not in taken]
+    if not free:
+        return "top-right"
+    # Among the corners nothing else wants, the one the author has put
+    # the fewest names in. Switching the locator on by default dropped it
+    # onto plates composed without one, and each time it landed on a
+    # quadrant somebody had already written in -- the Sea of Azov on the
+    # Ukraine plate, Derna on the Libyan. The generator refuses to bury a
+    # hand-placed name rather than doing it quietly, which turns each one
+    # into an error a human has to answer; counting first means there is
+    # usually nothing to answer.
+    #
+    # Counted in degrees, on the config's own coordinates, because this
+    # runs before there is a viewport to project with. A quadrant of the
+    # region bbox is a coarse stand-in for a corner of the plate and an
+    # exact enough one: the question is only which corner is emptiest.
+    return min(free, key=lambda corner: _hand_labels_in_corner(cfg, corner))
+
+
+def _hand_labels_in_corner(cfg: dict[str, Any], corner: str) -> int:
+    """How many hand-placed names fall in one quadrant of the region.
+
+    Examples
+    --------
+    >>> cfg = {"region": {"bbox": [0.0, 0.0, 10.0, 10.0]},
+    ...        "labels": {"places": [{"lon": 9.0, "lat": 9.0, "text": "NE"},
+    ...                              {"lon": 1.0, "lat": 1.0, "text": "SW"}]}}
+    >>> _hand_labels_in_corner(cfg, "top-right"), _hand_labels_in_corner(cfg, "bottom-left")
+    (1, 1)
+    >>> _hand_labels_in_corner(cfg, "bottom-right")
+    0
+    """
+    bbox = (cfg.get("region") or {}).get("bbox")
+    if not bbox:
+        return 0
+    west, south, east, north = (float(v) for v in bbox)
+    mid_lon, mid_lat = (west + east) / 2.0, (south + north) / 2.0
+    want_east = corner.endswith("-right")
+    want_north = corner.startswith("top")
+    labels = cfg.get("labels") or {}
+    points: list[tuple[float, float]] = []
+
+    def add(item: Any) -> None:
+        try:
+            points.append((float(item["lon"]), float(item["lat"])))
+        except (KeyError, TypeError, ValueError):
+            return
+
+    for item in (
+        *labels.get("places", []),
+        *labels.get("waters", []),
+        *labels.get("territories", []),
+        *(cfg.get("events") or []),
+        *(cfg.get("forces") or []),
+        *(cfg.get("annotations") or []),
+    ):
+        add(item)
+    if labels.get("water"):
+        add(labels["water"])
+    # An axis of advance carries a name at the end of its line, and a
+    # front line can carry one too. Both are hand-placed in every sense
+    # that matters here, and leaving them out is how the Sudan plate put
+    # its locator on "SPLM-N (reported)".
+    for arrow in cfg.get("arrows") or []:
+        line = arrow.get("line") or []
+        if arrow.get("label") and line:
+            tip = line[-1]
+            points.append((float(tip[0]), float(tip[1])))
+    front = cfg.get("front") or {}
+    if front.get("label") and front.get("label_at"):
+        spot = front["label_at"]
+        points.append((float(spot[0]), float(spot[1])))
+
+    return sum(
+        1
+        for lon, lat in points
+        if (lon >= mid_lon) == want_east and (lat >= mid_lat) == want_north
+    )
 
 
 def _inset_context_bbox(bbox: list[float], zoom: float = _INSET_ZOOM) -> list[float]:
@@ -6082,13 +6380,33 @@ def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, f
     context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
         region_bbox, float(inset.get("zoom", _INSET_ZOOM))
     )
+    margin = 22 * ts
+    # A legend set as its own column widens the plate beyond the map, and
+    # the room under the card in that column is the best home a locator
+    # can have: off the map entirely, so it covers nothing and competes
+    # with nothing. It is also where a newspaper puts one. Without this
+    # the Sudan plate had no choice of corner at all -- the column takes
+    # the top right, the scale bar the bottom left, the title the top
+    # left -- and the locator landed on the one remaining corner, over
+    # the label of a reported axis of advance.
+    if (
+        inset.get("position") is None
+        and _resolve_legend_position(cfg, ts, W) == "right"
+        and cfg.get("areas_of_control", {}).get("palette")
+    ):
+        panel_w, panel_h, corner = _legend_panel_dims(cfg, ts)
+        box_w = panel_w
+        sub = make_viewport(build_projection(context, "auto"), context, box_w, 0.0)
+        ox = W + corner
+        oy = corner + panel_h + corner
+        return ox, oy, ox + box_w, oy + sub["height"]
+
     box_w = float(inset.get("width", _INSET_WIDTH)) * W
     sub = make_viewport(build_projection(context, "auto"), context, box_w, 0.0)
     box_h = sub["height"]
-    margin = 22 * ts
     position = str(inset.get("position") or _inset_corner(cfg, ts, W))
     ox = margin if position.endswith("-left") else W - box_w - margin
-    oy = margin if position.startswith("top") else H - box_h - margin - _caption_height(cfg, ts)
+    oy = margin if position.startswith("top") else H - box_h - margin - _caption_height(cfg, ts, W)
     return ox, oy, ox + box_w, oy + box_h
 
 
@@ -6130,21 +6448,23 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             "Known keys: show, bbox, position, width, zoom"
         )
     palette = _pal(cfg)
-    ts, W = vp["ts"], vp["width"]
+    ts = vp["ts"]
     region_bbox = [float(v) for v in cfg["region"]["bbox"]]
     context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
         region_bbox, float(inset.get("zoom", _INSET_ZOOM))
     )
 
-    box_w = float(inset.get("width", _INSET_WIDTH)) * W
+    placed = _inset_box(cfg, vp)
+    assert placed is not None  # guarded by the early return above
+    ox, oy, x1, y1 = placed
+    # Read the size off the placement rather than recomputing it. The two
+    # disagreed the moment a second placement rule existed, and a card
+    # drawn at one width inside a rectangle reserved at another is a card
+    # with a seam down it.
+    box_w, box_h = x1 - ox, y1 - oy
     proj = build_projection(context, "auto")
     # A viewport of its own, with no padding: the inset's frame is its bound.
     sub = make_viewport(proj, context, box_w, 0.0, vp.get("simplify", DEFAULT_TOLERANCE))
-    box_h = sub["height"]
-
-    placed = _inset_box(cfg, vp)
-    assert placed is not None  # guarded by the early return above
-    ox, oy, _x1, _y1 = placed
 
     land = load_land(context)
     # A malformed clip must not cost the plate its inset: the unclipped land
@@ -6277,17 +6597,53 @@ def _required_disclaimers(cfg: dict[str, Any]) -> list[str]:
     ]
 
 
-def _caption_lines(cfg: dict[str, Any]) -> list[str]:
-    """Every line the provenance footer prints, in order.
+#: The footer's type size and its left/right inset, both in units at
+#: ts=1. Here rather than inline because the wrap has to use exactly the
+#: numbers the drawing uses, and a footer whose wrap and whose ink
+#: disagree is a footer that runs off the plate by one word.
+_CAPTION_SIZE = 8.2
+_CAPTION_INSET = 26.0
+
+
+def _caption_lines(cfg: dict[str, Any], width: float = 0.0, ts: float = 1.0) -> list[str]:
+    """Every line the provenance footer prints, in order and already wrapped.
 
     One function so :func:`_caption_height` and :func:`_caption_block`
     cannot disagree about how many there are -- they did not, but they
     each held their own copy of the list, which is the same thing waiting
-    to happen the next time a line is added.
+    to happen the next time a line is added. Now that a line can become
+    two, it would be the same thing happening.
+
+    **Wrapped, because a footer line is the one line long enough to run
+    off a plate.** It did: after the evidence-basis sentence joined the
+    five conflict plates, the eastern-DRC footer reached 982 units on a
+    944-unit canvas and the last eleven words were simply not there.
+    Measured in the monospace advance the footer is actually set in, not
+    the proportional one -- see :func:`_textbox.mono_width`.
+
+    Parameters
+    ----------
+    cfg : dict
+        The map config.
+    width : float, optional
+        The plate width. Zero leaves the lines unwrapped, which is what a
+        caller that only wants to know whether there *are* any needs.
+    ts : float, optional
+        The plate's type scale.
+
+    Returns
+    -------
+    list of str
     """
     lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
     lines.extend(_required_disclaimers(cfg))
-    return lines
+    if not width:
+        return [str(line) for line in lines]
+    available = width - 2 * _CAPTION_INSET * ts
+    wrapped: list[str] = []
+    for line in lines:
+        wrapped.extend(mono_wrap(str(line), _CAPTION_SIZE * ts, available))
+    return wrapped
 
 
 def _caption_mode(cfg: dict[str, Any]) -> str:
@@ -6305,7 +6661,7 @@ def _caption_mode(cfg: dict[str, Any]) -> str:
     return mode
 
 
-def _caption_height(cfg: dict[str, Any], ts: float) -> float:
+def _caption_height(cfg: dict[str, Any], ts: float, width: float = 0.0) -> float:
     """
     Vertical space the caption occupies, or 0 when it is off.
 
@@ -6315,7 +6671,7 @@ def _caption_height(cfg: dict[str, Any], ts: float) -> float:
     """
     if _caption_mode(cfg) != "full":
         return 0.0
-    return len(_caption_lines(cfg)) * 11.5 * ts + 17 * ts
+    return len(_caption_lines(cfg, width, ts)) * 11.5 * ts + 17 * ts
 
 
 def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
@@ -6353,7 +6709,7 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 
     palette = _pal(cfg)
     ts, W, H = vp["ts"], vp["width"], vp["height"]
-    lines = _caption_lines(cfg)
+    lines = _caption_lines(cfg, W, ts)
     if not lines:
         # Refusing beats printing an empty rule: a caption that says nothing
         # is worse than no caption, because it looks like provenance.
@@ -6361,7 +6717,7 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             'caption: full needs at least one of "method", "source" or "as_of"'
         )
 
-    size = 8.2 * ts
+    size = _CAPTION_SIZE * ts
     leading = 11.5 * ts
     top = H - (len(lines) * leading) - 10 * ts
     # The caption is furniture, and furniture owns its space. Without a
@@ -6380,7 +6736,7 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     ]
     for i, line in enumerate(lines):
         out.append(
-            f'<text x="{26 * ts:.1f}" y="{top + i * leading:.1f}" '
+            f'<text x="{_CAPTION_INSET * ts:.1f}" y="{top + i * leading:.1f}" '
             f'font-family="{_MONO_FONT}" font-size="{size:.1f}" '
             f'fill="{palette["chrome_faint"]}" letter-spacing="0.4">{_esc(line)}</text>'
         )
@@ -6419,16 +6775,29 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         arrow_x = min(arrow_x, inset_box[0] - 22 * ts)
     out: list[str] = [north_arrow(arrow_x, 34 * ts, ts)]
     title = cfg.get("title")
-    subtitle = cfg.get("subtitle")
     if title:
         out.append(
             f'<text x="{26 * ts:.0f}" y="{_TITLE_BASELINE * ts:.0f}" font-family="{_DEFAULT_FONT}" '
             f'font-size="{22 * ts:.0f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}">{_esc(title)}</text>'
         )
-    if subtitle:
+    for i, line in enumerate(_subtitle_lines(cfg, W)):
+        baseline = (_SUBTITLE_BASELINE + i * _SUBTITLE_SIZE * 1.3) * ts
         out.append(
-            f'<text x="{26 * ts:.0f}" y="{_SUBTITLE_BASELINE * ts:.0f}" font-family="{_DEFAULT_FONT}" '
-            f'font-size="{12.5 * ts:.0f}" fill="{_pal(cfg)["chrome_sub"]}">{_esc(subtitle)}</text>'
+            f'<text x="{_CAPTION_INSET * ts:.0f}" y="{baseline:.0f}" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{_SUBTITLE_SIZE * ts:.0f}" '
+            f'fill="{_pal(cfg)["chrome_sub"]}">{_esc(line)}</text>'
+        )
+    stamp = _as_of_stamp(cfg)
+    if stamp:
+        lines = _subtitle_lines(cfg, W)
+        base = _SUBTITLE_BASELINE if lines else _TITLE_BASELINE
+        offset = (len(lines) - 1) * _SUBTITLE_SIZE * 1.3 if lines else 0.0
+        out.append(
+            f'<text x="{_CAPTION_INSET * ts:.0f}" '
+            f'y="{(base + offset + _STAMP_SIZE * 1.6) * ts:.0f}" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{_STAMP_SIZE * ts:.0f}" '
+            f'font-weight="700" letter-spacing="0.7" '
+            f'fill="{_pal(cfg)["chrome_ink"]}">{_esc(stamp.upper())}</text>'
         )
     # Same rule as the north arrow above, for the other corner the legend can
     # take: the scale bar's home is bottom-left, so a bottom-left card lands
@@ -6436,7 +6805,9 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     # there to clear the caption and buried the bar instead). The bar is about
     # 150ts wide, so stepping to the opposite corner is enough.
     scale_x, scale_y = _scale_bar_origin(cfg, vp)
-    out.append(scale_bar(scale_x, scale_y, vp, _pal(cfg)["chrome_ink"]))
+    out.append(
+        scale_bar(scale_x, scale_y, vp, _pal(cfg)["chrome_ink"], _pal(cfg)["plate"])
+    )
     return f'<g id="annotation-furniture">{"".join(out)}</g>'
 
 
@@ -6919,7 +7290,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         py = (
             corner_margin
             if position in ("top-left", "top-right")
-            else H - panel_h - corner_margin - _caption_height(cfg, ts)
+            else H - panel_h - corner_margin - _caption_height(cfg, ts, W)
         )
     tx = px + pad + sw + 10 * ts  # label x
     parts: list[str] = [
@@ -7036,7 +7407,7 @@ def _value_legend(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     y = (
         margin + 54 * ts
         if position.startswith("top")
-        else H - 54 * ts - _caption_height(cfg, ts)
+        else H - 54 * ts - _caption_height(cfg, ts, W)
     )
 
     out: list[str] = [f'<g id="value-legend" transform="translate({x:.1f},{y:.1f})">']
