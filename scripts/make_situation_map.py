@@ -234,11 +234,13 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import csv
 import importlib.util
 import json
 import math
 import re
 import sys
+import unicodedata
 import warnings
 from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
@@ -248,6 +250,8 @@ from typing import Any
 
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
+from _classify import METHOD_LABELS, class_index, classify
+from _geo_colors import diverging_ramp_hex, sequential_ramp_hex
 from _places import cities_in_view, place_labels
 from _plate_controls import (
     controls_markup,
@@ -2218,11 +2222,32 @@ def _scale_bar_origin(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, f
     """
     ts, W, H = vp["ts"], vp["width"], vp["height"]
     x = 26 * ts
-    if _resolve_legend_position(cfg, ts, W) == "bottom-left" and cfg.get(
+    taken_bottom_left = _resolve_legend_position(cfg, ts, W) == "bottom-left" and cfg.get(
         "areas_of_control", {}
-    ).get("palette"):
+    ).get("palette")
+    # The graded key for a values layer has the same bottom-left home and
+    # the same claim on it. Found by looking: the first regional
+    # choropleth drawn here printed its ruler straight through the colour
+    # strip and its break values, so neither could be read.
+    if _value_legend_corner(cfg) == "bottom-left":
+        taken_bottom_left = True
+    if taken_bottom_left:
         x = W - 176 * ts
     return x, H - 44 * ts - _caption_height(cfg, ts)
+
+
+def _value_legend_corner(cfg: dict[str, Any]) -> str | None:
+    """Which corner the graded key wants, or ``None`` when there is no key.
+
+    Read from the config rather than from ``_value_key``, which only
+    exists once the layer has drawn: the scale bar's position is settled
+    before that, and asking the wrong one of the two is how a reservation
+    ends up protecting empty paper.
+    """
+    spec = cfg.get("values")
+    if not spec or cfg.get("_panel"):
+        return None
+    return str(spec.get("legend_position", "bottom-left"))
 
 
 def _reserved_boxes(cfg: dict[str, Any], vp: dict[str, Any]) -> list[tuple[float, float, float, float]]:
@@ -3045,6 +3070,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 3d. admin2-borders (admin-2, currently FR departments, zoom-gated) ----- #
     layers.append(_admin2_borders_layer(cfg, proj, vp, region_box, plate_region))
 
+    # 3e. values: a number per administrative unit, the regional choropleth.
+    #     Under areas-of-control, because a plate carrying both is saying
+    #     "this is the ground, and this is who holds it", in that order.
+    layers.append(_values_layer(cfg, proj, vp, region_box))
+
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp, region_box, land))
 
@@ -3144,6 +3174,10 @@ def build_map(cfg: dict[str, Any]) -> str:
 
     # 10. legend ------------------------------------------------------------ #
     layers.append(_legend_layer(cfg, vp))
+    # The graded key for a values layer, which is a different object from
+    # the categorical one above and can sit beside it: a plate may well
+    # colour the ground by a number and the control by an actor.
+    layers.append(_value_legend(cfg, vp))
 
     # 12. the plate's own controls -------------------------------------------
     # Drawn last so they sit above every layer they switch, and hidden until
@@ -3792,6 +3826,297 @@ def _areas_of_control_layer(
             )
         )
     return f'<g id="areas-of-control">{"".join(casings)}{"".join(fills)}</g>'
+
+
+# --------------------------------------------------------------------------- #
+# Values: a number per administrative unit, which is a regional choropleth      #
+# --------------------------------------------------------------------------- #
+
+
+#: The administrative layers a value can be attached to, and the loader for
+#: each. Every one of these atlases was already vendored and already read --
+#: by the border layers, which draw the lines and say nothing about what is
+#: inside them. A data scientist holding a value per US state, per French
+#: department, per German Kreis had no way to colour it: ``make_choropleth``
+#: keys on ISO-3166-1 numeric and draws the world. The geometry was here the
+#: whole time; what was missing was the three lines that fill it.
+_VALUE_SOURCES: dict[str, Any] = {
+    "countries": lambda bbox: load_countries(bbox),
+    "us-states": lambda bbox: load_us_states(bbox),
+    "fr-regions": lambda bbox: load_fr_regions(bbox),
+    "admin1": lambda bbox: (
+        load_us_states(bbox) + load_fr_regions(bbox) + load_osm_admin1(bbox)
+    ),
+    "admin2": lambda bbox: load_admin2(bbox),
+}
+
+#: The house sequential ramp, the same stops ``make_choropleth`` samples, so
+#: a regional plate and a world plate of the same indicator are the same
+#: colour. Lightness carries the order, which is what keeps it readable in
+#: greyscale and under colour-vision deficiency.
+_VALUE_RAMP: tuple[tuple[float, str], ...] = (
+    (0.00, "#EAF3FF"),
+    (0.62, "#007AFF"),
+    (1.00, "#0A4DA0"),
+)
+
+#: Fill for a unit the data has no row for. Light enough to read as absent
+#: and distinct enough from the palest class to not read as low -- which is
+#: the single commonest way a choropleth misleads, and the thing
+#: ``audit``'s ``no-data-hidden`` rule exists to catch.
+_VALUE_NO_DATA = "#dfe2e6"
+
+#: Share of the plate's width the graded key's colour strip occupies.
+#: The breaks are printed between the swatches, so the strip's width is
+#: what decides whether they can be read; a quarter leaves about sixty
+#: units a class at the five or six classes these maps use.
+_VALUE_STRIP_SHARE = 0.26
+
+
+def _fold(name: str) -> str:
+    """Fold a place name for matching: case, accents and punctuation out.
+
+    Names arrive from a spreadsheet and the atlas spells them its own way.
+    "Provence-Alpes-Cote d'Azur" against "Provence-Alpes-Côte d'Azur" is not
+    a disagreement about which region is meant, and a match that failed on
+    it would drop a real row into the no-data grey without a word.
+
+    Examples
+    --------
+    >>> _fold("Provence-Alpes-Côte d'Azur") == _fold("provence alpes cote dazur")
+    True
+    >>> _fold("New York") == _fold("new-york")
+    True
+    """
+    stripped = unicodedata.normalize("NFKD", str(name))
+    bare = "".join(c for c in stripped if not unicodedata.combining(c))
+    return "".join(c for c in bare.lower() if c.isalnum())
+
+
+def _value_rows(spec: dict[str, Any], base: Path) -> list[dict[str, Any]]:
+    """Return the data rows, from the config or from a CSV beside it."""
+    data = spec.get("data")
+    if isinstance(data, str):
+        path = (base / data) if base else Path(data)
+        with path.open(newline="", encoding="utf-8") as handle:
+            return list(csv.DictReader(handle))
+    return list(data or [])
+
+
+def _value_table(
+    spec: dict[str, Any], base: Path
+) -> tuple[dict[str, float], list[str]]:
+    """Return ``{folded name: value}`` and the rows that were not numbers.
+
+    Raises
+    ------
+    ValueError
+        If a row carries no key or no value field, which is a mistake in
+        the data rather than a region with nothing in it -- and the
+        difference matters, because the second is drawn and the first
+        should stop the plate.
+    """
+    key_field = str(spec.get("key", "name"))
+    value_field = str(spec.get("field", "value"))
+    table: dict[str, float] = {}
+    unreadable: list[str] = []
+    for row in _value_rows(spec, base):
+        if key_field not in row:
+            raise ValueError(
+                f"values row {row!r} has no {key_field!r}; set values.key to the "
+                "column holding the unit name"
+            )
+        raw = row.get(value_field)
+        if raw is None or raw == "":
+            continue  # an absent value is a real answer: no data for this unit
+        try:
+            table[_fold(row[key_field])] = float(raw)
+        except (TypeError, ValueError):
+            unreadable.append(f"{row[key_field]}={raw!r}")
+    return table, unreadable
+
+
+def _value_classes(
+    spec: dict[str, Any], values: list[float]
+) -> tuple[list[float], str, int]:
+    """Return the class breaks, the method's own name, and the class count.
+
+    The method is returned so the legend can print it. A classed map made
+    with quantiles and the same data made with natural breaks tell
+    different stories, and a plate that does not name its method is a
+    plate nobody can question -- which is why ``audit`` reports one that
+    does not.
+    """
+    given = spec.get("breaks")
+    if given:
+        breaks = [float(v) for v in given]
+        return breaks, "given", len(breaks) + 1
+    method = str(spec.get("method", "jenks"))
+    if method not in METHOD_LABELS:
+        raise ValueError(
+            f"unknown values.method {method!r}; known: "
+            + ", ".join(sorted(k for k in METHOD_LABELS if k != "given"))
+        )
+    classes = int(spec.get("classes", 5))
+    return classify(values, classes, method), method, classes
+
+
+def _value_colors(spec: dict[str, Any], classes: int, diverging: bool) -> list[str]:
+    """One colour per class, from the house ramp or a caller's own list."""
+    palette = spec.get("palette")
+    if isinstance(palette, list):
+        if len(palette) != classes:
+            raise ValueError(
+                f"values.palette has {len(palette)} colours for {classes} classes"
+            )
+        return [str(c) for c in palette]
+    if classes == 1:
+        return [sequential_ramp_hex(0.6, _VALUE_RAMP)]
+    out = []
+    for i in range(classes):
+        t = i / (classes - 1)
+        out.append(
+            diverging_ramp_hex(2.0 * t - 1.0) if diverging
+            else sequential_ramp_hex(t, _VALUE_RAMP)
+        )
+    return out
+
+
+def _values_layer(
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any | None = None,
+) -> str:
+    """Fill each administrative unit by a number: the regional choropleth.
+
+    The thematic layer this generator was missing. ``areas_of_control``
+    colours a unit by *who holds it*, which is categorical;
+    ``make_choropleth`` colours by *how much*, and only for the whole world
+    keyed on ISO-3166-1 numeric. Between the two sat every ordinary
+    analysis — a rate by French department, a count by US state, a score by
+    German Kreis — with the geometry already vendored, already loaded by
+    the border layers, and nothing able to put a value in it.
+
+    What this inherits by living here rather than in its own generator is
+    the point of putting it here: the conic projection, the texture-shaded
+    relief underneath, the frontier and coastline conventions, the place
+    labels that dodge each other, the scale bar, the locator inset, the
+    provenance footer, the disclaimers, and the audit.
+
+    A unit the data has no row for is drawn in a distinct grey and the
+    legend says so, because absent reading as low is the commonest way a
+    choropleth misleads.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``values``: ``by`` (which administrative layer),
+        ``data`` (rows, or a CSV path relative to the config),
+        ``key``/``field`` (the columns holding the name and the number),
+        ``classes``, ``method``, ``breaks``, ``palette``, ``diverging``,
+        ``label``, ``unit``, ``fill_opacity``, ``no_data``.
+    proj, vp, region_box
+        As for every other geographic layer.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when the plate carries no ``values``.
+
+    Raises
+    ------
+    ValueError
+        When the layer is named and unknown, when a row has no key, or
+        when **no** row matched a unit on the plate — a table that lines up
+        with nothing is a spelling problem, and drawing an empty grey map
+        instead of saying so is how it stays one.
+    """
+    spec = cfg.get("values")
+    if not spec:
+        return '<g id="values"></g>'
+    unknown = sorted(set(spec) - SECTION_KEYS["values"])
+    if unknown:
+        raise ValueError(
+            f"values has key(s) this generator never reads: {', '.join(unknown)}. "
+            f"Known keys: {', '.join(sorted(SECTION_KEYS['values']))}"
+        )
+    by = str(spec.get("by", "admin1"))
+    if by not in _VALUE_SOURCES:
+        raise ValueError(
+            f"unknown values.by {by!r}; known: {', '.join(sorted(_VALUE_SOURCES))}"
+        )
+    bbox = [float(v) for v in cfg["region"]["bbox"]]
+    units = _VALUE_SOURCES[by](bbox)
+    if not units:
+        raise ValueError(
+            f"values.by={by!r} has no vendored geometry over this region "
+            f"({bbox}); the atlas covers only the countries listed in "
+            "_OSM_ADMIN1_SOURCES / _ADMIN2_SOURCES, plus the US and France"
+        )
+
+    base = Path(cfg.get("_config_dir", "."))
+    table, unreadable = _value_table(spec, base)
+    if unreadable:
+        raise ValueError(
+            "values rows carry something that is not a number, which would be "
+            "dropped as if the unit had no data: " + ", ".join(unreadable[:6])
+        )
+    by_unit = {_fold(name): name for name, _geom in units}
+    matched = {k: v for k, v in table.items() if k in by_unit}
+    if table and not matched:
+        near = ", ".join(sorted(by_unit.values())[:6])
+        raise ValueError(
+            f"not one of the {len(table)} values rows names a unit this plate "
+            f"draws. The {by!r} layer here spells them: {near}, ... — check "
+            "values.key, or values.by"
+        )
+    missed = sorted(table.keys() - matched.keys())
+
+    numbers = sorted(matched.values())
+    diverging = bool(spec.get("diverging", numbers and numbers[0] < 0.0 < numbers[-1]))
+    breaks, method, classes = _value_classes(spec, numbers)
+    colors = _value_colors(spec, classes, diverging)
+    no_data = str(spec.get("no_data", _VALUE_NO_DATA))
+    fill_op = float(spec.get("fill_opacity", COMPOSITING["claim"]))
+
+    out: list[str] = []
+    drew_no_data = False
+    for name, geom in units:
+        shown = geom if region_box is None else geom.intersection(region_box)
+        if shown.is_empty:
+            continue
+        d = projected_geom_to_path(_project_geom(_polygonal(shown), proj), vp)
+        if not d:
+            continue
+        value = matched.get(_fold(name))
+        if value is None:
+            drew_no_data = True
+        fill = no_data if value is None else colors[class_index(value, breaks)]
+        reading = "no data" if value is None else _fmt_num(value)
+        out.append(
+            f'<path d="{d}" fill="{fill}" fill-opacity="{fill_op:.2f}" '
+            f'stroke="#ffffff" stroke-width="{0.8 * vp["ts"]:.1f}" '
+            f'stroke-linejoin="round"><title>{_esc(name)}: {_esc(reading)}</title></path>'
+        )
+    # Carried on the config so the legend, built later and without the
+    # geometry, prints the same breaks the fills used rather than
+    # recomputing them from a list it would have to be handed separately.
+    cfg["_value_key"] = {
+        "breaks": breaks,
+        "method": method,
+        "classes": classes,
+        "colors": colors,
+        # The chip only belongs in the key when a unit was actually drawn
+        # with it. A legend that explains a colour the plate does not use
+        # is the same kind of noise as one that omits a colour it does:
+        # both make the reader check.
+        "no_data": no_data if drew_no_data else "",
+        "fill_opacity": fill_op,
+        "label": spec.get("label") or spec.get("unit") or "",
+        "unmatched": missed,
+    }
+    return f'<g id="values">{"".join(out)}</g>'
 
 
 def _infrastructure_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
@@ -6650,6 +6975,120 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     return f'<g id="legend">{"".join(parts)}</g>'
 
 
+def _value_legend(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
+    """Return the graded key for the ``values`` layer.
+
+    Separate from :func:`_legend_layer`, which keys *categories* — a swatch
+    and a name per actor. A classed quantity is a different object: it is a
+    strip, the breaks fall between the swatches rather than beside them,
+    and two things have to be printed that a categorical key never needs.
+
+    **How the breaks were chosen**, because quantiles and natural breaks put
+    the same data in different colours and tell different stories, and a
+    method nobody can name is a method nobody can question.
+
+    **A no-data swatch**, whenever the plate drew one, because absent
+    reading as low is the commonest way a choropleth misleads.
+
+    Both are what ``audit``'s ``method-unnamed``, ``breaks-missing`` and
+    ``no-data-hidden`` rules ask for, so a plate drawn through this layer
+    satisfies them by construction rather than by the author remembering.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``_value_key``, left by :func:`_values_layer`, and
+        ``values.legend_position``.
+    vp : dict
+        The viewport record.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when the plate has no values layer.
+    """
+    key = cfg.get("_value_key")
+    if not key or cfg.get("_panel"):
+        return '<g id="value-legend"></g>'
+    palette = _pal(cfg)
+    ts, W, H = vp["ts"], vp["width"], vp["height"]
+    colors: list[str] = key["colors"]
+    breaks: list[float] = key["breaks"]
+    fill_op = float(key["fill_opacity"])
+
+    # The strip takes a fixed share of the plate and divides it, rather
+    # than giving each class a fixed width: the boundary values are printed
+    # between the swatches, and at six classes on a 26-unit swatch they
+    # overprinted each other into "11.4 636.1 901.2 1263" as one word.
+    # A quarter of the plate gives roughly 60 units a class at five or six,
+    # which is what a five-character number needs.
+    sw = max(26 * ts, _VALUE_STRIP_SHARE * W / max(len(colors), 1))
+    bh = 11 * ts           # swatch height
+    gap = 14 * ts          # before the no-data chip
+    chip = 13 * ts
+    strip_w = sw * len(colors)
+    has_gap = bool(key["no_data"])
+    total_w = strip_w + (gap + chip + 52 * ts if has_gap else 0)
+
+    position = _value_legend_corner(cfg) or "bottom-left"
+    margin = 26 * ts
+    x = margin if position.endswith("-left") else W - total_w - margin
+    y = (
+        margin + 54 * ts
+        if position.startswith("top")
+        else H - 54 * ts - _caption_height(cfg, ts)
+    )
+
+    out: list[str] = [f'<g id="value-legend" transform="translate({x:.1f},{y:.1f})">']
+    label = str(key["label"])
+    if label:
+        out.append(
+            f'<text x="0" y="{-20 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{11.5 * ts:.1f}" font-weight="700" '
+            f'fill="{palette["chrome_ink"]}" letter-spacing="0.6">{_esc(label)}</text>'
+        )
+    for i, color in enumerate(colors):
+        out.append(
+            f'<rect class="legend-swatch" x="{i * sw:.1f}" y="0" width="{sw:.1f}" '
+            f'height="{bh:.1f}" fill="{color}" fill-opacity="{fill_op:.2f}"/>'
+        )
+    out.append(
+        f'<rect x="0" y="0" width="{strip_w:.1f}" height="{bh:.1f}" fill="none" '
+        f'stroke="{palette["panel_edge"]}" stroke-width="1"/>'
+    )
+    # The boundary values, printed *between* the swatches they divide. A
+    # classed legend with no numbers on it is a lookup table with no key:
+    # a reader can see that one unit is darker and cannot say than what.
+    for i, cut in enumerate(breaks):
+        out.append(
+            f'<text x="{(i + 1) * sw:.1f}" y="{bh + 12 * ts:.1f}" text-anchor="middle" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{9.5 * ts:.1f}" '
+            f'fill="{palette["chrome_sub"]}">{_esc(_fmt_num(cut))}</text>'
+        )
+    # And the method, in the form the auditor reads and a reader can argue
+    # with: "5 classes, natural breaks".
+    out.append(
+        f'<text x="0" y="{bh + 26 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+        f'font-size="{9.5 * ts:.1f}" fill="{palette["chrome_faint"]}">'
+        f'{key["classes"]} classes, {METHOD_LABELS[key["method"]]}</text>'
+    )
+    if has_gap:
+        cx = strip_w + gap
+        out.append(
+            f'<rect x="{cx:.1f}" y="{(bh - chip) / 2:.1f}" width="{chip:.1f}" '
+            f'height="{chip:.1f}" fill="{key["no_data"]}" '
+            f'fill-opacity="{fill_op:.2f}" stroke="{palette["panel_edge"]}" '
+            f'stroke-width="1"/>'
+        )
+        out.append(
+            f'<text x="{cx + chip + 7 * ts:.1f}" y="{bh - 1 * ts:.1f}" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{10.5 * ts:.1f}" '
+            f'fill="{palette["chrome_sub"]}">No data</text>'
+        )
+    out.append("</g>")
+    return "".join(out)
+
+
 def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     """Draw the key as a full-width band under the map rather than over it.
 
@@ -7254,14 +7693,14 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "infrastructure", "internal_borders", "labels", "legend_footer",
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
-    "legend_title", "print_width", "small_multiples", "provenance",
+    "legend_title", "print_width", "small_multiples", "provenance", "values",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
 _INTERNAL_KEYS: frozenset[str] = frozenset(
     {
         "_config_dir", "_panel", "_plate", "_print", "_relief_cache",
-        "_relief_tone", "_source_file",
+        "_relief_tone", "_source_file", "_value_key",
     }
 )
 
@@ -7427,6 +7866,10 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     }),
     "provenance": frozenset({"inputs"}),
     "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
+    "values": frozenset({
+        "by", "data", "key", "field", "classes", "method", "breaks", "palette",
+        "diverging", "label", "unit", "fill_opacity", "no_data", "legend_position",
+    }),
     "rivers": frozenset({
         "show", "width", "color", "skip", "always_label", "label_color",
         "label_min_length_frac", "label_max_scalerank",

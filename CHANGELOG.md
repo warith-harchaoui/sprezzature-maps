@@ -69,6 +69,51 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Added
 
+- **A value per administrative unit: the regional choropleth.** The gap it
+  closes is the one a data scientist actually walks into. `areas_of_control`
+  colours a unit by *who holds it*, which is categorical. `make_choropleth`
+  colours by *how much*, and only for the whole world, keyed on ISO-3166-1
+  numeric. Between the two sat every ordinary analysis — a rate by French
+  region, a count by US state, a score by German Kreis — with the geometry
+  already vendored here and already read by the border layers, which draw the
+  lines and say nothing about what is inside them.
+
+  ```yaml
+  values:
+    by: us-states        # or fr-regions, admin1, admin2, countries
+    data: density.csv    # or inline rows
+    classes: 6
+    method: jenks        # quantile · equal · jenks · headtail, or `breaks:`
+    label: "PEOPLE PER SQUARE MILE"
+  ```
+
+  Names match through case, accents and punctuation, because a spreadsheet
+  spells Provence-Alpes-Côte d'Azur its own way and a match that failed on
+  that would drop a real row into the no-data grey without a word. Two
+  refusals, both for the same reason — a confident picture of nothing is
+  worse than an error: a table matching **no** unit stops the plate rather
+  than rendering a grey map of a column-name typo, and a cell that is not a
+  number stops it rather than being dropped as if the unit had none. A blank
+  cell is different, and is drawn as no data, with the chip in the key only
+  when something actually used it.
+
+  It lives inside the situation map rather than in a generator of its own,
+  and that is the point: it inherits the conic projection, the texture-shaded
+  relief, the frontier conventions, the labels that dodge each other, the
+  scale bar, the locator, the footer, the disclaimers and the audit. The
+  graded key prints the breaks and names the method, so a plate drawn this
+  way satisfies `method-unnamed`, `breaks-missing` and `no-data-hidden` by
+  construction rather than by the author remembering.
+
+- **`make-map situation-new`**, a scaffold that starts finished. Until now
+  there were two ways to begin: a four-line demo config that draws a bare
+  coastline, or the thousand-four-hundred-line builder behind the gallery.
+  `--country Moldova` reads the bounding box off the vendored atlas with the
+  margin that keeps the neighbours in frame, and writes a commented config
+  that renders a correct reference plate as it stands and audits clean —
+  footer, date stamp, locator, and the thematic block in comments with
+  `confidence` on every zone.
+
 - **Four audit rules for a regional situation plate**, from the standards such
   a plate gets read against — the UNHCR guidelines for the furniture, the
   Institute for the Study of War for the evidence model. `no-locator`;

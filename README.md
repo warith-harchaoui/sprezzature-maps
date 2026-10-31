@@ -73,18 +73,69 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+Starting a new regional plate is one command, and what it writes already
+carries the furniture a plate owes a reader:
+
+```bash
+make-map situation-new --country Moldova --out moldova.yaml
+make-map situation_map --config moldova.yaml --out moldova.svg
+make-map audit moldova.svg          # clean, as written
+```
+
+### A number per administrative unit
+
+A choropleth of the world keys on ISO-3166-1 numeric. An analysis usually
+does not: it is a rate by French region, a count by US state, a score by
+German Kreis. Those atlases were vendored here all along and read only by
+the layers that draw the *lines*, so `values` fills what is inside them:
+
+```yaml
+values:
+  by: us-states          # or fr-regions, admin1, admin2, countries
+  data: density.csv      # or inline rows; a path is relative to the config
+  key: name              # the column holding the unit's name
+  field: value           # the column holding the number
+  classes: 6
+  method: jenks          # quantile · equal · jenks · headtail, or `breaks:`
+  label: "PEOPLE PER SQUARE MILE"
+```
+
+Names are matched through case, accents and punctuation, because a
+spreadsheet spells Provence-Alpes-Côte d'Azur its own way. A table that
+matches **nothing** stops the plate rather than drawing a confident grey map
+of a column-name typo, and a cell that is not a number stops it rather than
+being dropped as if the unit had no data. The key prints the breaks and names
+the method, so the plate satisfies the audit by construction.
+
+Living inside the situation map rather than in a generator of its own is the
+point: it inherits the conic projection, the texture-shaded relief, the
+frontier conventions, the labels that dodge each other, the scale bar, the
+locator, the footer and the disclaimers.
+
 ### Then read the plate back
 
 ```bash
 make-map audit world.svg            # exit 1 on any finding
 ```
 
-Six static rules over a rendered plate, because a map is read the way a text
+Ten static rules over a rendered plate, because a map is read the way a text
 is: did it **name the classification method** (the same numbers in quantiles
 and in natural breaks tell two different stories), does it carry its
 **provenance**, does it hide rows it could not place, does it have a title and
 labelled breaks. A plate that passes is not thereby a good map — it is one a
 reader can argue with.
+
+Four of the ten only apply to a **regional** plate, and come from the
+standards such a plate gets read against — the UNHCR Mapping Guidelines for
+the furniture, the Institute for the Study of War for the evidence model.
+Does it carry a **locator**, so a reader who does not know where this is can
+place it. Does a control map say **as of when** — looser is not enough here,
+because a publication year in a source citation is not the date a front was
+true. Are its zones **graded by evidence**, or does a belligerent's claim
+look exactly like a geolocated observation. And does it carry the
+**disclaimer** its extent owes, for the three boundaries that have a standard
+sentence attached. The generator now supplies the first and the last of those
+on its own; the other two are sentences only an author can write.
 
 ### From a conflict dataset, in one call
 

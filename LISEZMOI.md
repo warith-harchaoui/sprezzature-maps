@@ -76,19 +76,73 @@ make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
 ```
 
+Commencer une planche régionale tient en une commande, et ce qu'elle écrit
+porte déjà le mobilier qu'une planche doit à son lecteur :
+
+```bash
+make-map situation-new --country Moldova --out moldova.yaml
+make-map situation_map --config moldova.yaml --out moldova.svg
+make-map audit moldova.svg          # propre, telle quelle
+```
+
+### Une valeur par unité administrative
+
+Un choroplèthe du monde s'indexe sur l'ISO-3166-1 numérique. Une analyse,
+non : c'est un taux par région française, un compte par État américain, un
+score par Kreis allemand. Ces atlas étaient vendorisés ici depuis toujours
+et lus seulement par les couches qui tracent les *lignes* ; `values`
+remplit ce qu'il y a dedans :
+
+```yaml
+values:
+  by: us-states          # ou fr-regions, admin1, admin2, countries
+  data: densite.csv      # ou des lignes en place ; un chemin est relatif au config
+  key: name              # la colonne qui porte le nom de l'unité
+  field: value           # la colonne qui porte le nombre
+  classes: 6
+  method: jenks          # quantile · equal · jenks · headtail, ou `breaks:`
+  label: "HABITANTS AU KILOMÈTRE CARRÉ"
+```
+
+Les noms sont appariés à la casse, aux accents et à la ponctuation près,
+parce qu'un tableur écrit Provence-Alpes-Côte d'Azur à sa façon. Une table
+qui n'apparie **rien** arrête la planche plutôt que de dessiner une carte
+grise et confiante d'une faute de nom de colonne, et une cellule qui n'est
+pas un nombre l'arrête aussi plutôt que d'être jetée comme si l'unité
+n'avait pas de donnée. La légende imprime les bornes et nomme la méthode :
+la planche satisfait l'audit par construction.
+
+Vivre dans la carte de situation plutôt que dans un générateur à soi, c'est
+tout l'intérêt : elle hérite de la projection conique, du relief texturé, des
+conventions de frontière, des étiquettes qui s'évitent, de l'échelle, du
+carton de localisation, du pied de planche et des clauses.
+
 ### Puis relire la planche
 
 ```bash
 make-map audit world.svg            # sort 1 au moindre constat
 ```
 
-Six règles statiques sur une planche rendue, parce qu'une carte se relit comme
+Dix règles statiques sur une planche rendue, parce qu'une carte se relit comme
 un texte : a-t-elle **nommé sa méthode de classification** (les mêmes chiffres
 en quantiles et en seuils naturels racontent deux histoires différentes),
 porte-t-elle sa **provenance**, cache-t-elle des lignes qu'elle n'a pas su
 placer, a-t-elle un titre et des bornes étiquetées ? Une planche qui passe
 n'en devient pas bonne pour autant — elle devient discutable, ce qui est le
 but.
+
+Quatre des dix ne valent que pour une planche **régionale**, et viennent des
+normes contre lesquelles on la lit — les UNHCR Mapping Guidelines pour le
+mobilier, l'Institute for the Study of War pour le modèle de preuve.
+Porte-t-elle un **carton de localisation**, pour qu'un lecteur qui ignore où
+c'est puisse le situer. Une carte de contrôle dit-elle **à quelle date** — et
+la règle large ne suffit pas ici, parce qu'une année d'édition citée en
+source n'est pas la date à laquelle un front était vrai. Ses zones sont-elles
+**graduées en preuve**, ou la revendication d'un belligérant ressemble-t-elle
+exactement à une observation géolocalisée. Et porte-t-elle la **clause** que
+son étendue lui impose, pour les trois frontières à phrase standard ? Le
+générateur fournit désormais la première et la dernière tout seul ; les deux
+autres sont des phrases que seul un auteur peut écrire.
 
 Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira.
 Un choroplèthe demande environ une seconde. Une carte de situation dépend de
