@@ -212,8 +212,34 @@ The assessment
     ``label``, ``precision``, ``radius_km``, ``date``, ``time_precision``
     and ``source``.
 ``annotations``
-    Editorial notes: a list of ``{at, text, place, color, circle_km,
-    wrap}``.
+    Editorial notes -- the layer that makes a plate an argument rather
+    than a diagram: a list of ``{at, text, place, number, color,
+    circle_km, wrap}``. ``at`` is ``[lon, lat]``; ``circle_km`` rings the
+    ground around it rather than pointing at a pixel, which is the
+    precision a note about a region actually has. ``place`` sets the
+    direction the note is written in -- ``right`` (the default),
+    ``left``, ``above``, ``below`` or one of the four diagonals
+    ``above-right``, ``above-left``, ``below-right``, ``below-left``, so
+    every leader falls on 90 or 45 degrees. ``place: auto`` has the
+    direction **measured** instead: the eight are tried in that order and
+    the first whose every line clears the names already on the plate and
+    stays on the drawn map wins, and a note with nowhere to go is refused
+    rather than set over a toponym. ``number`` draws a numbered badge
+    instead of a dot, for a plate that accompanies an article: the
+    numbers must run 1..n with no gap and no repeat, they are stamped
+    into the markup, and ``sprezzature_maps.article_sidecar`` reads them
+    back out of the finished plate so the page's numbered list is
+    generated from the same artefact that drew the map. A numbered note
+    needs no ``text`` -- the badge refers and the article explains.
+``detail_area``
+    A labelled rectangle around the ground a piece is actually about:
+    ``{bbox, label, color, label_at}``. ``bbox`` is
+    ``[west, south, east, north]``. ``label`` defaults to "Detail area"
+    and is set above the rectangle, or below it when ``label_at`` says so
+    or when there is no room above; an empty ``label`` draws the
+    rectangle alone. The plate's extent has to stay wide enough to place
+    itself, which is what the locator inset argues, and this says in one
+    mark that the story is happening in a tenth of it.
 ``labels``
     Hand-placed names: ``{places, waters, water, territories}``.
     ``water`` is the singular alias, appended to ``waters`` when both are
@@ -3178,6 +3204,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     force_marks = tag_layer(_markers_layer(cfg.get("forces", []), proj, vp, "forces", marker_legend))
     event_marks = tag_layer(_markers_layer(cfg.get("events", []), proj, vp, "events", marker_legend))
     hand_names = tag_layer(_labels_layer(cfg, proj, vp))
+    # Before the notes: a detail rectangle is the coarsest editorial mark on
+    # the plate and the one a note should be told about, not the other way
+    # round. Its label goes in the ledger here so an ``auto``-placed note
+    # below steps around it.
+    detail = tag_layer(_detail_area_layer(cfg, proj, vp))
     hand_notes = tag_layer(_annotations_layer(cfg, proj, vp))
     # The contact line and the axes of advance carry the author's words too
     # -- "Approx. Kordofan front", "SPLM-N (REPORTED)" -- and until they
@@ -3389,6 +3420,9 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 8. annotation-labels -------------------------------------------------- #
     # Built at the top of build_map, drawn here: see the note there.
     layers.append(hand_names)
+    # The detail rectangle sits under the notes and over everything else:
+    # it is the frame the notes are inside, so a leader may cross it.
+    layers.append(detail)
     # Editorial notes ride above every map layer and below the furniture:
     # an annotation that a river or a label can cross is not an annotation.
     layers.append(hand_notes)
@@ -6389,6 +6423,156 @@ _ANNOTATION_OFFSET = 26.0
 #: on a map is a caption, not a paragraph, and a wide measure invites one.
 _ANNOTATION_WRAP = 30
 
+#: Unit vectors for the directions a note may be set in, in the order
+#: ``place: auto`` tries them.
+#:
+#: Eight, not four, and never an arbitrary angle. Datawrapper's locator
+#: callout lines are built to fall on 90 or 45 degrees -- so that a reader
+#: who asks for a right angle gets 90 and not "91 or 89" -- after Harry
+#: Beck's underground map and its 45/90-only rule. Four placements left
+#: half the paper around a point unreachable, which on a crowded plate is
+#: the difference between a note that clears every name and a note set
+#: over one.
+#:
+#: Orthogonal first: a horizontal or vertical leader is the quietest, and
+#: ``auto`` should only reach for a diagonal when the straight sides are
+#: taken. The diagonals are scaled by 1/sqrt(2) so every leader is the
+#: same length whichever way it goes -- eight notes around one point
+#: should read as a ring of notes, not as a star with long arms.
+_ANNOTATION_PLACES: dict[str, tuple[float, float]] = {
+    "right": (1.0, 0.0),
+    "left": (-1.0, 0.0),
+    "above": (0.0, -1.0),
+    "below": (0.0, 1.0),
+    "above-right": (0.7071, -0.7071),
+    "above-left": (-0.7071, -0.7071),
+    "below-right": (0.7071, 0.7071),
+    "below-left": (-0.7071, 0.7071),
+}
+
+#: Radius of a numbered callout's badge, in SVG units at ``ts=1``. Big
+#: enough that two digits fit inside it at the badge type size, which is
+#: the ceiling this package needs: a plate carrying more than a dozen
+#: numbered marks has stopped being a map with notes on it.
+_CALLOUT_BADGE_R = 8.4
+
+
+def _annotation_geometry(
+    x: float,
+    y: float,
+    place: str,
+    *,
+    ring: float,
+    ts: float,
+    lines: int,
+    size: float,
+) -> dict[str, Any]:
+    """Where one note's leader ends and where its lines sit, for one placement.
+
+    One function, because ``place: auto`` has to ask "would this fit" with
+    exactly the arithmetic that will draw it. Measuring with one formula
+    and drawing with another is how a reservation comes to protect empty
+    paper while the thing itself prints over a name -- the defect
+    :func:`_claim_label` exists to name.
+
+    Parameters
+    ----------
+    x, y : float
+        The annotated point, in plate coordinates.
+    place : str
+        A key of :data:`_ANNOTATION_PLACES`.
+    ring : float
+        Radius of the note's circle in plate units, or 0 for a point.
+    ts : float
+        The plate's type scale.
+    lines : int
+        How many wrapped lines the note runs to.
+    size : float
+        Type size of a line, already scaled.
+
+    Returns
+    -------
+    dict
+        ``start`` and ``end`` for the leader, ``x`` for the text's left
+        edge, ``anchor``, and ``baselines``, one per line.
+    """
+    ux, uy = _ANNOTATION_PLACES.get(place, _ANNOTATION_PLACES["right"])
+    gap = ring + _ANNOTATION_OFFSET * ts
+    tx, ty = x + ux * gap, y + uy * gap
+    anchor = "start" if ux > 0 else ("end" if ux < 0 else "middle")
+    pad = 3.0 * ts * (1 if ux > 0 else (-1 if ux < 0 else 0))
+    # A note to the side centres its block on the leader's end; one above
+    # or below hangs off it, upwards or downwards.
+    if uy < 0:
+        first = ty - (lines - 1) * size * 1.24
+    elif uy > 0:
+        first = ty + size * 0.9
+    else:
+        first = ty - (lines - 1) * size * 0.62
+    return {
+        "start": (x + ux * ring, y + uy * ring),
+        "end": (tx, ty),
+        "x": tx + pad,
+        "anchor": anchor,
+        "baselines": [first + i * size * 1.24 for i in range(lines)],
+    }
+
+
+def _annotation_place(
+    x: float,
+    y: float,
+    note: dict[str, Any],
+    lines: list[str],
+    *,
+    ring: float,
+    size: float,
+    vp: dict[str, Any],
+) -> str:
+    """Return the direction to set a note in, measuring when asked to.
+
+    ``annotations`` was the one text layer in this generator that never
+    consulted the ink ledger. Every other one asks :func:`_label_fits`
+    whether the paper is free; a note was placed by the four-way ``place``
+    key and drawn wherever that landed, so a hand that guessed wrong set a
+    sentence through a toponym -- and because the note is drawn *above*
+    every map layer, the collision is at its most visible there.
+
+    ``place: auto`` asks the ledger instead, trying the eight directions in
+    :data:`_ANNOTATION_PLACES` and taking the first where every line of the
+    note is inside the drawn map and clear of the ink already committed.
+
+    An explicit ``place`` is honoured without measurement, unchanged: a
+    direction the author named is the author's argument, the same standing
+    a hand-placed name has.
+
+    Raises
+    ------
+    ValueError
+        When ``auto`` finds no direction that clears. Refused rather than
+        drawn in the least-bad one: an annotation over a place name is
+        worse than no annotation, and the author can say where it goes.
+    """
+    place = str(note.get("place", "right"))
+    if place != "auto":
+        return place
+    for candidate in _ANNOTATION_PLACES:
+        geo = _annotation_geometry(
+            x, y, candidate, ring=ring, ts=vp["ts"], lines=len(lines), size=size
+        )
+        if all(
+            _label_fits(
+                geo["x"], baseline, line, size=size, vp=vp, anchor=geo["anchor"]
+            )
+            for line, baseline in zip(lines, geo["baselines"], strict=True)
+        ):
+            return candidate
+    raise ValueError(
+        f'the annotation "{" ".join(lines)}" asked for place: auto and not '
+        f"one of the {len(_ANNOTATION_PLACES)} directions clears the ink "
+        "already on the plate or stays on the drawn map. Shorten it, move "
+        "its point, or name a place: explicitly to overrule the measurement"
+    )
+
 
 def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
     """Return the editorial notes: a circled point, a leader, and a sentence.
@@ -6415,12 +6599,28 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
     place an annotation has to stay legible is over the relief and the
     control fills it is pointing at.
 
+    A note may also carry a ``number``, which is the device that makes a
+    plate accompany an *article* rather than merely carry a caption: a
+    numbered badge on the map, and the matching numbered paragraph in the
+    prose. The numbers are stamped into the markup as ``data-callout``, so
+    :func:`_sidecar.article_sidecar` reads them back out of the finished
+    plate and the page's numbered list is generated from the same artefact
+    that drew the map. A plate whose mark 3 and whose paragraph 3 drifted
+    apart is worse than an unannotated plate, and nothing but a shared
+    source stops that drifting.
+
+    A numbered note needs no ``text``. That is the pure form of the
+    device: the badge is the map's half of the reference and the sentence
+    lives in the article, where it has room to be a sentence.
+
     Parameters
     ----------
     cfg : dict
         Reads ``annotations``: a list of ``{at: [lon, lat], text: str}``,
-        each optionally with ``place`` (``"right"``, ``"left"``, ``"above"``
-        or ``"below"``), ``color``, ``circle_km`` and ``wrap``.
+        each optionally with ``place`` (one of the eight keys of
+        :data:`_ANNOTATION_PLACES`, or ``"auto"`` to have the direction
+        measured against the plate's ink), ``number``, ``color``,
+        ``circle_km`` and ``wrap``.
     proj : pyproj.Transformer
         The plate's lon/lat -> planar-metres transformer.
     vp : dict
@@ -6430,6 +6630,13 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
     -------
     str
         An SVG group, empty when no annotation is configured.
+
+    Raises
+    ------
+    ValueError
+        On an unknown key, on a ``place`` this generator does not draw, or
+        on a numbered set that is not 1..n -- see
+        :func:`_callout_numbers`.
     """
     notes = cfg.get("annotations", []) or []
     if not notes:
@@ -6437,17 +6644,38 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
     ts = vp["ts"]
     ink = _pal(cfg)["chrome_ink"]
     paper = _pal(cfg)["plate"]
+    _callout_numbers(notes)
     out: list[str] = []
+    marks: list[dict[str, Any]] = []
+    # Pass one: every mark, and every mark in the ledger. This has to
+    # finish before any note is placed, because a note's direction is
+    # chosen against the ink that exists when it is chosen -- and the
+    # marks of the notes *after* it did not. Measured on the Dnieper
+    # plate when it was first drawn: note 1 took the right-hand side,
+    # which was free at the time, and note 2's badge then landed in the
+    # middle of the word "Kherson"; note 3's sentence ran through note
+    # 4's ring. Both notes were placed correctly against a plate that
+    # was not finished.
     for note in notes:
-        unknown = sorted(set(note) - {"at", "text", "place", "color", "circle_km", "wrap"})
+        unknown = sorted(
+            set(note) - {"at", "text", "place", "number", "color", "circle_km", "wrap"}
+        )
         if unknown:
             raise ValueError(
                 f"an annotation has key(s) this generator never reads: {', '.join(unknown)}. "
-                "Known keys: at, text, place, color, circle_km, wrap"
+                "Known keys: at, text, place, number, color, circle_km, wrap"
+            )
+        place = str(note.get("place", "right"))
+        if place != "auto" and place not in _ANNOTATION_PLACES:
+            raise ValueError(
+                f"an annotation asks for place: {place!r}, which this generator "
+                f"does not draw. Known places: {', '.join(_ANNOTATION_PLACES)}, "
+                "or auto to have the direction measured"
             )
         lon, lat = (float(v) for v in note["at"])
         x, y = vp["to_svg"](*proj.transform(lon, lat))
         color = str(note.get("color", ink))
+        number = note.get("number")
         ring = 0.0
         if note.get("circle_km"):
             ring = float(note["circle_km"]) * 1000.0 / vp["m_per_unit"]
@@ -6455,45 +6683,140 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{ring:.1f}" fill="none" '
                 f'stroke="{color}" stroke-width="{1.4 * ts:.1f}" stroke-opacity="0.9"/>'
             )
-        else:
+            # The whole disc, not the outline. A ring means "the thing is
+            # somewhere in here", so the inside is the subject and a
+            # sentence set across it is a sentence over its own subject.
+            _ink_mark(x, y, ring, vp)
+        if number is not None:
+            out.append(_callout_badge(x, y, int(number), color, note, vp))
+        elif not ring:
             out.append(
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{3.0 * ts:.1f}" fill="{color}"/>'
             )
-        place = str(note.get("place", "right"))
-        gap = ring + _ANNOTATION_OFFSET * ts
-        dx, dy = {"right": (gap, 0.0), "left": (-gap, 0.0),
-                  "above": (0.0, -gap), "below": (0.0, gap)}.get(place, (gap, 0.0))
-        tx, ty = x + dx, y + dy
-        out.append(
-            f'<line x1="{x + (ring * (1 if dx > 0 else -1 if dx < 0 else 0)):.1f}" '
-            f'y1="{y + (ring * (1 if dy > 0 else -1 if dy < 0 else 0)):.1f}" '
-            f'x2="{tx:.1f}" y2="{ty:.1f}" stroke="{color}" '
-            f'stroke-width="{1.2 * ts:.1f}" stroke-opacity="0.75"/>'
-        )
-        anchor = {"right": "start", "left": "end"}.get(place, "middle")
+            _ink_mark(x, y, 3.0 * ts, vp)
+        marks.append({"note": note, "x": x, "y": y, "color": color,
+                      "number": number, "ring": ring})
+
+    # Pass two: the sentences, against a plate whose marks are all down.
+    for mark in marks:
+        note, x, y = mark["note"], mark["x"], mark["y"]
+        color, number, ring = mark["color"], mark["number"], mark["ring"]
         lines = wrap_no_orphan(str(note.get("text", "")), int(note.get("wrap", _ANNOTATION_WRAP)))
+        # A numbered badge with nothing beside it is the whole device, not a
+        # half-finished one: the map carries the reference and the article
+        # carries the sentence. Drawing a leader to an empty note would be
+        # a line pointing at nothing.
+        if not any(line.strip() for line in lines):
+            continue
         size = 11.5 * ts
-        # Vertically centre the block on the leader's end for a side note,
-        # and hang it off the end for one above or below.
-        first = ty - (len(lines) - 1) * size * 0.62 if place in ("right", "left") else (
-            ty - (len(lines) - 1) * size * 1.24 if place == "above" else ty + size * 0.9
+        # One radius, computed once: whichever of the ring and the badge is
+        # wider is what the leader has to start outside of. Measured and
+        # drawn from the same number, because the measurement and the
+        # drawing share :func:`_annotation_geometry` and two radii that
+        # drifted would reserve one piece of paper and print on another.
+        lead_ring = max(ring, _callout_ring(number, ts))
+        place = _annotation_place(x, y, note, lines, ring=lead_ring, size=size, vp=vp)
+        geo = _annotation_geometry(
+            x, y, place, ring=lead_ring, ts=ts, lines=len(lines), size=size
         )
-        pad = 3 * ts if place == "right" else (-3 * ts if place == "left" else 0.0)
-        for i, line in enumerate(lines):
+        (sx, sy), (tx, ty) = geo["start"], geo["end"]
+        out.append(
+            f'<line x1="{sx:.1f}" y1="{sy:.1f}" x2="{tx:.1f}" y2="{ty:.1f}" '
+            f'stroke="{color}" stroke-width="{1.2 * ts:.1f}" stroke-opacity="0.75"/>'
+        )
+        for line, baseline in zip(lines, geo["baselines"], strict=True):
             _ink_hand_label(
-                text_box(tx + pad, first + i * size * 1.24, line,
-                         size=size, anchor=anchor),
+                text_box(geo["x"], baseline, line, size=size, anchor=geo["anchor"]),
                 vp,
                 f'the annotation "{line}"',
             )
             out.append(
-                f'<text x="{tx + pad:.1f}" y="{first + i * size * 1.24:.1f}" '
-                f'text-anchor="{anchor}" font-family="{_DEFAULT_FONT}" '
+                f'<text x="{geo["x"]:.1f}" y="{baseline:.1f}" '
+                f'text-anchor="{geo["anchor"]}" font-family="{_DEFAULT_FONT}" '
                 f'font-size="{size:.1f}" fill="{ink}" '
                 f'stroke="{paper}" stroke-width="{3.2 * ts:.1f}" paint-order="stroke" '
                 f'stroke-linejoin="round">{_esc(line)}</text>'
             )
     return f'<g id="annotations">{"".join(out)}</g>'
+
+
+def _callout_numbers(notes: list[dict[str, Any]]) -> list[int]:
+    """Return the callout numbers in order, refusing a set that is not 1..n.
+
+    A numbered mark is only a reference if the reader can follow it, and a
+    plate showing 1, 2 and 4 sends somebody hunting the map for a 3 that
+    was never drawn -- which is the same waste as a legend entry for a
+    colour nothing used, and happens the same way: a note gets cut from
+    the article and its number goes with it.
+
+    The order the notes are written in is free -- only the set has to be
+    1..n -- because a config is usually ordered by geography and an
+    article by argument.
+
+    Examples
+    --------
+    >>> _callout_numbers([{"number": 2}, {"number": 1}, {"text": "no number"}])
+    [2, 1]
+    >>> _callout_numbers([{"number": 1}, {"number": 3}])
+    Traceback (most recent call last):
+      ...
+    ValueError: annotation numbers have to run 1..n with no gap and no repeat, because a reader follows them from the article. Got: 1, 3
+    """
+    numbers = [int(n["number"]) for n in notes if n.get("number") is not None]
+    if sorted(numbers) != list(range(1, len(numbers) + 1)):
+        raise ValueError(
+            "annotation numbers have to run 1..n with no gap and no repeat, "
+            "because a reader follows them from the article. Got: "
+            + ", ".join(str(n) for n in numbers)
+        )
+    return numbers
+
+
+def _callout_ring(number: Any, ts: float) -> float:
+    """Radius the leader has to clear for a numbered badge, or 0 without one."""
+    return _CALLOUT_BADGE_R * ts if number is not None else 0.0
+
+
+def _callout_badge(
+    x: float,
+    y: float,
+    number: int,
+    color: str,
+    note: dict[str, Any],
+    vp: dict[str, Any],
+) -> str:
+    """Return the numbered disc, and record it in the plate's ink ledger.
+
+    Stamped with ``data-callout`` and the point's own coordinates, which is
+    what lets :func:`_sidecar.article_sidecar` hand a page the numbered list
+    read back out of the plate rather than typed a second time beside it.
+
+    Focusable and announced, like a control zone and for a stronger
+    reason. A badge is the map's half of a reference whose other half is a
+    paragraph; a reader who reaches it by keyboard and hears nothing has
+    been handed the geography and none of the argument. The number alone
+    would not do either -- "3" is only a reference if the thing referred to
+    comes with it -- so the label carries the note's own words, and a badge
+    drawn without any is announced as what it is: a numbered mark the
+    article explains.
+    """
+    ts = vp["ts"]
+    r = _CALLOUT_BADGE_R * ts
+    _ink_mark(x, y, r, vp)
+    lon, lat = (float(v) for v in note["at"])
+    said = str(note.get("text", "")).strip()
+    label = f"Note {number}. {said}" if said else f"Note {number}, explained in the article"
+    return (
+        f'<g data-callout="{number}" data-lon="{lon:.4f}" data-lat="{lat:.4f}" '
+        f'role="graphics-symbol" tabindex="0" aria-label="{_esc(label)}">'
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{color}" '
+        f'stroke="#ffffff" stroke-width="{1.6 * ts:.1f}"/>'
+        f'<text x="{x:.1f}" y="{y + 4.1 * ts:.1f}" text-anchor="middle" '
+        f'font-family="{_DEFAULT_FONT}" font-size="{11.5 * ts:.1f}" '
+        f'font-weight="700" fill="#ffffff">{number}</text>'
+        + (f"<title>{_esc(said)}</title>" if said else "")
+        + "</g>"
+    )
 
 
 #: How far an inset zooms out from the plate's own region when no context
@@ -6724,6 +7047,135 @@ def _inset_context_bbox(bbox: list[float], zoom: float = _INSET_ZOOM) -> list[fl
         min(180.0, cx + half_w),
         min(84.0, cy + half_h),
     ]
+
+
+#: Default wording over a detail area. Says what the rectangle is for
+#: rather than what it contains, because the names inside it are already
+#: drawn and a box that repeats one of them is a box that argues with it.
+_DETAIL_LABEL = "Detail area"
+
+#: Corner radius of the detail rectangle, in SVG units at ``ts=1``. Round,
+#: so it never reads as a frontier or as a frame: this plate already draws
+#: three kinds of straight line that mean something.
+_DETAIL_RADIUS = 5.0
+
+
+def _detail_area_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
+    """Draw a labelled rectangle around the ground the article is about.
+
+    The device every situation map in a newspaper uses and this package
+    had no word for: the plate's extent has to stay wide enough to place
+    itself -- that is what the locator inset argues -- and the story is
+    usually happening in a tenth of it. A box says "here", which is the
+    one thing a reader of an accompanying map needs before anything else,
+    and it says it without touching a single fill or label underneath.
+
+    Drawn as an outline and nothing else. The alternative -- dimming the
+    context outside it -- was tried on paper and refused: a wash over the
+    relief, the control fills and the water all at once changes every
+    colour the legend keys, so the key would show hues the plate no longer
+    draws. That is the defect :func:`_change_blend` exists to prevent,
+    reintroduced for an effect.
+
+    The label is registered in the ink ledger like any hand-placed name,
+    so the automatic layers below it yield; the rectangle itself is not,
+    because the whole point of the rectangle is that the map keeps drawing
+    inside it.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``detail_area``: ``bbox`` (``[west, south, east, north]``),
+        plus ``label``, ``color`` and ``label_at`` (``"above"``, the
+        default, or ``"below"``).
+    proj : pyproj.Transformer
+        The plate's lon/lat -> planar-metres transformer.
+    vp : dict
+        The viewport record.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when the plate declares no detail area.
+
+    Raises
+    ------
+    ValueError
+        When the rectangle is not four numbers, when it is empty, or when
+        its label will not fit above or below it on the drawn map -- the
+        same stance :func:`_ink_hand_label` takes, and for the same
+        reason: a caption nobody can read is not a caption.
+    """
+    spec = cfg.get("detail_area") or {}
+    if not spec:
+        return '<g id="detail-area"></g>'
+    unknown = sorted(set(spec) - SECTION_KEYS["detail_area"])
+    if unknown:
+        raise ValueError(
+            f"detail_area has key(s) this generator never reads: {', '.join(unknown)}. "
+            f"Known keys: {', '.join(sorted(SECTION_KEYS['detail_area']))}"
+        )
+    bbox = [float(v) for v in spec.get("bbox") or ()]
+    if len(bbox) != 4:
+        raise ValueError(
+            "detail_area.bbox needs four numbers, [west, south, east, north], "
+            f"and got {len(bbox)}"
+        )
+    west, south, east, north = bbox
+    if east <= west or north <= south:
+        raise ValueError(
+            f"detail_area.bbox {bbox} encloses no ground: east has to exceed "
+            "west and north has to exceed south"
+        )
+    ts = vp["ts"]
+    color = str(spec.get("color", _pal(cfg)["chrome_ink"]))
+    # Both diagonal corners through the projection, not the lon/lat
+    # rectangle scaled: under a conic a box of degrees is not a box of
+    # units, and taking the min/max of the four projected corners is what
+    # keeps the drawn rectangle around the ground it names.
+    corners = [
+        vp["to_svg"](*proj.transform(lon, lat))
+        for lon in (west, east)
+        for lat in (south, north)
+    ]
+    xs = [c[0] for c in corners]
+    ys = [c[1] for c in corners]
+    x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+    out = [
+        f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{x1 - x0:.1f}" '
+        f'height="{y1 - y0:.1f}" rx="{_DETAIL_RADIUS * ts:.1f}" fill="none" '
+        f'stroke="{color}" stroke-width="{1.8 * ts:.1f}" stroke-opacity="0.85"/>'
+    ]
+    label = str(spec.get("label", _DETAIL_LABEL))
+    if label:
+        size = 10.5 * ts
+        gap = 7.0 * ts
+        wanted = str(spec.get("label_at", "above"))
+        # The named side first, the other as the fallback: a box near the
+        # top of the plate has no room above it, and a label that silently
+        # went missing there is the failure this whole ledger exists to
+        # stop.
+        for side in (wanted, "below" if wanted == "above" else "above"):
+            ly = y0 - gap if side == "above" else y1 + gap + size * 0.8
+            if _claim_label(
+                x0, ly, label, size=size, tracking=1.6, vp=vp,
+                anchor="start", caps=True,
+            ):
+                out.append(
+                    tracked_text(
+                        x0, ly, label, size=size, fill=color,
+                        tracking=1.6, weight="700", upper=True, anchor="start",
+                    )
+                )
+                break
+        else:
+            raise ValueError(
+                f'detail_area.label "{label}" will not fit above or below the '
+                "rectangle: it would leave the drawn map or land on ink that is "
+                "already there. Shorten it, move the box, or set label: '' to "
+                "draw the rectangle alone"
+            )
+    return f'<g id="detail-area">{"".join(out)}</g>'
 
 
 def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, float, float] | None:
@@ -8455,7 +8907,7 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
     "legend_title", "print_width", "small_multiples", "provenance", "values",
-    "change",
+    "change", "detail_area",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
@@ -8632,6 +9084,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
         "before", "after", "actor", "from", "to", "palette", "fill_opacity",
         "blend",
     }),
+    "detail_area": frozenset({"bbox", "label", "color", "label_at"}),
     "values": frozenset({
         "by", "data", "key", "field", "classes", "method", "breaks", "palette",
         "diverging", "label", "unit", "fill_opacity", "no_data", "legend_position",
