@@ -180,7 +180,7 @@ What is deliberately shared today:
 
 | Here | There | Shared because |
 |---|---|---|
-| `make-map`'s argparse shape | `make-figure` | Someone who knows one recognises the other |
+| `make-map`'s Click shape | `make-figure` | Someone who knows one recognises the other |
 | `web/tools/build_map_kits.py` | `web/tools/build_figure_kits.py` | Same download chip, same `--only` / `--check`, same per-language kits |
 | `_load_script` in `sprezzature_maps/__init__.py` | the figures loader | Same `scripts/` layout, same caching |
 | The Ralph Eyeball Loop | `references/ralph-eyeball-loop.md` | One verification discipline, not two |

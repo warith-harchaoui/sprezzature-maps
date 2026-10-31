@@ -85,8 +85,12 @@ make_density(
 
 ## Command line (`make-map`)
 
-Built with argparse, Python's standard library for parsing command-line
-flags; this CLI is always installed, no extra to add.
+Built with Click, a Python library for command-line tools with
+subcommands. Always installed, no extra to add. `make-map` and
+`sprezzature-maps` are two spellings of the same group — they resolve to
+the same callable, so they cannot differ; `make-map` is the older name and
+is kept because it is what the skill, the README and years of notes tell
+people to type.
 
 ```bash
 # Demo data, default output path.
@@ -165,18 +169,18 @@ open http://localhost:8000/docs
 open http://localhost:8000/
 ```
 
-## Command line (`sprezzature-maps[cli]`)
+## The same command, under its suite name (`sprezzature-maps`)
 
-A richer twin of `make-map`, built with Click (another Python
-command-line library, one that makes subcommands like `sprezzature-maps
-choropleth` easy to define). It reads CSV/TSV/JSONL files directly
-(comma-separated, tab-separated, or one-JSON-object-per-line, not just a
-pre-shaped JSON array) and accepts `--map role=column` bindings for a
-file whose columns aren't already named `id`/`value`.
+Everything above works under this name too, and everything here works
+under `make-map`: one Click group, two spellings. Until 2026-10-25 these
+really were two commands — an argparse `make-map` that read only a
+pre-shaped JSON array, and a richer Click twin behind a `[cli]` extra —
+and that is what the examples below are showing off: reading CSV/TSV/JSONL
+directly (comma-separated, tab-separated, or one-JSON-object-per-line) and
+`--map role=column` bindings for a file whose columns aren't already named
+`id`/`value`. Those live on the sub-commands, so both names reach them.
 
 ```bash
-pip install 'sprezzature-maps[cli]'
-
 sprezzature-maps list
 # choropleth
 # situation_map
