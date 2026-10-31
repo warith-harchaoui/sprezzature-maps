@@ -1405,7 +1405,12 @@ def build_andes() -> dict[str, Any]:
                 {"lon": -61.0, "lat": -4.5, "text": "AMAZON BASIN", "size": 13, "tracking": 4},
                 {"lon": -69.5, "lat": -46.0, "text": "PATAGONIA", "size": 12, "tracking": 3.5},
                 {"lon": -67.5, "lat": -19.5, "text": "ALTIPLANO", "size": 10, "tracking": 2.5},
-                {"lon": -70.2, "lat": -25.2, "text": "ATACAMA", "size": 9, "tracking": 2},
+                # North of the range label, not across it. At 25.2 S this name
+                # ran straight through the "A" of A N D E S -- 60% of its own
+                # box -- because the two sit on nearly the same meridian and
+                # the range label is a 125-unit vertical band. 23 S is the
+                # desert's core, Antofagasta to Calama, and clears the band.
+                {"lon": -69.8, "lat": -23.0, "text": "ATACAMA", "size": 9, "tracking": 2},
                 {"lon": -62.5, "lat": -34.0, "text": "PAMPAS", "size": 10, "tracking": 2.5},
             ],
         },
@@ -1512,7 +1517,14 @@ def build_hormuz() -> dict[str, Any]:
             "waters": [
                 {"lon": 51.5, "lat": 27.4, "text": "PERSIAN GULF", "size": 13, "tracking": 4, "rotate": -38},
                 {"lon": 59.0, "lat": 24.6, "text": "GULF OF OMAN", "size": 11, "tracking": 3},
-                {"lon": 56.45, "lat": 26.45, "text": "Strait of Hormuz", "size": 9, "rotate": -42},
+                # The water layer's default tracking is 6, a setting meant for
+                # an ocean, and on a sixteen-character name it made a 206-unit
+                # word for a forty-kilometre strait: it crossed BANDAR ABBAS
+                # and swallowed MUSANDAM whole. Set tight, and laid along the
+                # lane -- Gulf in the north-west, Gulf of Oman in the
+                # south-east -- rather than across it.
+                {"lon": 56.62, "lat": 26.54, "text": "Strait of Hormuz", "size": 9,
+                 "tracking": 1.6, "rotate": 25},
                 {"lon": 60.5, "lat": 21.6, "text": "ARABIAN SEA", "size": 11, "tracking": 3},
             ],
             "places": [
