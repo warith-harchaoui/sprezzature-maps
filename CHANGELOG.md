@@ -31,6 +31,26 @@ All notable changes to sprezzature-maps are documented here.
   — no sub-polygon closes with a chord that spans the map — measured in
   degrees of longitude between a piece's ends: 0.1 for Russia now, 152 before.
 
+- **The plate carried a white page around with it.** A world choropleth has
+  no sea layer of its own — the sea is simply the part of the canvas no
+  country covers — so the backdrop `<rect>` across the whole canvas was
+  never the ocean. It was an opaque page, and dropped on a dark site, a
+  slide, or any ground that is not white it showed up as a white box with a
+  map in it. The rect is gone and the sea takes the ground the plate is
+  placed on.
+
+  What must *not* go transparent with it is the land. Country fills are
+  drawn at 0.7 so the hillshade reads through them, and over a transparent
+  canvas that 30% peek would dilute the ramp against an unknown colour — the
+  one thing a choropleth's colour may not depend on. So the land carries its
+  own paper: the hillshade is composited onto the page colour in the raster
+  and made opaque exactly where the countries are, so the single `<image>`
+  is both the terrain texture and the land's ground. With `relief: false`
+  there is no texture to peek at and nothing underneath but canvas, so that
+  branch fills at full opacity instead of washing every country 30% towards
+  a page that is no longer there — which had also left the legend swatches,
+  drawn at full strength, a visible step away from the land they key.
+
 ### Changed
 
 - **A regional situation plate draws a locator inset by default.** The inset

@@ -107,8 +107,13 @@ BG = "#FFFFFF"
 NO_DATA = "#E5E5EA"
 NO_DATA_EDGE = "#D1D1D6"
 
-# Country fill opacity: lets the relief layer underneath show through as a
-# faint terrain texture instead of being fully hidden by an opaque fill.
+# Country fill opacity, applied **only when the relief layer is drawn**:
+# it lets the hillshade underneath show through as a faint terrain texture
+# instead of being fully hidden by an opaque fill. With ``relief=False``
+# there is nothing underneath to show through, so the same 0.7 is pure
+# dilution -- it washed every fill 30% towards the page and left the legend
+# swatches, drawn at full strength, a visible step away from the land they
+# key. That branch now fills at 1.0 (see ``build_svg``).
 # Tuned empirically via the Ralph Eyeball Loop, not guessed: 0.9 (10% peek)
 # was tried first and was completely imperceptible at any render size (the
 # math: a ~66-grey-level mountain-ridge highlight, diluted first by the
@@ -1073,7 +1078,22 @@ def build_svg(
         "@media (prefers-reduced-motion: reduce){.tip{transition:none;}}"
         "</style>"
     )
-    parts.append(f'<rect width="{width}" height="{height}" fill="{BG}"/>')
+    # No backdrop rect. A world choropleth has no sea layer of its own --
+    # the sea is simply the part of the canvas no country covers -- so a
+    # rect across the whole canvas is not "the ocean", it is an opaque page
+    # the plate carries around with it. Dropped on a dark site, a slide, or
+    # a printed ground, that page shows up as a white box with a map in it.
+    # Leaving it out makes the sea transparent, and the plate takes the
+    # ground it is placed on.
+    #
+    # What must NOT become transparent with it is the land: country fills
+    # are drawn at _COUNTRY_FILL_OPACITY so the relief reads through them,
+    # and over a transparent canvas that peek would dilute the ramp against
+    # an unknown colour -- the one thing a choropleth's colour may not
+    # depend on. So the land carries its own paper: see the relief block
+    # below, which flattens the hillshade onto BG and turns it opaque
+    # exactly where the drawn countries are, and the ``relief=False``
+    # branch, which drops the peek instead (no texture, nothing to peek at).
     parts.append(
         f'<text x="40" y="44" font-size="22" font-weight="700" fill="{INK}" '
         f'letter-spacing="-0.3">{xml_escape(title)}</text>'
@@ -1134,13 +1154,27 @@ def build_svg(
         #
         # Masked to the countries this map actually draws, the sea becomes
         # the page -- which is what a world choropleth's sea is.
-        relief_rgba[..., 3] = (
-            relief_rgba[..., 3]
-            * _land_mask(
-                countries, project, side_margin, top_margin,
-                int(plot_w), int(plot_h),
-            )
-        ).astype(np.uint8)
+        land = _land_mask(
+            countries, project, side_margin, top_margin,
+            int(plot_w), int(plot_h),
+        )
+        # Flatten the shading onto the page colour here, in the raster,
+        # rather than letting the canvas do it: with no backdrop rect there
+        # is no page left to flatten against, and a 55%-alpha hillshade over
+        # a transparent canvas would hand the land's lightness to whatever
+        # is behind the plate. Composited onto BG and then made opaque
+        # exactly where the countries are, this one <image> is both the
+        # terrain texture and the land's paper -- so every land pixel comes
+        # out the value it had against a white page, and every sea pixel
+        # comes out empty.
+        alpha = relief_rgba[..., 3:4].astype(np.float32) / 255.0
+        white = np.array(
+            [int(BG[1:3], 16), int(BG[3:5], 16), int(BG[5:7], 16)], dtype=np.float32
+        )
+        relief_rgba[..., :3] = (
+            relief_rgba[..., :3].astype(np.float32) * alpha + white * (1.0 - alpha)
+        ).round().astype(np.uint8)
+        relief_rgba[..., 3] = (land * 255.0).astype(np.uint8)
         parts.append(
             f'<image x="{side_margin:.1f}" y="{top_margin:.1f}" '
             f'width="{int(plot_w)}" height="{int(plot_h)}" '
@@ -1172,6 +1206,10 @@ def build_svg(
         parts.append(f'<path d="{d}"/>')
     parts.append("</g>")
 
+    # The peek belongs to the relief, not to the fill: with the hillshade
+    # off there is nothing under the countries but the (now transparent)
+    # canvas, so a translucent fill would read the page instead of the data.
+    fill_opacity = _COUNTRY_FILL_OPACITY if relief else 1.0
     for country in countries:
         cid = str(country["id"])
         # None is a real answer here -- a country the data simply does not
@@ -1247,7 +1285,7 @@ def build_svg(
                 border=NO_DATA_EDGE,
             )
         parts.append(
-            f'<path class="country hit" tabindex="0"{_country_data(country, value)} d="{path_d}" fill="{fill}" fill-opacity="{_COUNTRY_FILL_OPACITY}" '
+            f'<path class="country hit" tabindex="0"{_country_data(country, value)} d="{path_d}" fill="{fill}" fill-opacity="{fill_opacity}" '
             f'stroke="{edge}" stroke-width="0.4"><title>{xml_escape(tip)}</title></path>'
             f"{bubble}"
         )
