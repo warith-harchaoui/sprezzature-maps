@@ -145,7 +145,11 @@ spreadsheet spells Provence-Alpes-Côte d'Azur its own way. A table that
 matches **nothing** stops the plate rather than drawing a confident grey map
 of a column-name typo, and a cell that is not a number stops it rather than
 being dropped as if the unit had no data. The key prints the breaks and names
-the method, so the plate satisfies the audit by construction.
+the method, so the plate satisfies the audit by construction — and it counts
+the classes the data **supported**, not the ones the config asked for. Ties
+collapse boundaries, which is ordinary: `classes: 6` over counts with a long
+run of zeros is not six classes, and a key saying so over six swatches would
+be a key to nothing.
 
 Living inside the situation map rather than in a generator of its own is the
 point: it inherits the conic projection, the texture-shaded relief, the

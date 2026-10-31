@@ -4223,8 +4223,28 @@ def _value_classes(
             f"unknown values.method {method!r}; known: "
             + ", ".join(sorted(k for k in METHOD_LABELS if k != "given"))
         )
-    classes = int(spec.get("classes", 5))
-    return classify(values, classes, method), method, classes
+    asked = int(spec.get("classes", 5))
+    breaks = classify(values, asked, method)
+    # The count the plate states is the count the breaks deliver, never the
+    # count the config asked for. ``classify`` collapses boundaries the data
+    # cannot support -- ties are ordinary, and a quantile cut through
+    # mostly-zero counts puts several breaks on the same number -- and its own
+    # docstring states that as the contract: "the caller asked for k classes
+    # and gets the number the data can actually support".
+    #
+    # Handing ``asked`` back anyway made the legend restate the request as the
+    # result. Measured on counts with a long run of zeros, which is the
+    # commonest input a choropleth gets: ``classes: 5`` with quantiles left
+    # the data admitting a single boundary, so the plate printed "5 classes,
+    # quantiles" over five swatches with every unit in one colour. Four of
+    # those swatches keyed nothing, and five was a number no reader could have
+    # obtained from the data.
+    #
+    # ``classes: 5`` is also the *default* here, so this was reachable without
+    # anybody choosing a number at all. The ``breaks`` branch above has always
+    # returned ``len(breaks) + 1``; this is the same arithmetic, which is what
+    # makes the two branches of one function mean the same thing.
+    return breaks, method, len(breaks) + 1
 
 
 def _value_colors(spec: dict[str, Any], classes: int, diverging: bool) -> list[str]:

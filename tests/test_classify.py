@@ -133,6 +133,45 @@ def test_classification_refuses_what_it_cannot_do() -> None:
         classify(GDP, 5, "rainbow")
 
 
+def test_no_boundary_sits_on_the_minimum() -> None:
+    """A break on the smallest value bounds a class nothing can reach.
+
+    ``class_index`` puts a value in the class above every boundary it is not
+    strictly below, so a boundary equal to ``min(values)`` leaves class 0
+    empty for ever: a swatch on the legend keying nothing, and a class in the
+    count that is not there.
+
+    Ties at the bottom are what produce it, and counts with a long run of
+    zeros are the commonest input a choropleth gets. Forty zeros and four
+    small numbers is that input: before this rule, ``quantile`` put its only
+    surviving break on zero and every unit on the map sat in class 1.
+    """
+    counts = [0.0] * 40 + [1.0, 2.0, 3.0, 17.0]
+    for method in METHODS:
+        breaks = classify(counts, 5, method)
+        assert all(b > min(counts) for b in breaks), f"{method} kept a break on the floor"
+        reached = {class_index(v, breaks) for v in counts}
+        assert 0 in reached, f"{method} left class 0 unreachable"
+
+
+def test_equal_interval_keeps_its_empty_bands() -> None:
+    """The limit of the rule above, and the reason it is only about the floor.
+
+    An empty band *inside* an equal-interval classification is not a defect,
+    it is the method reporting the shape of the data: "nothing falls between
+    here and here" on a number line cut into equal widths. Dropping those
+    would turn equal intervals into something else, and the module offers
+    them precisely because the classes sometimes have to mean something
+    outside the data. So the measurement that keeps the previous test honest
+    is this one: the method whose empty classes carry information keeps them.
+    """
+    counts = [0.0] * 40 + [1.0, 2.0, 3.0, 17.0]
+    breaks = classify(counts, 5, "equal")
+    assert len(breaks) == 4
+    reached = {class_index(v, breaks) for v in counts}
+    assert reached == {0, 4}, "the two populated bands are the ends; the middle is empty"
+
+
 def test_the_map_separates_what_it_claims_to_separate() -> None:
     """
     The measurement that justifies the feature, in perceptual units.

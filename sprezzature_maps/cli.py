@@ -34,6 +34,7 @@ Run it under either name::
 
     sprezzature-maps list
     sprezzature-maps choropleth --data my.csv --map id=Code --map value=Score --out world.svg
+    sprezzature-maps choropleth --data my.csv --classes 5 --method jenks --out world.svg
     sprezzature-maps situation-map --config my-region.yaml --out region.svg
 
 Usage example
@@ -56,7 +57,7 @@ from typing import Any
 
 import click
 
-from . import make_choropleth, make_density, make_situation_map
+from . import classification_methods, make_choropleth, make_density, make_situation_map
 
 
 def _parse_mapping(pairs: tuple[str, ...]) -> dict[str, str]:
@@ -253,6 +254,48 @@ def audit_cmd(target: str, fmt: str) -> None:
         "detail the canvas cannot resolve; pass 0 to keep every vertex."
     ),
 )
+# The most consequential decision on a choropleth, and until now the one
+# decision this command could not express. `scripts/_classify.py` has held
+# four classifications and an exact Fisher-Jenks solver since it was written;
+# the HTTP request model offers both of these fields; the regional plate
+# reads them out of its own YAML. Only the world choropleth -- the command
+# the README shows first, and the one whose entire subject is numbers
+# coloured by class -- had neither, so every map anybody made by typing got
+# `classes=None`: the unclassed linear stretch, which that module's own
+# docstring calls "the worst fit for the data choropleths are usually made
+# of", because on skewed data it puts most territories in the bottom of the
+# ramp and leaves numbers ten times apart looking identical.
+#
+# Reaching for `elbow-helper` to pick the number was measured and refused. Its
+# floor sits above this question's ceiling: `robust_knee` wants 20 points on a
+# curve (`min_samples = 20`) and the curve is residual within-class variance
+# against k, which both surfaces here cap at 12. So it returns
+# NoClearKnee(INSUFFICIENT_DATA) for every input the question can produce,
+# including a control whose answer is unarguably three. The number of classes
+# stays the caller's to state -- and now statable.
+@click.option(
+    "--classes",
+    type=click.IntRange(2, 12),
+    default=None,
+    help=(
+        "Class the values into this many colour classes instead of stretching "
+        "the ramp linearly from min to max. Reach for it whenever the values "
+        "are skewed — income, density, counts, GDP per head. Omit for the "
+        "unclassed ramp."
+    ),
+)
+@click.option(
+    "--method",
+    type=click.Choice(classification_methods()),
+    default="quantile",
+    show_default=True,
+    help=(
+        "Where to put the class boundaries, used only with --classes. "
+        "quantile gives every class the same count; equal gives every class "
+        "the same width; jenks finds the groupings the data itself suggests; "
+        "headtail suits heavy tails. The legend prints whichever was used."
+    ),
+)
 def choropleth_cmd(
     data_path: str | None,
     mappings: tuple[str, ...],
@@ -261,11 +304,20 @@ def choropleth_cmd(
     diverging: bool | None,
     relief: bool,
     simplify: float | None,
+    classes: int | None,
+    method: str,
 ) -> None:
     """Render a world choropleth map."""
     kwargs: dict[str, Any] = {"diverging": diverging, "relief": relief}
     if simplify is not None:
         kwargs["simplify"] = simplify
+    # `method` without `classes` is not an error and not a silent drop: the
+    # generator ignores it exactly as the HTTP surface does, because the
+    # unclassed ramp has no boundaries to place. Passing it anyway would make
+    # a reader who typed only --method believe a classification happened.
+    if classes is not None:
+        kwargs["classes"] = classes
+        kwargs["method"] = method
     if data_path:
         kwargs["data"] = _load_choropleth_rows(data_path, _parse_mapping(mappings))
     elif mappings:
