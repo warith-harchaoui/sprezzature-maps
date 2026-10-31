@@ -36,7 +36,7 @@ nothing is left for a front door to be missing.
 
 That tolerance was also blind in a shape worth recording. Measured here on
 2026-10-31, with ``sprezzature_maps.cli`` made to exit 1 printing exactly what
-the tolerance asked for — ``pip install 'sprezzature-maps[click]'``, no
+the tolerance asked for — an install line naming a ``[click]`` extra, no
 traceback — the old case **passed** for ``sprezzature-maps`` and failed only
 for ``make-map``. A refusal has to name the distribution to be useful, the
 Click front door is named after the distribution, so the one assertion left
