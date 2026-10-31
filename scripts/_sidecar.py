@@ -72,6 +72,23 @@ _MARKER_RE = re.compile(
     r'(?: data-radius-km="([\d.]+)")?'
 )
 
+#: ``data-*`` on a numbered callout badge, written by ``_callout_badge``,
+#: with the note's own words in the optional ``<title>`` that follows it.
+#:
+#: This is the half of "accompanying an article" a generator can actually
+#: guarantee. The map's half of a numbered reference is a badge; the
+#: article's half is a numbered paragraph, and nothing but a shared source
+#: stops the two drifting apart -- a note cut from the prose leaves its
+#: badge on the plate, and a badge renumbered leaves the prose pointing at
+#: the wrong place. Read back out of the finished SVG, the plate *is* the
+#: shared source: the page prints the list it is given rather than one
+#: somebody typed again beside it.
+_CALLOUT_RE = re.compile(
+    r'<g data-callout="(\d+)" data-lon="(-?[\d.]+)" data-lat="(-?[\d.]+)"[^>]*>'
+    r"(?:(?!</g>).)*?(?:<title\b[^>]*>(.*?)</title>)?</g>",
+    re.S,
+)
+
 #: The root ``<title>``/``<desc>``, whichever kind wrote them. Matched on the
 #: element rather than on an id: the situation map stamps ``sm-title`` and the
 #: choropleth ``cx-title``, and keying on one of them made this return a
@@ -141,9 +158,12 @@ def article_sidecar(svg: str) -> dict[str, Any]:
     Returns
     -------
     dict
-        ``title``, ``alt``, ``description``, ``zones`` and ``markers``.
-        ``zones`` and ``markers`` are empty lists for a plate that draws
-        neither, which is the normal case for a locator map.
+        ``title``, ``alt``, ``description``, ``zones``, ``markers`` and
+        ``callouts``. ``zones`` and ``markers`` are empty lists for a plate
+        that draws neither, which is the normal case for a locator map;
+        ``callouts`` is the plate's numbered editorial marks, in number
+        order, which is the list the surrounding article numbers its
+        paragraphs from.
 
     Examples
     --------
@@ -161,6 +181,19 @@ def article_sidecar(svg: str) -> dict[str, Any]:
     ['Blue', 'Red']
     >>> card["alt"]
     'Situation map covering 1.0°E to 2.0°E. Blue covers the largest mapped share, 70%.'
+
+    The numbered marks come back in number order, whatever order the
+    config wrote them in, because the article numbers its paragraphs from
+    this list and a page that renumbers them has lost the reference:
+
+    >>> plate = (
+    ...     '<svg><g data-callout="2" data-lon="35.0000" data-lat="47.8000"'
+    ...     ' role="graphics-symbol"><circle/><title>The dam</title></g>'
+    ...     '<g data-callout="1" data-lon="37.7000" data-lat="48.1000">'
+    ...     '<circle/></g></svg>'
+    ... )
+    >>> [(c["number"], c["text"]) for c in article_sidecar(plate)["callouts"]]
+    [(1, ''), (2, 'The dam')]
 
     A plate whose largest zone is only claimed says so, because "covers" and
     "is claimed to cover" are different sentences:
@@ -188,12 +221,30 @@ def article_sidecar(svg: str) -> dict[str, Any]:
         }
         for precision, lon, lat, radius in _MARKER_RE.findall(svg)
     ]
+    # Sorted on the parsed integer, taken before the record is built, not
+    # read back out of it: a record is a ``dict[str, Any]`` of three types
+    # and sorting on one of its values asks the reader -- and the type
+    # checker -- to know which. ``mypy`` would not, and said so.
+    numbered = [
+        (
+            int(number),
+            {
+                "number": int(number),
+                "lon": float(lon),
+                "lat": float(lat),
+                "text": _unescape(text or ""),
+            },
+        )
+        for number, lon, lat, text in _CALLOUT_RE.findall(svg)
+    ]
+    callouts = [record for _n, record in sorted(numbered, key=lambda pair: pair[0])]
     return {
         "title": title,
         "description": description,
         "alt": _alt_text(description, zones),
         "zones": zones,
         "markers": markers,
+        "callouts": callouts,
     }
 
 

@@ -460,6 +460,64 @@ claims a precision a note about a region does not have. The note takes the
 colour of the thing it describes, so it sits back onto the map instead of
 jumping off it.
 
+**The direction can be measured rather than guessed.** `place` takes the
+four sides and the four diagonals — so every leader falls on 90 or 45
+degrees, which is Datawrapper's rule after Beck — and `place: auto` tries
+them in that order and takes the first whose every line clears the names
+already on the plate. `annotations` was the one text layer here that never
+consulted the ink ledger, and a hand that guessed wrong set a sentence
+through a toponym, at its most visible, because the note is drawn above
+every map layer. A note with nowhere to go is refused by name rather than
+drawn in the least-bad direction.
+
+**A numbered mark is half of a reference whose other half is a
+paragraph.**
+
+```yaml
+annotations:
+  - at: [32.6250, 46.6425]
+    number: 1
+    text: "Kherson, retaken in November 2022."
+    place: auto
+```
+
+The numbers have to run 1..n with no gap and no repeat, because a plate
+showing 1, 2 and 4 sends a reader hunting the map for a 3 that was cut
+from the article. And they come back out of the finished plate, so the
+page prints the list it is given rather than one somebody typed again
+beside it:
+
+```python
+from sprezzature_maps import article_sidecar
+for note in article_sidecar(svg)["callouts"]:
+    print(f"{note['number']}. {note['text']}")
+```
+
+The badge is focusable and announces the note's words, not its digit: a
+reference is useless to a reader who reaches it by keyboard and hears "3".
+
+**And a rectangle says where the story is.** The extent has to stay wide
+enough to place itself — that is what the locator argues — and the piece
+is usually happening in a tenth of it:
+
+```yaml
+detail_area:
+  bbox: [32.1, 46.3, 34.2, 47.4]
+  label: "Lower Dnieper"
+```
+
+An outline and a label, nothing else. Dimming the context outside it was
+tried and refused: a wash over the relief, the control fills and the
+water changes every colour the legend keys, so the key would show hues
+the plate no longer draws.
+
+The examples all three of these were chosen from — eight named New York
+Times situation maps, read through their own text layer — are in
+[`references/situation-map-annotation.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/references/situation-map-annotation.md),
+together with the reason this package still refuses movement arrows when
+the desk that invented the modern form of these plates spent 2022
+abandoning them.
+
 **It says where on Earth it is, without being asked.** *"Zoom out for
 perspective, zoom in for detail"* is the locator map's one rule, and a plate
 that only ever zooms in answers half of it. So a regional plate draws a

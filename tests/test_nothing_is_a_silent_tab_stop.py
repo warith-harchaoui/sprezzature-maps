@@ -99,6 +99,11 @@ def _focusables(svg: str) -> list[dict[str, str]]:
                 "label": (el.get("aria-label") or "").strip(),
                 "labelledby": el.get("aria-labelledby") or "",
                 "category": el.get("data-category") or el.get("data-legend-category") or "",
+                # Captured so a marker can be selected by what it *is*
+                # rather than by what it is not. See
+                # ``test_a_mark_announces_its_precision``.
+                "precision": el.get("data-precision") or "",
+                "callout": el.get("data-callout") or "",
             }
         )
     return out
@@ -108,7 +113,11 @@ def _root_role(svg: str) -> str:
     return ET.fromstring(svg).get("role") or ""
 
 
-THEMATIC = sorted(n for n in _builders() if n in {"ukraine", "syria", "libya", "sudan", "drc"})
+THEMATIC = sorted(
+    n
+    for n in _builders()
+    if n in {"ukraine", "syria", "libya", "sudan", "drc", "dnieper"}
+)
 REFERENCE = sorted(n for n in _builders() if n not in set(THEMATIC))
 
 
@@ -194,6 +203,33 @@ def test_a_claim_names_the_claim(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", THEMATIC)
+def test_a_numbered_callout_says_what_it_refers_to(name: str) -> None:
+    """
+    A badge reading "3" and nothing else is a reference with one half.
+
+    The numbered callout is the plate's half of a pairing whose other half
+    is a numbered paragraph. A sighted reader follows it by looking from
+    the map to the article; a reader who arrives at the badge by keyboard
+    has only what the badge says, so it has to carry the note's own words
+    and not just the digit.
+    """
+    svg = plate(_builders()[name]())
+    badges = [f for f in _focusables(svg) if f["callout"]]
+    if not badges:
+        pytest.skip(f"{name} draws no numbered callouts")
+    for b in badges:
+        assert b["role"] == "graphics-symbol", (
+            f"{name}: callout {b['callout']} is reachable with no graphics role"
+        )
+        assert b["label"].startswith(f"Note {b['callout']}"), (
+            f"{name}: callout {b['callout']} announces itself as {b['label']!r}"
+        )
+        assert len(b["label"]) > len(f"Note {b['callout']}. "), (
+            f"{name}: callout {b['callout']} announces its number and nothing else"
+        )
+
+
+@pytest.mark.parametrize("name", THEMATIC)
 def test_a_mark_announces_its_precision(name: str) -> None:
     """
     The precision code is the one thing the non-visual reader cannot infer.
@@ -204,8 +240,17 @@ def test_a_mark_announces_its_precision(name: str) -> None:
     exists to prevent, reintroduced for the readers least able to catch it.
     """
     svg = plate(_builders()[name]())
-    marks = [f for f in _focusables(svg) if f["role"] == "graphics-symbol" and not f["category"]]
-    assert marks, f"{name}: no named marker found"
+    # Selected on ``data-precision``, which is what a marker has and what
+    # this test is about. It used to select every focusable
+    # ``graphics-symbol`` carrying no ``data-category`` -- a marker by
+    # elimination -- and the first new kind of focusable symbol the
+    # generator grew was caught by it and asked to announce a precision
+    # code it does not have. A numbered callout is a reference to a
+    # paragraph, not a position estimate; it is covered by
+    # ``test_a_numbered_callout_says_what_it_refers_to`` instead.
+    marks = [f for f in _focusables(svg) if f["precision"]]
+    if not marks:
+        pytest.skip(f"{name} draws no markers")
     wordings = set(msm._GEO_PRECISION.values())
     for m in marks:
         assert any(w in m["label"] for w in wordings), (

@@ -4,6 +4,81 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **The editorial annotation layer, and a plate that uses it.** A
+  situation plate that runs beside an article has to carry the argument's
+  own marks, not only the assessment. The layer for that — a circled
+  point, a leader, a sentence with a halo — has been in this generator
+  for months and was called by **none of the fourteen bundled plates**,
+  which is this repository's dominant failure mode in its purest form:
+  the tool exists and nothing calls it.
+
+  Three devices were added, chosen against eight named New York Times
+  situation maps read through their own ai2html text layer. The study is
+  `references/situation-map-annotation.md`, and it carries what was
+  deliberately **not** built as well as what was.
+
+  `annotations[].number` draws a numbered badge, the map's half of a
+  reference whose other half is a numbered paragraph — the "fight for
+  Mosul" maps of October 2016 are the exemplar, markers 1 to 6 keyed to
+  six numbered sentences. The numbers must run 1..n with no gap and no
+  repeat, because a plate showing 1, 2 and 4 sends a reader hunting for a
+  3 that was cut from the prose. They are stamped into the markup and
+  `article_sidecar` reads them back out of the finished plate, so a page
+  prints the list it is given rather than one typed again beside it. The
+  badge is focusable and announces the note's words: a reference is
+  useless to a reader who reaches it by keyboard and hears a digit.
+
+  `place: auto` has the note's direction measured rather than guessed.
+  `annotations` was the **only** text layer here that never consulted the
+  ink ledger — every other one asks `_label_fits` whether the paper is
+  free — so a note went where the `place` key said and a hand that
+  guessed wrong set a sentence through a toponym, at its most visible,
+  because the note is drawn above every map layer. Eight directions are
+  tried, the four sides and the four diagonals, so every leader falls on
+  90 or 45 degrees after Datawrapper's rule and Beck's; a note with
+  nowhere to go is refused by name rather than drawn in the least-bad
+  direction.
+
+  Writing it surfaced a second defect of the same shape, and only a
+  rendered plate shows this one: the notes were placed **one at a time
+  against a plate that was not finished**. Note 1 took the paper to its
+  right, which was free when it was asked, and note 2's badge then landed
+  in the middle of the word "Kherson"; note 3's sentence ran through note
+  4's ring. Both notes were placed correctly, against the wrong plate.
+  Every mark is now down and in the ledger before any sentence is placed.
+
+  `detail_area: {bbox, label, color, label_at}` draws a labelled
+  rectangle around the ground the piece is about. The extent has to stay
+  wide enough to place itself — that is what the locator inset argues —
+  and the story is usually happening in a tenth of it. An outline and a
+  label and nothing else: dimming the context outside it was tried and
+  refused, because a wash over the relief, the control fills and the
+  water changes every colour the legend keys, which is the defect
+  `_change_blend` exists to prevent, reintroduced for an effect.
+
+  **A capability nobody switches on is a capability the package does not
+  have**, so a fifteenth plate uses all three. `dnieper` draws the same
+  traced contact line the Ukraine plate does, at a tighter extent, with
+  four numbered callouts placed by measurement and a detail rectangle on
+  the lower Dnieper — and a test asserts that it keeps using them.
+
+  Two things the examples settled rather than added. The package's
+  refusal of movement arrows **stands, and the evidence sharpens it**:
+  the desk that drew the big red arrows in February 2022 had dropped the
+  occupation fill itself by 21 March, and by 2024 draws advance as a
+  dated shaded area with an all-caps caption — `RUSSIAN ADVANCE AS OF
+  MAY 14` — which is this package's `change` layer, arrived at
+  independently. And in Gaza in October 2023 it drew crossing points and
+  vehicle sightings on a map whose own headline asserted encirclement.
+  What the study adds to the existing position is that the alternative to
+  the arrow is not only geometric. It is also **typographic**: by the end
+  of the 2022 retreat what carried the claim was named cities coloured by
+  who held them.
+
+  `tests/test_the_map_and_the_article_point_at_the_same_thing.py`.
+
 ### Fixed
 
 - **The difference layer subtracted a control layer from itself, and

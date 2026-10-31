@@ -14,6 +14,14 @@ be regenerated in one command:
   Institute for the Study of War, a think tank that publishes daily
   conflict maps). An illustrative snapshot from partway through the war,
   not a claim of exact, current accuracy.
+- ``dnieper``: the same traced contact line as ``ukraine`` at a tighter
+  extent, and the one plate here that carries an *article's* marks rather
+  than only an assessment: four numbered callouts whose direction is
+  measured against the names already on the plate, and a detail rectangle
+  on the lower Dnieper. The editorial annotation layer had been in the
+  generator for months and was used by none of these examples; see
+  ``references/situation-map-annotation.md`` for the New York Times maps
+  each device was taken from.
 - ``syria``: a schematic four-way split (government, opposition, the
   Kurdish-led SDF, Syrian Democratic Forces, and Turkish-backed forces)
   based on open-source literature, an illustrative snapshot from around
@@ -342,6 +350,169 @@ def build_ukraine() -> dict[str, Any]:
                 {"lon": 31.2947, "lat": 51.4939, "text": "Chernihiv", "size": 11},
                 {"lon": 37.30, "lat": 48.98, "text": "Kramatorsk", "size": 11, "anchor": "above"},
                 {"lon": 34.90, "lat": 46.70, "text": "Melitopol", "size": 11, "anchor": "above"},
+            ],
+        },
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Dnieper: the plate as an argument, with its article's numbered marks         #
+# --------------------------------------------------------------------------- #
+
+def build_dnieper() -> dict[str, Any]:
+    """The plate that accompanies an article, with the article's own marks.
+
+    Every other builder here draws an assessment and stops. This one draws
+    the same kind of assessment and then does the thing the package could
+    not do until now: it carries **numbered editorial marks** that a page
+    numbers its paragraphs from, a **detail rectangle** around the ground
+    the piece is actually about, and notes whose direction is **measured**
+    against the names already on the plate rather than guessed.
+
+    The subject is the one piece of this war's geography that a map
+    explains better than prose: once the right bank was back in Ukrainian
+    hands in November 2022, the front stopped being a line somebody had to
+    hold and became a river. Tim Wallace's objection to hard edges does not
+    bite here, which is exactly why it is the honest plate to demonstrate
+    annotation on -- the edge is real, and the notes can argue about what
+    sits on either side of it rather than about where it is.
+
+    No arrow, on a plate whose whole subject is a withdrawal. The movement
+    is carried by what the notes say and by the drained reservoir drawn as
+    former, which is the package's standing position and the graphics
+    desks' -- see ``references/situation-map-annotation.md`` §2.
+    """
+    # The same traced contact line the Ukraine plate uses, at a tighter
+    # extent. Deliberately not a second hand-typed claim: two polygons of
+    # the same war drawn from the same reporting and disagreeing with each
+    # other is the only thing this plate could get wrong that annotation
+    # cannot fix, and the point here is the annotation.
+    ukr = load_country("Ukraine")
+    occupied = unary_union(
+        [
+            ukr.intersection(Polygon(ENVELOPE)),
+            load_land().intersection(box(*CRIMEA_BBOX)),  # Crimea (occupied 2014)
+        ]
+    )
+    government = ukr.difference(occupied)
+    palette = {
+        "Ukrainian government control": "#bcd4ec",
+        "Russian-occupied (approx.)": "#e0a89e",
+    }
+    return {
+        "title": "The Dnieper Line",
+        "subtitle": "Where a river became the front, and what sits on each bank",
+        "region": {"bbox": [30.2, 44.1, 38.4, 48.7]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {
+            "sea_color": "#a8bccb",
+            "land_color": "#f6f1df",
+            "coast_color": "#7993a6",
+        },
+        # Neighbour names off. The extent crops Russia to a corner, so the
+        # automatic placer put "RUSSIA" at the centroid of what is visible of
+        # it -- which on this extent is the Crimean peninsula. A plate that
+        # draws Crimea as occupied and then letters it with the occupier's
+        # name has contradicted its own legend in type.
+        "frontiers": {"focus": "Ukraine", "label_neighbours": False},
+        "legend_position": "top-right",
+        "rivers": {
+            "always_label": ["Dnieper"],
+            "color": "#5d86a6",
+            "label_color": "#3f6a8c",
+        },
+        # Drawn as former, not skipped: on this plate the absence of the
+        # reservoir is the subject of note 2, and a reader who knows the
+        # geography comes looking for it.
+        "lakes": {
+            "former": ["Kakhovka Reservoir"],
+            "always_label": ["Kakhovka Reservoir"],
+        },
+        "areas_of_control": {
+            "category_field": "actor",
+            "palette": palette,
+            "fill_opacity": 0.78,
+            "source": {
+                "type": "FeatureCollection",
+                "features": [
+                    _feat("Ukrainian government control", government),
+                    _feat("Russian-occupied (approx.)", occupied),
+                ],
+            },
+        },
+        # The rectangle the piece is about. The plate stays wide enough to
+        # place itself -- that is what the locator argues -- and says in one
+        # mark that the story is happening in a tenth of it.
+        "detail_area": {
+            "bbox": [32.1, 46.3, 34.2, 47.4],
+            "label": "Lower Dnieper",
+        },
+        # The map's half of a numbered reference. The article's half is a
+        # numbered paragraph, and `article_sidecar` reads these back out of
+        # the finished plate so the page prints the list it is given rather
+        # than one somebody typed again beside it.
+        #
+        # Every one is `place: auto`: the direction is measured against the
+        # names already committed to the plate, which is the only way four
+        # notes on a crowded map are placed without hand-tuning each one
+        # and re-rendering to find out.
+        "annotations": [
+            {
+                "at": [32.6250, 46.6425],
+                "number": 1,
+                "text": "Kherson, retaken in November 2022. The river has been the line since.",
+                "place": "auto",
+                "color": "#3a4149",
+            },
+            {
+                "at": [33.3689, 46.7781],
+                "number": 2,
+                "text": "The Kakhovka dam, breached in June 2023. The reservoir behind it drained in a fortnight.",
+                "place": "auto",
+                "color": "#3a4149",
+            },
+            {
+                "at": [34.5856, 47.5069],
+                "number": 3,
+                "text": "Europe's largest nuclear plant, occupied since March 2022.",
+                "place": "auto",
+                "color": "#3a4149",
+            },
+            {
+                "at": [35.8261, 47.4431],
+                "number": 4,
+                "text": "Robotyne: the furthest the 2023 counteroffensive reached.",
+                "place": "auto",
+                "color": "#b03a3a",
+                "circle_km": 28,
+            },
+        ],
+        "legend_footer": "As of ~2024 · schematic, open-source geography",
+        "caption": "full",
+        "method": (
+            "Schematic polygons drawn by hand from open-source reporting, not a "
+            "geocoded dataset. " + _EVIDENCE_BASIS
+        ),
+        "source": (
+            "Natural Earth basemap; the Kakhovka Reservoir is drawn as former "
+            "(drained after the dam breach of 6 June 2023)"
+        ),
+        "as_of": "Positions as of ~2024 · illustrative, not operational intelligence",
+        "labels": {
+            "waters": [
+                {"lon": 31.2, "lat": 44.70, "text": "Black Sea", "size": 17, "tracking": 6},
+                {"lon": 36.3, "lat": 46.35, "text": "Sea of Azov", "size": 11, "tracking": 2.4},
+            ],
+            "places": [
+                {"lon": 30.7434, "lat": 46.4857, "text": "Odesa", "anchor": "below"},
+                {"lon": 35.1175, "lat": 47.8500, "text": "Zaporizhzhia", "anchor": "end"},
+                {"lon": 37.5494, "lat": 47.0958, "text": "Mariupol", "anchor": "above"},
+                {"lon": 33.5225, "lat": 44.6050, "text": "Sevastopol", "anchor": "above"},
+                {"lon": 34.1667, "lat": 45.1833, "text": "Simferopol", "size": 11},
+                {"lon": 31.9950, "lat": 46.9750, "text": "Mykolaiv", "size": 11, "anchor": "end"},
+                {"lon": 34.9000, "lat": 46.7000, "text": "Melitopol", "size": 11, "anchor": "above"},
             ],
         },
     }
@@ -1618,6 +1789,7 @@ def build_south_china_sea() -> dict[str, Any]:
 
 BUILDERS = {
     "ukraine": build_ukraine,
+    "dnieper": build_dnieper,
     "syria": build_syria,
     "libya": build_libya,
     "sudan": build_sudan,

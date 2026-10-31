@@ -392,6 +392,66 @@ pixel et revendique une précision qu'une note sur une région n'a pas. La
 note prend la couleur de ce qu'elle décrit, pour se poser sur la carte au
 lieu d'en sauter.
 
+**La direction peut être mesurée plutôt que devinée.** `place` accepte les
+quatre côtés et les quatre diagonales — chaque trait d'appel tombe donc à
+90 ou 45 degrés, la règle de Datawrapper d'après Beck — et `place: auto`
+les essaie dans cet ordre et retient la première dont chaque ligne évite
+les noms déjà posés sur la planche. `annotations` était ici la seule
+couche de texte qui ne consultait jamais le registre d'encre, et une main
+qui se trompait écrivait une phrase au travers d'un toponyme — au plus
+visible, puisque la note est dessinée au-dessus de toutes les couches de
+carte. Une note qui n'a nulle part où aller est refusée nommément, pas
+dessinée dans la direction la moins mauvaise.
+
+**Un repère numéroté est la moitié d'un renvoi dont l'autre moitié est un
+paragraphe.**
+
+```yaml
+annotations:
+  - at: [32.6250, 46.6425]
+    number: 1
+    text: "Kherson, reprise en novembre 2022."
+    place: auto
+```
+
+Les numéros doivent courir de 1 à n, sans trou ni répétition : une planche
+qui affiche 1, 2 et 4 envoie le lecteur chercher sur la carte un 3 qui a
+été coupé de l'article. Et ils ressortent de la planche finie, pour que la
+page imprime la liste qu'on lui donne plutôt qu'une liste retapée à côté :
+
+```python
+from sprezzature_maps import article_sidecar
+for note in article_sidecar(svg)["callouts"]:
+    print(f"{note['number']}. {note['text']}")
+```
+
+Le badge est atteignable au clavier et annonce les mots de la note, pas
+son chiffre : un renvoi ne sert à rien à un lecteur qui l'atteint et
+entend « 3 ».
+
+**Et un rectangle dit où est l'histoire.** L'étendue doit rester assez
+large pour se situer — c'est l'argument du carton de localisation — et le
+sujet se passe en général dans un dixième :
+
+```yaml
+detail_area:
+  bbox: [32.1, 46.3, 34.2, 47.4]
+  label: "Lower Dnieper"
+```
+
+Un contour et une étiquette, rien d'autre. Assombrir le contexte autour a
+été essayé puis refusé : un voile sur le relief, les aplats de contrôle et
+l'eau change toutes les couleurs que la légende explique, donc la légende
+montrerait des teintes que la planche ne dessine plus.
+
+Les exemples dont ces trois dispositifs sont tirés — huit cartes de
+situation du New York Times, nommées, lues à travers leur propre couche de
+texte — sont dans
+[`references/situation-map-annotation.md`](references/situation-map-annotation.md),
+avec la raison pour laquelle ce paquet refuse toujours les flèches de
+mouvement alors que la rédaction qui a inventé la forme moderne de ces
+planches a passé 2022 à les abandonner.
+
 **Elle dit où c'est sur Terre, sans qu'on le demande.** « Dézoomer pour la
 perspective, zoomer pour le détail » est la règle unique de la carte de
 localisation, et une planche qui ne fait que zoomer n'en honore que la
