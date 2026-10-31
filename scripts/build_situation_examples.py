@@ -1315,7 +1315,10 @@ def build_caribbean() -> dict[str, Any]:
                 {"lon": -72.3388, "lat": 18.5944, "text": "Port-au-Prince", "capital": True, "anchor": "end"},
                 {"lon": -76.7936, "lat": 17.9712, "text": "Kingston", "capital": True, "anchor": "below"},
                 {"lon": -66.1057, "lat": 18.4655, "text": "San Juan", "size": 11, "anchor": "above"},
-                {"lon": -66.9036, "lat": 10.4806, "text": "Caracas", "capital": True},
+                {"lon": -66.9036, "lat": 10.4806, "text": "Caracas", "capital": True,
+                 # Set to the left of its dot: the default puts the name to the
+                 # right, where the provenance footer now sits.
+                 "anchor": "end"},
                 {"lon": -75.4794, "lat": 10.3910, "text": "Cartagena", "size": 11, "anchor": "end"},
                 {"lon": -86.2514, "lat": 12.1364, "text": "Managua", "size": 11, "anchor": "end"},
                 {"lon": -84.0907, "lat": 9.9281, "text": "San José", "size": 11, "anchor": "below"},
