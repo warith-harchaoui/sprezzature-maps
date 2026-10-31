@@ -162,12 +162,43 @@ The assessment
     hatch_color}``. ``over_water: true`` keeps a zone's own shape instead of
     clipping it to land, for a claim that really is maritime.
     ``hatch_color`` sets the diagonal rule a contested zone is struck with.
+``values``
+    A number per administrative unit, the regional choropleth:
+    ``{by, data, key, field, classes, method, breaks, palette, diverging,
+    label, unit, fill_opacity, no_data, legend_position}``. ``by`` chooses
+    the geometry from the vendored atlases -- ``admin1`` (the default),
+    ``admin2``, ``countries``, ``us-states`` or ``fr-regions``. ``data`` is
+    the rows themselves, or a CSV path beside the config; ``key`` and
+    ``field`` name the columns holding the unit name and the number, and
+    default to ``name`` and ``value``. ``classes`` (default 5) and
+    ``method`` (``jenks`` by default, else ``quantile``, ``equal`` or
+    ``headtail``) cut the numbers into classes; ``breaks`` states the
+    boundaries outright and outranks both. ``diverging`` forces the
+    two-tailed ramp, which the data otherwise elects by spanning zero.
+    ``no_data`` is the grey a unit with no row is drawn in, and it reaches
+    the key, because absent reading as low is the commonest way a
+    choropleth misleads. ``label`` or ``unit`` heads the graded key;
+    ``legend_position`` places it.
 ``front``
     The contact line: ``{line, color, label, label_at, label_dx, label_dy,
     legend, legend_label}``. The three ``label_*`` offsets place the callout
     by hand when the automatic position lands badly.
 ``arrows``
     Axes of advance: a list of ``{line, color, label, style}``.
+``change``
+    What was held, taken and lost between two dates, the answer an arrow
+    only pretends to give: ``{before, after, from, to, palette,
+    fill_opacity, blend}``. ``before`` is the earlier extent, a
+    FeatureCollection or a path beside the config; ``after`` is the later
+    one and defaults to ``areas_of_control.source``. Both are required --
+    a difference with one side absent is the other side drawn in the
+    colour of a change nobody computed -- and both are repaired on the way
+    in, since a hand-traced ring crosses itself sooner or later. ``from``
+    and ``to`` are the two dates, printed in the footer as the interval
+    the subtraction covers. ``palette`` recolours any of ``held``,
+    ``gained`` and ``lost``. ``fill_opacity`` and ``blend`` set how the
+    three fills meet the terrain and are read by the key as well as by the
+    layer, so a key cannot show a colour the ground does not.
 ``forces``, ``events``
     Point markers; each takes ``lon``, ``lat``, ``color``, ``r``,
     ``label``, ``precision``, ``radius_km``, ``date``, ``time_precision``
@@ -176,7 +207,9 @@ The assessment
     Editorial notes: a list of ``{at, text, place, color, circle_km,
     wrap}``.
 ``labels``
-    Hand-placed names: ``{places, waters, territories}``.
+    Hand-placed names: ``{places, waters, water, territories}``.
+    ``water`` is the singular alias, appended to ``waters`` when both are
+    given.
 
 Chrome and provenance
 ~~~~~~~~~~~~~~~~~~~~~
@@ -3261,6 +3294,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     #     "this is the ground, and this is who holds it", in that order.
     layers.append(_values_layer(cfg, proj, vp, region_box))
 
+    # 3f. change: held / taken / lost between two dates. Under the control
+    #     fills, because a plate carrying both reads as "this is what moved,
+    #     and this is who holds it now".
+    layers.append(_change_layer(cfg, proj, vp, region_box))
+
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp, region_box, land))
 
@@ -4303,6 +4341,201 @@ def _values_layer(
         "unmatched": missed,
     }
     return f'<g id="values">{"".join(out)}</g>'
+
+
+#: The three states ground can be in between two dates, in draw order and
+#: in legend order: what stayed, what was taken, what was lost.
+#:
+#: Colours chosen so the two that matter read first and read apart.
+#: ``held`` is the quietest thing on the plate -- it is the answer to "what
+#: did not happen" -- while gained and lost are a warm/cool pair that
+#: survives the common colour-vision deficiencies, which a red/green pair
+#: would not.
+_CHANGE_CLASSES: tuple[tuple[str, str, str], ...] = (
+    ("held", "#b9ad92", "Held throughout"),
+    ("gained", "#b03a3a", "Taken"),
+    ("lost", "#5b7fa6", "Lost"),
+)
+
+
+def _change_geometries(
+    cfg: dict[str, Any], base: Path
+) -> dict[str, Any]:
+    """Return ``{held, gained, lost}`` geometries for the declared interval.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``change``: ``before`` (the earlier extent, a
+        FeatureCollection or a path beside the config), ``after`` (the
+        later one; defaults to ``areas_of_control.source``), plus the
+        ``from`` / ``to`` dates the plate prints.
+    base : pathlib.Path
+        Directory a relative ``before`` / ``after`` path resolves against.
+
+    Returns
+    -------
+    dict
+        Shapely geometries, possibly empty.
+
+    Raises
+    ------
+    ValueError
+        When either extent is missing or draws nothing. A difference
+        layer with one side absent is not a difference; it is the other
+        side, drawn in the colour of a change that was never computed.
+    """
+    spec = cfg.get("change") or {}
+    after_spec = spec.get("after") or (cfg.get("areas_of_control") or {}).get("source")
+    sides = {}
+    for name, raw in (("before", spec.get("before")), ("after", after_spec)):
+        if raw is None:
+            raise ValueError(
+                f"change needs a {name!r} extent: a FeatureCollection, or a "
+                "path beside the config. Without both sides there is no "
+                "difference to draw, only one side in a colour that claims "
+                "there is."
+            )
+        # Repaired before anything is subtracted. A hand-traced extent is
+        # the normal input here and a hand-traced ring crosses itself
+        # sooner or later; GEOS answers that with a "side location
+        # conflict" from somewhere inside the set operation, which names
+        # a coordinate and not the file it came from. Every other loader
+        # in this module repairs on the way in, for the same reason.
+        shapes = [
+            _polygonal(make_valid(shape(f["geometry"])))
+            for f in _load_features(raw, base)
+            if f.get("geometry")
+        ]
+        merged = unary_union([g for g in shapes if not g.is_empty])
+        if merged.is_empty:
+            raise ValueError(f"change.{name} drew no ground")
+        sides[name] = merged
+    before, after = sides["before"], sides["after"]
+    before, after = make_valid(before), make_valid(after)
+    return {
+        "held": before.intersection(after),
+        "gained": after.difference(before),
+        "lost": before.difference(after),
+    }
+
+
+def _change_layer(
+    cfg: dict[str, Any],
+    proj: Transformer,
+    vp: dict[str, Any],
+    region_box: Any | None = None,
+) -> str:
+    """Draw what one actor held, took and lost between two dates.
+
+    The question a researcher actually brings, and the one a single frame
+    cannot answer. This package could draw a front and could draw an
+    arrow, and an arrow is the wrong answer: it asserts intent, momentum
+    and success at once while evidencing none of the three. Early maps of
+    the 2022 invasion used big arrows and read as a blitzkrieg that was
+    not happening; the graphics desks moved to showing fluidity for
+    exactly that reason.
+
+    A difference layer asserts nothing. It states two extents and
+    subtracts them, and the reader can see how much of the map is the
+    third colour -- the ground where nothing happened, which is usually
+    most of it and is usually the finding.
+
+    Parameters
+    ----------
+    cfg : dict
+        Reads ``change``; see :func:`_change_geometries`.
+    proj, vp, region_box
+        As for every other geographic layer.
+
+    Returns
+    -------
+    str
+        An SVG group, empty when the plate declares no ``change``.
+    """
+    spec = cfg.get("change")
+    if not spec:
+        return '<g id="change"></g>'
+    unknown = sorted(set(spec) - SECTION_KEYS["change"])
+    if unknown:
+        raise ValueError(
+            f"change has key(s) this generator never reads: {', '.join(unknown)}. "
+            f"Known keys: {', '.join(sorted(SECTION_KEYS['change']))}"
+        )
+    parts = _change_geometries(cfg, Path(cfg.get("_config_dir", ".")))
+    palette = dict(spec.get("palette") or {})
+    # The same relationship to the terrain the control fills have, for the
+    # same reason and -- critically -- by the same arithmetic the legend
+    # simulates. Drawn with a plain alpha while ``_as_rendered`` simulated
+    # a multiply, the key came out olive, dark red and dark green for a
+    # map drawn tan, red and blue: a key that shows a different colour
+    # from the ground is worse than no key at all.
+    how = _change_blend(cfg)
+    blend, fill_op = how["blend"], how["fill_opacity"]
+    fill_style = f' style="mix-blend-mode:{blend}"' if blend in ("multiply", "screen") else ""
+    out: list[str] = []
+    drawn: dict[str, float] = {}
+    # Shares are taken over the three classes together, which is the
+    # union of both extents: the question "how much of this changed
+    # hands" is asked of the ground either side ever held, not of the
+    # whole plate, most of which was never in play.
+    total = sum(g.area for g in parts.values()) or 1.0
+    for key, default_color, _label in _CHANGE_CLASSES:
+        geom = parts[key]
+        if region_box is not None:
+            geom = geom.intersection(region_box)
+        if geom.is_empty:
+            continue
+        d = projected_geom_to_path(_project_geom(_polygonal(geom), proj), vp)
+        if not d:
+            continue
+        drawn[key] = geom.area / total
+        out.append(
+            f'<path d="{d}" fill="{palette.get(key, default_color)}" '
+            f'fill-opacity="{fill_op:.2f}" stroke="#ffffff" '
+            f'stroke-width="{0.9 * vp["ts"]:.1f}" stroke-linejoin="round"'
+            f"{fill_style}/>"
+        )
+    # Only the classes the plate actually drew reach the key, each with
+    # the share it covers. A sliver of ground is still real change and
+    # still belongs in the key -- what it must not do is take a row that
+    # says nothing, leaving a reader hunting the map for a colour that
+    # covers a tenth of a per cent. The number is the answer to that, and
+    # it is the number a reader came for anyway.
+    cfg["_change_key"] = drawn
+    return f'<g id="change">{"".join(out)}</g>'
+
+
+def _change_blend(cfg: dict[str, Any]) -> dict[str, Any]:
+    """How the change fills meet the terrain: blend mode and alpha.
+
+    One function, read by the layer that draws and by the legend that
+    keys it, because the two disagreeing is exactly the defect this
+    exists to prevent.
+    """
+    spec = cfg.get("change") or {}
+    has_relief = bool(cfg.get("basemap", {}).get("relief", True))
+    plate_blend = cfg.get("_plate", _PLATES["day"])["blend"]
+    blend = spec.get("blend", plate_blend if has_relief else "none")
+    default_op = 0.88 if blend == "multiply" else COMPOSITING["claim"]
+    return {"blend": blend, "fill_opacity": float(spec.get("fill_opacity", default_op))}
+
+
+def _change_interval(cfg: dict[str, Any]) -> str:
+    """The interval the difference covers, as the plate prints it.
+
+    Examples
+    --------
+    >>> _change_interval({"change": {"from": "March 2022", "to": "September 2024"}})
+    'Change from March 2022 to September 2024'
+    >>> _change_interval({})
+    ''
+    """
+    spec = cfg.get("change") or {}
+    first, last = spec.get("from"), spec.get("to")
+    if not (first and last):
+        return ""
+    return f"Change from {first} to {last}"
 
 
 def _infrastructure_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) -> str:
@@ -6636,6 +6869,11 @@ def _caption_lines(cfg: dict[str, Any], width: float = 0.0, ts: float = 1.0) -> 
     list of str
     """
     lines = [x for x in (cfg.get("method"), cfg.get("source"), cfg.get("as_of")) if x]
+    interval = _change_interval(cfg)
+    if interval:
+        # A difference layer is a claim about two moments, and a plate
+        # that draws one without naming them is drawing arithmetic.
+        lines.append(interval)
     lines.extend(_required_disclaimers(cfg))
     if not width:
         return [str(line) for line in lines]
@@ -6930,6 +7168,30 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
          "contested": name in contested, "fill": 1.0}
         for name, color in palette.items()
     ]
+    # The difference classes, in the order the layer drew them and only
+    # the ones it actually drew: a key for a colour nothing used sends a
+    # reader looking for it.
+    shares = cfg.get("_change_key") or {}
+    for key, default_color, label in _CHANGE_CLASSES:
+        if key not in shares:
+            continue
+        change = cfg.get("change") or {}
+        rows.append({
+            "kind": "class",
+            "label": f"{label} — {_share_phrase(shares[key]).replace(' of the mapped area', '')}",
+            "color": _as_rendered(
+                (change.get("palette") or {}).get(key, default_color),
+                # ``_as_rendered`` reads the blend off ``areas_of_control``;
+                # a change plate may carry no control layer at all, so it is
+                # shown this layer's own settings under that name.
+                {**cfg, "areas_of_control": {**(cfg.get("areas_of_control") or {}),
+                                             **_change_blend(cfg)}},
+                float(_change_blend(cfg)["fill_opacity"]),
+            ),
+            "contested": False,
+            "fill": 1.0,
+        })
+
     for tier_name in _tiers_present(cfg):
         tier = _CONFIDENCE_TIERS[tier_name]
         label = str(tier["label"])
@@ -8065,13 +8327,14 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
     "legend_title", "print_width", "small_multiples", "provenance", "values",
+    "change",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
 _INTERNAL_KEYS: frozenset[str] = frozenset(
     {
         "_config_dir", "_panel", "_plate", "_print", "_relief_cache",
-        "_relief_tone", "_source_file", "_value_key",
+        "_relief_tone", "_source_file", "_value_key", "_change_key",
     }
 )
 
@@ -8237,6 +8500,9 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     }),
     "provenance": frozenset({"inputs"}),
     "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
+    "change": frozenset({
+        "before", "after", "from", "to", "palette", "fill_opacity", "blend",
+    }),
     "values": frozenset({
         "by", "data", "key", "field", "classes", "method", "breaks", "palette",
         "diverging", "label", "unit", "fill_opacity", "no_data", "legend_position",
