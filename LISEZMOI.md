@@ -85,6 +85,34 @@ make-map situation_map --config moldova.yaml --out moldova.svg
 make-map audit moldova.svg          # propre, telle quelle
 ```
 
+### Ce qui a bougé entre deux dates
+
+La question qu'un chercheur apporte vraiment, et celle à laquelle une
+image fixe ne répond pas. La réponse du paquet était une flèche, et une
+flèche est la mauvaise réponse : elle affirme à la fois l'intention,
+l'élan et le succès sans prouver aucun des trois — les premières cartes
+de l'invasion de 2022 en portaient de grosses et se lisaient comme une
+guerre éclair qui n'avait pas lieu.
+
+Une couche de différence n'affirme rien. Deux étendues, soustraites :
+
+```yaml
+change:
+  before: 2022-avril.geojson     # l'étendue antérieure
+  after:  2024-decembre.geojson  # par défaut, areas_of_control.source
+  from: "avril 2022"
+  to:   "décembre 2024"
+```
+
+Tenu, pris, perdu en trois couleurs, l'intervalle imprimé au pied, et
+**chaque classe légendée avec la part de terrain disputé qu'elle
+couvre** — « Held throughout — 46 % », « Taken — under 1 % », « Lost —
+54 % ». La part se calcule sur l'union des deux étendues, pas sur la
+planche : la question porte sur le terrain que l'un ou l'autre a tenu, pas
+sur un cadre qui est surtout de la mer. C'est aussi ce qui empêche un
+éclat de prendre une ligne muette qu'un lecteur cherchera ensuite sur la
+carte.
+
 ### Une valeur par unité administrative
 
 Un choroplèthe du monde s'indexe sur l'ISO-3166-1 numérique. Une analyse,

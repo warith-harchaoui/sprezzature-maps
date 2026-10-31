@@ -113,6 +113,21 @@ All notable changes to sprezzature-maps are documented here.
 - **The date is stamped under the title**, which is where the guidelines
   put it and where a reader looks first. The footer keeps the full line.
 
+- **`change`: held, taken and lost between two dates.** The question a
+  researcher brings, and the one a single frame cannot answer. The
+  package's answer was an arrow, which asserts intent, momentum and
+  success at once while evidencing none of the three. Two extents,
+  subtracted, with the interval named in the footer and each class keyed
+  with the share of contested ground it covers — "Held throughout — 46%",
+  "Taken — under 1%", "Lost — 54%". The share is over the union of both
+  extents, not the plate, and it is what stops a sliver from taking a
+  silent row a reader then hunts for.
+
+  Both sides are required: a difference with one side absent is the other
+  side drawn in the colour of a change nobody computed. Both are repaired
+  on the way in, because a hand-traced ring crosses itself and GEOS
+  answers that with a coordinate rather than a filename.
+
 - **A value per administrative unit: the regional choropleth.** The gap it
   closes is the one a data scientist actually walks into. `areas_of_control`
   colours a unit by *who holds it*, which is categorical. `make_choropleth`

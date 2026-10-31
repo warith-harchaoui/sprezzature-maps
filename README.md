@@ -82,6 +82,32 @@ make-map situation_map --config moldova.yaml --out moldova.svg
 make-map audit moldova.svg          # clean, as written
 ```
 
+### What moved between two dates
+
+The question a researcher actually brings, and the one a single frame
+cannot answer. The package's previous answer was an arrow, and an arrow is
+the wrong answer: it asserts intent, momentum and success at once while
+evidencing none of the three — the early maps of the 2022 invasion used
+big ones and read as a blitzkrieg that was not happening.
+
+A difference layer asserts nothing. Two extents, subtracted:
+
+```yaml
+change:
+  before: 2022-april.geojson   # the earlier extent
+  after:  2024-december.geojson  # defaults to areas_of_control.source
+  from: "April 2022"
+  to:   "December 2024"
+```
+
+Held, taken and lost in three colours, the interval printed in the footer,
+and **each class keyed with the share of contested ground it covers** —
+"Held throughout — 46%", "Taken — under 1%", "Lost — 54%". The share is
+taken over the union of both extents, not over the plate, because the
+question is asked of the ground either side ever held and not of a frame
+that is mostly ocean. It is also what stops a sliver from taking a silent
+row a reader then hunts the map for.
+
 ### A number per administrative unit
 
 A choropleth of the world keys on ISO-3166-1 numeric. An analysis usually
