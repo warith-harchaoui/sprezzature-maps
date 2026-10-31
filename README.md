@@ -96,11 +96,25 @@ A difference layer asserts nothing. Two extents, subtracted:
 change:
   before: 2022-april.geojson   # the earlier extent
   after:  2024-december.geojson  # defaults to areas_of_control.source
+  actor: "Russian forces"      # whose ground; filters BOTH sides
   from: "April 2022"
   to:   "December 2024"
 ```
 
-Held, taken and lost in three colours, the interval printed in the footer,
+`actor` is the part that is easy to leave out and impossible to leave out
+safely. A difference is about *somebody's* ground, and `after` defaults to
+the whole control source — every camp's zones at once. The camps of a
+control layer tile the same theatre at both dates, so their union barely
+moves: subtracted from itself it reports that nothing happened while the
+line between them walked across the map. Measured on a two-camp theatre
+where one side took half a unit of ground, the layer returned **`taken` =
+0.0** and gave `held` the entire rectangle. So a side spelling more than
+one camp is now refused until `actor` says which one is meant, matched
+against the property `areas_of_control.category_field` already names, and
+applied to both sides by the one call that filters either.
+
+Held, taken and lost in three colours, the interval printed in the footer
+with the actor named — "Taken" states a direction and cannot state a camp —
 and **each class keyed with the share of contested ground it covers** —
 "Held throughout — 46%", "Taken — under 1%", "Lost — 54%". The share is
 taken over the union of both extents, not over the plate, because the

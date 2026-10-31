@@ -6,6 +6,51 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Fixed
 
+- **The difference layer subtracted a control layer from itself, and
+  reported that nothing moved.** `change.after` defaults to
+  `areas_of_control.source`, and that source is every camp's zones at
+  once — the layer unioned them before subtracting. On a theatre two
+  camps tile, which is what a control plate *is*, the union is close to
+  constant across both dates: the camps redistribute the same ground
+  between them. Measured on a two-camp rectangle where one side pushed
+  the line half a unit east, the layer returned `taken` = **0.0** and
+  gave `held` the whole rectangle. The plate drew one quiet colour, keyed
+  it "Held throughout — 100%", and the finding it stated — nothing
+  happened here — was the exact opposite of the one in the data.
+
+  A difference is about somebody's ground, so each side is filtered by
+  `change.actor` before the subtraction, matched against the property
+  `areas_of_control.category_field` already names: the control layer has
+  carried whose ground a zone is since it existed, and a second spelling
+  of the same fact would be a second thing to keep in step. The filter is
+  one function called once from inside the loop over the two sides, for
+  the same reason `_change_blend` is one function read by both the layer
+  and the key — where two things must agree, there is one of them, not
+  two call sites that look alike.
+
+  `actor` was added for this in the layer's first commit, then removed the
+  same day for being accepted by the validator and read by no line, which
+  is exactly what `SECTION_KEYS` exists to refuse. It is back because
+  something reads it. The missing work was never the key; it was knowing
+  which geometries belong to which camp on both sides of the subtraction.
+
+  A side spelling more than one camp with no `actor` to choose between
+  them is now refused, naming the camps, because there is no honest
+  difference to draw from a union — only a correct subtraction of the
+  wrong two sets. An `actor` that filters a side down to nothing is
+  refused too: the realistic cause is a typo in a hand-typed proper noun,
+  and letting it through has the plate assert this actor took every
+  square kilometre it holds. And the footer interval now names the actor,
+  since "Taken" states a direction and cannot state a camp — once there,
+  rather than three times in the key.
+
+  `tests/test_what_moved_between_two_dates.py` holds the class rather than
+  the instance: ground belonging to a third camp, present identically on
+  both dates and far from the two that moved, must not reach any of the
+  three classes. Dropping the filter from `before` lands it in `lost`,
+  from `after` in `gained`, from both in `held` — so the one measurement
+  catches an unfiltered side whichever side it is.
+
 - **The choropleth painted the sea, and the sea hid a Russia in diagonal
   slabs.** Terrain shading is a statement about ground; the raster covered
   the whole plot rectangle, so every ocean pixel came out `(190, 200, 186)`
