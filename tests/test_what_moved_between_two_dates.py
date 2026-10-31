@@ -168,3 +168,167 @@ def test_a_mistyped_option_is_refused() -> None:
     cfg = _config(fromm="2022")
     with pytest.raises(ValueError, match="fromm"):
         msm.validate_config(cfg)
+
+
+# ── whose ground ─────────────────────────────────────────────────────────
+
+
+def _zone(actor: str, poly: Polygon) -> dict:
+    return {
+        "type": "Feature",
+        "properties": {"actor": actor},
+        "geometry": mapping(poly),
+    }
+
+
+def _camps(*zones: dict) -> dict:
+    return {"type": "FeatureCollection", "features": list(zones)}
+
+
+def _two_camp_config(**change: object) -> dict:
+    """A theatre two camps tile at both dates, with the line walking east.
+
+    ``A`` holds the western half in January and pushes the line from 1.0
+    to 1.5 by June, so it takes exactly 0.5 of ground and ``B`` loses the
+    same 0.5. Nothing else changes, and critically the *union* of the two
+    camps is the same rectangle on both dates.
+    """
+    before = _camps(
+        _zone("A", Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])),
+        _zone("B", Polygon([(1, 0), (2, 0), (2, 1), (1, 1)])),
+    )
+    after = _camps(
+        _zone("A", Polygon([(0, 0), (1.5, 0), (1.5, 1), (0, 1)])),
+        _zone("B", Polygon([(1.5, 0), (2, 0), (2, 1), (1.5, 1)])),
+    )
+    return {
+        "region": {"bbox": [-0.5, -0.5, 2.5, 1.5]},
+        "canvas_width": 600,
+        "basemap": {"relief": False},
+        "areas_of_control": {
+            "source": after,
+            "palette": {"A": "#b03a3a", "B": "#5b7fa6"},
+        },
+        "change": {"before": before, "from": "January", "to": "June", **change},
+    }
+
+
+def test_a_control_layer_is_not_subtracted_from_itself() -> None:
+    """The defect ``change`` shipped with, and the number that shows it.
+
+    ``after`` defaults to ``areas_of_control.source``, which is every
+    camp's zones at once. The camps of a control layer tile the same
+    theatre at both dates, so that union barely moves: subtracting it
+    from itself gave ``held`` the whole rectangle and ``gained`` an area
+    of exactly 0.0 while the line between the camps had walked half a
+    unit east. The plate stated that nothing happened.
+
+    Refused now, naming the camps, because there is no honest difference
+    to draw from a union — only a correct subtraction of the wrong two
+    sets.
+    """
+    with pytest.raises(ValueError, match="carries 2 camps"):
+        msm._change_geometries(_two_camp_config(), Path("."))
+
+
+def test_an_actor_gets_the_ground_it_actually_took() -> None:
+    """Both sides filtered by the same camp, and the two readings agree.
+
+    0.5 taken by ``A`` is 0.5 lost by ``B``: a difference that does not
+    balance across the camps is a difference of two different questions.
+    """
+    taken = msm._change_geometries(_two_camp_config(actor="A"), Path("."))
+    assert taken["gained"].area == pytest.approx(0.5)
+    assert taken["held"].area == pytest.approx(1.0)
+    assert taken["lost"].area == pytest.approx(0.0)
+
+    lost = msm._change_geometries(_two_camp_config(actor="B"), Path("."))
+    assert lost["lost"].area == pytest.approx(taken["gained"].area)
+    assert lost["gained"].area == pytest.approx(0.0)
+
+
+def test_a_camp_nobody_is_fighting_cannot_move_the_numbers() -> None:
+    """The class guard: both sides filtered, or neither side is.
+
+    Ground belonging to a third camp, present identically on both dates
+    and nowhere near the two that moved, must not appear in any of the
+    three classes. It is the measurement that catches an unfiltered side
+    whichever side that is — drop the filter from ``before`` and the
+    third camp's ground lands in ``lost``; drop it from ``after`` and it
+    lands in ``gained``; drop it from both and ``held`` swallows it.
+
+    That is the shape of the defect, not one instance of it: a
+    subtraction whose two sides are not filtered by the same actor.
+    """
+    elsewhere = _zone("C", Polygon([(5, 0), (7, 0), (7, 1), (5, 1)]))
+    cfg = _two_camp_config(actor="A")
+    cfg["region"]["bbox"] = [-0.5, -0.5, 8.0, 1.5]
+    cfg["change"]["before"]["features"].append(elsewhere)
+    cfg["areas_of_control"]["source"]["features"].append(elsewhere)
+    cfg["areas_of_control"]["palette"]["C"] = "#8a8f96"
+
+    parts = msm._change_geometries(cfg, Path("."))
+    assert parts["gained"].area == pytest.approx(0.5)
+    assert parts["held"].area == pytest.approx(1.0)
+    assert parts["lost"].area == pytest.approx(0.0)
+    # And nothing the function returned reaches as far east as C's ground,
+    # which is the same statement made geometrically rather than by area:
+    # two slivers that happened to cancel would pass the areas above.
+    for key, geom in parts.items():
+        if not geom.is_empty:
+            assert geom.bounds[2] <= 2.0 + 1e-9, (key, geom.bounds)
+
+
+def test_a_misspelt_actor_is_refused_rather_than_drawn() -> None:
+    """An empty side is not an empty finding.
+
+    ``actor`` filtering a side down to nothing would make the whole of
+    the other side a change, so the plate would assert this actor took
+    every square kilometre it holds. A typo in a hand-typed proper noun
+    is the realistic cause, so the camps the side does spell are named.
+    """
+    with pytest.raises(ValueError, match="change.actor is 'Aa'"):
+        msm._change_geometries(_two_camp_config(actor="Aa"), Path("."))
+
+
+def test_the_actor_is_matched_the_way_every_other_name_here_is() -> None:
+    """Folded, like the choropleth's unit names and for the same reason.
+
+    A camp spelt "Côte" in the assessment and "Cote" in the config is not
+    a disagreement about which camp is meant.
+    """
+    cfg = _two_camp_config(actor="a")
+    assert msm._change_geometries(cfg, Path("."))["gained"].area == pytest.approx(0.5)
+
+
+def test_the_camp_property_is_the_one_the_control_layer_already_names() -> None:
+    """One spelling of "whose ground is this", not two.
+
+    ``areas_of_control.category_field`` already answers it per feature. A
+    ``change``-only field name would be a second thing to keep in step.
+    """
+    cfg = _two_camp_config(actor="A")
+    cfg["areas_of_control"]["category_field"] = "side"
+    for coll in (cfg["change"]["before"], cfg["areas_of_control"]["source"]):
+        for feat in coll["features"]:
+            feat["properties"] = {"side": feat["properties"]["actor"]}
+    assert msm._change_geometries(cfg, Path("."))["gained"].area == pytest.approx(0.5)
+
+
+def test_the_footer_says_whose_ground_moved() -> None:
+    """ "Taken" names a direction and cannot name a camp.
+
+    On a plate that also fills both camps' zones, a key reading "Taken —
+    33%" with no actor is a genuine ambiguity. Answered once in the
+    footer rather than three times in the key.
+    """
+    cfg = _two_camp_config(actor="A")
+    cfg["caption"] = "full"
+    cfg["method"] = "schematic"
+    assert "Change in ground held by A, January to June" in msm._caption_lines(cfg)
+
+
+def test_actor_is_an_option_the_validator_accepts() -> None:
+    """The key was removed once for being read by no line. It is read now."""
+    assert "actor" in msm.SECTION_KEYS["change"]
+    msm.validate_config(_two_camp_config(actor="A"))

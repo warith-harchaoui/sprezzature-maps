@@ -187,18 +187,26 @@ The assessment
     Axes of advance: a list of ``{line, color, label, style}``.
 ``change``
     What was held, taken and lost between two dates, the answer an arrow
-    only pretends to give: ``{before, after, from, to, palette,
+    only pretends to give: ``{before, after, actor, from, to, palette,
     fill_opacity, blend}``. ``before`` is the earlier extent, a
     FeatureCollection or a path beside the config; ``after`` is the later
     one and defaults to ``areas_of_control.source``. Both are required --
     a difference with one side absent is the other side drawn in the
     colour of a change nobody computed -- and both are repaired on the way
-    in, since a hand-traced ring crosses itself sooner or later. ``from``
-    and ``to`` are the two dates, printed in the footer as the interval
-    the subtraction covers. ``palette`` recolours any of ``held``,
-    ``gained`` and ``lost``. ``fill_opacity`` and ``blend`` set how the
-    three fills meet the terrain and are read by the key as well as by the
-    layer, so a key cannot show a colour the ground does not.
+    in, since a hand-traced ring crosses itself sooner or later.
+    ``actor`` names whose ground the difference is about, matched against
+    the property ``areas_of_control.category_field`` names, and filters
+    **both** sides before the subtraction. It is required as soon as a
+    side spells more than one camp: the camps of a control layer tile the
+    same theatre at both dates, so their union barely moves and
+    subtracting it from itself reports that nothing happened while the
+    line between them walked across the map. ``from`` and ``to`` are the
+    two dates, printed in the footer as the interval the subtraction
+    covers -- with the actor named, since "Taken" cannot say by whom.
+    ``palette`` recolours any of ``held``, ``gained`` and ``lost``.
+    ``fill_opacity`` and ``blend`` set how the three fills meet the
+    terrain and are read by the key as well as by the layer, so a key
+    cannot show a colour the ground does not.
 ``forces``, ``events``
     Point markers; each takes ``lon``, ``lat``, ``color``, ``r``,
     ``label``, ``precision``, ``radius_km``, ``date``, ``time_precision``
@@ -4358,18 +4366,119 @@ _CHANGE_CLASSES: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def _change_camps(features: list[dict[str, Any]], field: str) -> list[str]:
+    """Return the distinct camps a list of control features spells, in order.
+
+    Examples
+    --------
+    >>> feats = [{"properties": {"actor": "B"}}, {"properties": {"actor": "A"}},
+    ...          {"properties": {"actor": "B"}}, {"properties": {}}]
+    >>> _change_camps(feats, "actor")
+    ['B', 'A']
+    """
+    seen: dict[str, str] = {}
+    for feat in features:
+        name = str((feat.get("properties") or {}).get(field, "")).strip()
+        if name:
+            seen.setdefault(_fold(name), name)
+    return list(seen.values())
+
+
+def _change_side_for_actor(
+    features: list[dict[str, Any]], actor: str, field: str, side: str
+) -> list[dict[str, Any]]:
+    """Keep the features belonging to ``actor``, or refuse the side outright.
+
+    One function, called once from inside the loop over the two sides, so
+    the two sides cannot be filtered differently -- which is the whole
+    defect this exists to prevent. The same discipline as
+    :func:`_change_blend`: where two things must agree, there is one
+    function and not two call sites that look alike.
+
+    Parameters
+    ----------
+    features : list of dict
+        GeoJSON features for one side of the subtraction.
+    actor : str
+        The camp the difference is about, or ``""`` for a side that is
+        already one actor's extent and carries no camp at all.
+    field : str
+        Property holding the camp, from ``areas_of_control.category_field``.
+    side : str
+        ``"before"`` or ``"after"``, for the error message.
+
+    Returns
+    -------
+    list of dict
+
+    Raises
+    ------
+    ValueError
+        When no ``actor`` is declared and the side spells more than one
+        camp -- the union would be subtracted from itself -- or when
+        ``actor`` is declared and the side spells no such camp.
+    """
+    camps = _change_camps(features, field)
+    if not actor:
+        if len(camps) > 1:
+            raise ValueError(
+                f"change.{side} carries {len(camps)} camps "
+                f"({', '.join(camps[:6])}) and no change.actor says which "
+                "one the difference is about. Their zones would be unioned "
+                "before the subtraction, and on a control layer the camps "
+                "tile the same theatre at both dates: the union barely "
+                "moves, so held would come out as everything and taken as "
+                f"nothing. Set change.actor to one of: {', '.join(camps[:6])}"
+            )
+        return features
+    wanted = _fold(actor)
+    kept = [
+        f
+        for f in features
+        if _fold(str((f.get("properties") or {}).get(field, ""))) == wanted
+    ]
+    if not kept:
+        spelt = ", ".join(camps[:6]) if camps else f"none (no {field} property)"
+        raise ValueError(
+            f"change.actor is {actor!r} and not one feature on the {side!r} "
+            f"side carries {field}={actor!r}, so that side would be empty "
+            "and the whole of the other side would be drawn as a change. "
+            f"The {side!r} side spells: {spelt} — check change.actor, or "
+            "areas_of_control.category_field"
+        )
+    return kept
+
+
 def _change_geometries(
     cfg: dict[str, Any], base: Path
 ) -> dict[str, Any]:
     """Return ``{held, gained, lost}`` geometries for the declared interval.
+
+    A difference is about *somebody's* ground. On a control layer with two
+    or more camps, the extent of "everyone" is close to constant -- the
+    camps tile the theatre at both dates -- so subtracting one union from
+    the other returns nothing, and the plate states that nothing moved
+    while the line between the camps walked across the map. That is this
+    function's own failure mode: ``after`` defaults to
+    ``areas_of_control.source``, which is every camp's zones at once.
+
+    So each side is filtered by ``change.actor`` before the subtraction,
+    using the same property ``areas_of_control.category_field`` names
+    (default ``actor``) -- the control layer already carries whose ground
+    a zone is, and a second spelling of the same fact would be a second
+    thing to get wrong. Both sides, by the same actor: a difference whose
+    sides are filtered differently is arithmetic between two different
+    questions.
 
     Parameters
     ----------
     cfg : dict
         Reads ``change``: ``before`` (the earlier extent, a
         FeatureCollection or a path beside the config), ``after`` (the
-        later one; defaults to ``areas_of_control.source``), plus the
-        ``from`` / ``to`` dates the plate prints.
+        later one; defaults to ``areas_of_control.source``), ``actor``
+        (whose ground the difference is about), plus the ``from`` / ``to``
+        dates the plate prints. The property carrying the camp comes from
+        ``areas_of_control.category_field``.
     base : pathlib.Path
         Directory a relative ``before`` / ``after`` path resolves against.
 
@@ -4384,9 +4493,20 @@ def _change_geometries(
         When either extent is missing or draws nothing. A difference
         layer with one side absent is not a difference; it is the other
         side, drawn in the colour of a change that was never computed.
+
+        When a side carries more than one camp and no ``actor`` says
+        which one is meant -- the self-subtraction above, refused rather
+        than drawn as a finding.
+
+        When ``actor`` is declared and one side spells no such camp. The
+        realistic cause is a typo, and the consequence of letting it
+        through is a plate asserting that this actor took every square
+        kilometre it holds.
     """
     spec = cfg.get("change") or {}
     after_spec = spec.get("after") or (cfg.get("areas_of_control") or {}).get("source")
+    actor = str(spec.get("actor") or "").strip()
+    field = str((cfg.get("areas_of_control") or {}).get("category_field", "actor"))
     sides = {}
     for name, raw in (("before", spec.get("before")), ("after", after_spec)):
         if raw is None:
@@ -4396,17 +4516,15 @@ def _change_geometries(
                 "difference to draw, only one side in a colour that claims "
                 "there is."
             )
+        feats = [f for f in _load_features(raw, base) if f.get("geometry")]
+        feats = _change_side_for_actor(feats, actor, field, name)
         # Repaired before anything is subtracted. A hand-traced extent is
         # the normal input here and a hand-traced ring crosses itself
         # sooner or later; GEOS answers that with a "side location
         # conflict" from somewhere inside the set operation, which names
         # a coordinate and not the file it came from. Every other loader
         # in this module repairs on the way in, for the same reason.
-        shapes = [
-            _polygonal(make_valid(shape(f["geometry"])))
-            for f in _load_features(raw, base)
-            if f.get("geometry")
-        ]
+        shapes = [_polygonal(make_valid(shape(f["geometry"]))) for f in feats]
         merged = unary_union([g for g in shapes if not g.is_empty])
         if merged.is_empty:
             raise ValueError(f"change.{name} drew no ground")
@@ -4524,10 +4642,17 @@ def _change_blend(cfg: dict[str, Any]) -> dict[str, Any]:
 def _change_interval(cfg: dict[str, Any]) -> str:
     """The interval the difference covers, as the plate prints it.
 
+    Names the actor when one is declared. "Taken" and "Lost" in the key
+    say which direction the ground moved and cannot say by whom, and on a
+    plate that also fills two camps' zones that is a real ambiguity --
+    answered once here rather than three times in the key.
+
     Examples
     --------
     >>> _change_interval({"change": {"from": "March 2022", "to": "September 2024"}})
     'Change from March 2022 to September 2024'
+    >>> _change_interval({"change": {"actor": "Government", "from": "May", "to": "July"}})
+    'Change in ground held by Government, May to July'
     >>> _change_interval({})
     ''
     """
@@ -4535,6 +4660,9 @@ def _change_interval(cfg: dict[str, Any]) -> str:
     first, last = spec.get("from"), spec.get("to")
     if not (first and last):
         return ""
+    actor = str(spec.get("actor") or "").strip()
+    if actor:
+        return f"Change in ground held by {actor}, {first} to {last}"
     return f"Change from {first} to {last}"
 
 
@@ -8501,7 +8629,8 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     "provenance": frozenset({"inputs"}),
     "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
     "change": frozenset({
-        "before", "after", "from", "to", "palette", "fill_opacity", "blend",
+        "before", "after", "actor", "from", "to", "palette", "fill_opacity",
+        "blend",
     }),
     "values": frozenset({
         "by", "data", "key", "field", "classes", "method", "breaks", "palette",

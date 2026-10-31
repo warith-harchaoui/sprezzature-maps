@@ -100,11 +100,27 @@ Une couche de différence n'affirme rien. Deux étendues, soustraites :
 change:
   before: 2022-avril.geojson     # l'étendue antérieure
   after:  2024-decembre.geojson  # par défaut, areas_of_control.source
+  actor: "forces russes"         # le terrain de qui ; filtre LES DEUX côtés
   from: "avril 2022"
   to:   "décembre 2024"
 ```
 
-Tenu, pris, perdu en trois couleurs, l'intervalle imprimé au pied, et
+`actor` est la part facile à oublier et impossible à oublier sans
+conséquence. Une différence porte sur le terrain de *quelqu'un*, et
+`after` retombe par défaut sur toute la source de contrôle — les zones de
+tous les camps à la fois. Les camps d'une couche de contrôle pavent le
+même théâtre aux deux dates : leur union bouge à peine, et soustraite
+d'elle-même elle annonce que rien ne s'est passé pendant que la ligne
+entre eux traversait la carte. Mesuré sur un théâtre à deux camps où l'un
+prend une demi-unité de terrain, la couche rendait **`taken` = 0,0** et
+donnait tout le rectangle à `held`. Un côté qui épelle plus d'un camp est
+donc refusé jusqu'à ce qu'`actor` dise lequel, apparié contre la propriété
+qu'`areas_of_control.category_field` nomme déjà, et appliqué aux deux
+côtés par l'unique appel qui filtre l'un ou l'autre.
+
+Tenu, pris, perdu en trois couleurs, l'intervalle imprimé au pied avec
+l'acteur nommé — « Taken » énonce un sens et ne peut pas énoncer un camp —
+et
 **chaque classe légendée avec la part de terrain disputé qu'elle
 couvre** — « Held throughout — 46 % », « Taken — under 1 % », « Lost —
 54 % ». La part se calcule sur l'union des deux étendues, pas sur la
