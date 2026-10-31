@@ -500,11 +500,12 @@ carries its own `data-*` attributes (`data-confidence`, `data-precision`,
 `data-area-share`), so the assessment can be read back out of the finished
 file rather than only looked at.
 
-The library is reachable five ways: as a Python import; as an argparse
-(Python's standard command-line-parsing library) command line, `make-map`,
-installed by default; as a richer Click-based command line,
-`sprezzature-maps` (`sprezzature-maps[cli]`), which adds CSV ingestion and
-column mapping on top of what `make-map` reads; as an HTTP API
+The library is reachable four ways: as a Python import; as a Click
+command line, installed by default, under two spellings — `make-map` and
+`sprezzature-maps` resolve to the same callable, so neither reaches
+anything the other cannot (they were two commands until 2026-10-25, an
+argparse one and a richer Click twin behind a `[cli]` extra, which is why
+older notes count five); as an HTTP API
 (`sprezzature-maps[api]`) that publishes an OpenAPI schema (a
 machine-readable description of every endpoint, letting other tools
 generate documentation or client code automatically) and a small gallery

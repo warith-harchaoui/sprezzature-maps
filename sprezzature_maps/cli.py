@@ -1,37 +1,36 @@
 """
-sprezzature-maps: the Click-based command line (the ``sprezzature-maps`` command).
+sprezzature-maps: the Click command line (``sprezzature-maps`` and ``make-map``).
 
 Module summary
 --------------
 Click is a Python library for building command-line tools with
-subcommands. This module uses it to provide a richer twin of the
-always-installed, argparse-based ``make-map`` command
-(:mod:`sprezzature_maps.cli`); it is available separately, through the
-``[cli]`` extra. Both commands call the exact same underlying functions
+subcommands. This module is the whole command line, reachable under two
+names: ``[project.scripts]`` points both ``make-map`` and
+``sprezzature-maps`` at :func:`main` here, so they resolve to one callable
+and cannot differ. ``make-map`` is the older spelling and is kept because
+it is what the skill, the README and years of notes tell people to type.
+Every sub-command calls the library functions
 (:func:`sprezzature_maps.make_choropleth`,
 :func:`sprezzature_maps.make_situation_map`; see CODING.md §19.1), so this
-file only adds a new way to reach the generators, not a second
-implementation of them.
+file is a way to reach the generators, never a second implementation.
 
-What this command adds over ``make-map``, specifically: it can read data
-straight from a CSV file (``make-map`` only reads a JSON file already
-shaped the way the generator expects), and it accepts ``--map
-role=column`` bindings for a CSV whose columns are not already named
-``id``/``value``. That is exactly the same gap that exists between the
-two command lines in the sister ``sprezzature-figures`` repository (its
-argparse-based command is JSON-and-demo-data only too; its Click command
-is where CSV reading and column mapping live). This file deliberately does
-not duplicate ``make-map``'s JSON-file path, and does not add a second way
-to load a ``situation_map`` configuration: both already work, and a CSV
-story simply does not apply to ``situation_map``, since it is driven by a
-YAML configuration file describing zones and markers, not by rows of
-tabular data.
+What this used to be, until 2026-10-25: a *richer twin* of an
+argparse-based ``make-map`` that read only a JSON file already shaped the
+way the generator expects, with Click bought through a ``[cli]`` extra.
+The pair meant every sub-command written twice, and the extra meant a
+reader could hold a command that would not run. argparse is gone, click is
+a base dependency, the ``[cli]`` extra is gone with it, and the
+distinction this docstring used to draw no longer exists — anything one
+name does, the other does.
 
-Install the extra to pull in Click::
+What that twin added is still here, now on both names: reading data
+straight from a CSV/TSV/JSON/JSONL file, and ``--map role=column``
+bindings for a file whose columns are not already named ``id``/``value``.
+Both live on the sub-commands rather than on the group. There is still no
+CSV story for ``situation_map``, which is driven by a YAML configuration
+file describing zones and markers rather than by rows of tabular data.
 
-    pip install 'sprezzature-maps[cli]'
-
-Then run the command::
+Run it under either name::
 
     sprezzature-maps list
     sprezzature-maps choropleth --data my.csv --map id=Code --map value=Score --out world.svg

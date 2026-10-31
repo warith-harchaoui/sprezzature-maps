@@ -425,12 +425,12 @@ attributs `data-*` (`data-confidence`, `data-precision`,
 `data-area-share`), pour que l'évaluation se relise hors du fichier fini
 au lieu de seulement se regarder.
 
-La bibliothèque se joint de cinq façons : par import Python ; par la
-ligne de commande argparse (la bibliothèque standard de Python pour
-analyser les arguments de ligne de commande) `make-map`, installée par
-défaut ; par une ligne de commande Click plus riche,
-`sprezzature-maps` (`sprezzature-maps[cli]`), qui ajoute l'ingestion de
-CSV et le mappage de colonnes par-dessus ce que lit `make-map` ; par une
+La bibliothèque se joint de quatre façons : par import Python ; par une
+ligne de commande Click, installée par défaut, sous deux orthographes —
+`make-map` et `sprezzature-maps` résolvent vers le même appelable, donc
+aucune n'atteint ce que l'autre n'atteint pas (c'étaient deux commandes
+jusqu'au 2026-10-25, une argparse et un jumeau Click plus riche derrière
+un extra `[cli]`, d'où le cinq des notes plus anciennes) ; par une
 API HTTP (`sprezzature-maps[api]`) qui publie un schéma OpenAPI (une
 description de chaque point d'entrée lisible par une machine,
 permettant à d'autres outils de générer automatiquement de la
