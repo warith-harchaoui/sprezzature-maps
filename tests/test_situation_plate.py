@@ -863,19 +863,30 @@ def test_the_scale_bar_is_long_enough_to_carry_its_own_labels() -> None:
         vp = msm.make_viewport(msm.build_projection(bbox, "auto"), bbox, float(width), 26.0)
         svg = msm.scale_bar(0.0, 0.0, vp)
         labels = re.findall(r'text-anchor="end">([^<]+)</text>', svg)
-        lengths = [
-            float(x) + float(w)
-            for x, w in re.findall(r'<rect x="([-\d.]+)"[^>]*width="([\d.]+)"', svg)
-        ]
-        assert len(labels) == 2 and len(lengths) == 4
-        for label, length in zip(labels, (lengths[1], lengths[3]), strict=True):
+        # Each bar is one rule with two half-boxes struck on it, so the
+        # rule's ``x2`` is the bar's far end -- the only number this needs,
+        # and drawn from ``x = 0``. This used to count ``<rect>``s and index
+        # into them, which stopped being an answer the day the bar grew a
+        # paper ground under its numbers: a fifth rectangle, wider than
+        # either bar and not a bar at all. Measuring the rules instead reads
+        # the same lengths off the markup and does not care how much
+        # furniture is drawn around them.
+        ends = [float(v) for v in re.findall(r'<line [^>]*x2="([-\d.]+)"', svg)]
+        assert len(labels) == 2 and len(ends) == 2
+        for label, length in zip(labels, ends, strict=True):
             # Measured, not counted. A flat advance per character said
             # "200KM" fitted a bar it overran by a fifth, because K and M
             # are among the widest glyphs in the face and a digit is not.
             needed = text_width(f"0{label}", 10 * vp["ts"])
             assert length >= needed, f"{width}: '{label}' does not fit its {length:.0f}-unit bar"
         # And neither bar may run off the plate.
-        assert max(lengths) < width, f"{width}: a scale bar overruns the canvas"
+        assert max(ends) < width, f"{width}: a scale bar overruns the canvas"
+        # The ground is what makes the two numbers readable over a hillshade,
+        # and it is worth nothing if it stops short of the longer bar.
+        ground = re.search(r'<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)"[^>]*fill-opacity=', svg)
+        assert ground, f"{width}: the bar's numbers sit on no ground at all"
+        right = float(ground.group(1)) + float(ground.group(2))
+        assert right >= max(ends), f"{width}: the ground stops {max(ends) - right:.0f} units short"
 
 
 # ── weight ────────────────────────────────────────────────────────────────
@@ -1148,7 +1159,20 @@ def test_the_caption_owns_its_band_rather_than_printing_on_the_map() -> None:
 
 
 def test_no_inset_configured_means_an_empty_group_not_a_missing_one() -> None:
-    assert re.search(r'<g id="inset"[^>]*></g>', _plate())
+    """
+    A refused locator leaves its group behind, empty.
+
+    The reason is the plate's own control panel: it switches layers by id,
+    so a group that is absent rather than empty is a control with nothing
+    on the other end of it. That has not changed. What has changed is which
+    config refuses one -- **a regional plate now gets a locator unless it
+    says otherwise**, so ``_plate()`` with nothing set is the populated
+    case, and the empty group is what ``show: false`` produces.
+    """
+    assert re.search(r'<g id="inset"[^>]*></g>', _plate(inset={"show": False}))
+    # And the default really is the other way round, or the line above is
+    # asserting that an empty group is empty.
+    assert not re.search(r'<g id="inset"[^>]*></g>', _plate())
 
 
 def test_the_inset_shows_the_region_inside_a_wider_context() -> None:
@@ -1186,8 +1210,16 @@ def _with_inset() -> dict[str, Any]:
 
 
 def test_the_north_arrow_steps_clear_of_the_inset() -> None:
-    """Both default to the top-right corner, and an arrow on a small map reads as part of it."""
-    plain = _plate()
+    """
+    Both want the top-right corner, and an arrow on a small map reads as
+    part of it.
+
+    The plate with no locator is now the one that has to be asked for:
+    ``_plate()`` draws one by default, so comparing it against
+    ``inset={"position": "top-right"}`` compared two plates that both had
+    a locator and measured the same number twice.
+    """
+    plain = _plate(inset={"show": False})
     with_inset = _plate(inset={"position": "top-right"})
     import re
 
