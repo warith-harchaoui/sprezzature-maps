@@ -71,6 +71,7 @@ have a list of things that happened at coordinates, density.
 |---|---|---|
 | Choropleth | `make-map choropleth --out world.svg` | `render_choropleth` |
 | Situation map | `make-map situation_map --config region.yaml --out r.svg` | `render_situation_map` |
+| A region config to start one from | `make-map situation_new --country Sudan --out sudan.yaml` | — |
 | Density | `make-map density --out where.svg` | `render_density` |
 | Audit a finished plate | `make-map audit plate.svg` | — |
 | Which kinds exist | `make-map list` (or `--help`) | `list_kinds` |
@@ -96,6 +97,40 @@ surface is this repo's HTTP routes and those render into a response, while
 the audit reads plates already sitting on the caller's disk — which an HTTP
 renderer never sees. It is on both CLIs instead, `make-map audit` and
 `sprezzature-maps audit`.
+
+---
+
+## Asked for a situation map, with no region config in hand
+
+> **A place named, and no YAML to render — that is the trigger.** The
+> situation map is the only kind here that is configured by a file, so
+> every request for one starts at the same fork: either the caller already
+> has a region config, or the first call is `make-map situation_new` to
+> write one.
+
+The vocabulary is the domain's own, and it is short: the config's sections
+are **region**, **basemap**, **frontiers**, **cities**, **areas of
+control**, **legend**, **provenance**. A question naming one of them, or
+naming a country or a bounding box and no file, is this call — "where do I
+start a plate of Mali", "I need a region config for the Sahel", "what goes
+in the YAML", « une carte de situation du Mali, je pars de quoi ». So is
+any request to change the plate's *furniture* rather than its subject: the
+starter writes all of it already furnished.
+
+```
+make-map situation_new --country Sudan --out sudan.yaml
+make-map situation_new --bbox 21.8,8.7,27.6,16.4 --title "Darfur" --out darfur.yaml
+```
+
+Exactly one of `--country` and `--bbox`. The country name is resolved
+against the vendored Natural Earth atlas, so it is the Natural Earth
+spelling or nothing — an unknown name is refused rather than guessed at.
+
+What comes out renders as it stands — basemap, frontiers, towns, scale,
+locator, provenance footer — and the thematic block is present but
+commented, with `confidence` on every zone. That field is the one most
+often left out, and leaving it out is itself a claim: it says the author is
+certain. Do not delete the comment and the field together.
 
 ---
 
