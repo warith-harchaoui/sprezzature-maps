@@ -148,18 +148,20 @@ def test_no_plate_draws_a_frontier_across_open_water(plate_name: str) -> None:
     heavy ones -- the shape of plate where a seam has room to be obvious and
     where the defect was actually seen.
     """
-    import json
+    import importlib
     import re
 
     sys.path.insert(0, str(REPO / "tests"))
-    from make_situation_map import build_map  # noqa: E402
+    from _plates import plate  # noqa: E402
 
-    cfg = json.loads(
-        (REPO / "assets" / "situation-maps" / f"{plate_name}.yaml").read_text(
-            encoding="utf-8"
-        )
-    )
-    svg = build_map(cfg)
+    # The builder, not the shipped YAML beside the plate. Both describe the
+    # same plate, and only one of them is in the repository: everything
+    # under ``assets/situation-maps/`` is gitignored -- it is one command
+    # away from these builders, which are the source. Reading the file made
+    # this test pass on a machine that had run that command and fail with
+    # ``FileNotFoundError`` on a fresh clone, which is what CI is.
+    cfg = importlib.import_module("build_situation_examples").BUILDERS[plate_name]()
+    svg = plate(cfg)
 
     start = svg.index('<g id="frontiers"')
     end = svg.index("<g id=", start + 1)
