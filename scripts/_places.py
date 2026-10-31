@@ -133,6 +133,7 @@ def place_labels(
     bounds_px: tuple[float, float, float, float] | None = None,
     avoid: Sequence[tuple[float, float, float, float]] = (),
     clearance: float = 1.0,
+    halo: float = 0.0,
 ) -> list[tuple[City, float, float, float, float]]:
     """
     Place a label per city, dropping any that would collide.
@@ -166,7 +167,28 @@ def place_labels(
         can still go on its left instead of being lost.
     clearance : float, optional
         Breathing room kept between two boxes, in canvas units.
+    halo : float, optional
+        The ``stroke-width`` of the white outline the caller draws behind
+        each name, if any. **This is not cosmetic bookkeeping.** The box
+        measured here is the *ink*; a haloed name occupies half that
+        stroke more on every side, so two names placed a clearance apart
+        are drawn with their halos that much closer, and at the default
+        clearance of 1 they can be drawn touching.
+
+        Measured on the world choropleth, whose halo is 2.4 units: "Los
+        Angeles" and "Washington, D.C." were placed 1.2 units apart and
+        came out with their outlines fused into one grey smear across the
+        United States, and "Mumbai" and "Kolkata" the same at 1.3. Both
+        passed the collision test, because the test was looking at
+        something narrower than what gets drawn.
+
+    Notes
+    -----
+    The effective gap is ``max(clearance, halo + font_size / 10)``: the two
+    half-strokes, plus a tenth of the type size so the two names are not
+    merely not-touching but separable at a glance.
     """
+    clearance = max(clearance, halo + font_size / 10.0)
     placed: list[tuple[float, float, float, float]] = list(avoid)
     kept: list[tuple[City, float, float, float, float]] = []
     gap = dot_radius + 3.0

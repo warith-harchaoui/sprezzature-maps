@@ -363,3 +363,100 @@ def box_inside(
         and inner[2] <= outer[2] - pad
         and inner[3] <= outer[3] - pad
     )
+
+
+#: Advance width in em of **every** glyph in the monospace stack these
+#: plates declare for their provenance footer (``'Roboto Mono',
+#: ui-monospace, SFMono-Regular, Menlo, monospace``). One number, because
+#: that is what monospace means.
+#:
+#: The maximum across the stack, by the same rule :data:`ADVANCE` follows
+#: and for the same reason: the question is always "will this line fit",
+#: and an answer that only holds for a reader with Roboto Mono installed
+#: is not an answer. Measured with ``fontTools`` on the four faces
+#: resolvable here -- Roboto Mono 0.6001, SF Mono 0.6182, Menlo 0.6001,
+#: PT Mono 0.6000.
+MONO_ADVANCE = 0.6182
+
+
+def mono_width(text: str, size: float) -> float:
+    """Return the ink width of ``text`` set in the monospace stack.
+
+    The sans measurement in :func:`text_width` is per character and is
+    wrong here in both directions: it reads ``l`` as a quarter em and
+    ``W`` as most of one, where a monospace face gives both the same.
+
+    This was not academic. The provenance footer is the one line on a
+    plate long enough to run off it, and after the evidence-basis sentence
+    was added to the five conflict plates two of them did exactly that --
+    the eastern-DRC footer reaching 982 units on a 944-unit canvas, with
+    the last eleven words simply absent.
+
+    Parameters
+    ----------
+    text : str
+        The line.
+    size : float
+        Font size in user units.
+
+    Returns
+    -------
+    float
+        Width in the same units as ``size``.
+
+    Examples
+    --------
+    >>> round(mono_width("abcd", 10), 3)
+    24.728
+    >>> mono_width("llll", 10) == mono_width("WWWW", 10)
+    True
+    """
+    return len(text) * MONO_ADVANCE * size
+
+
+def mono_wrap(text: str, size: float, available: float) -> list[str]:
+    """Break ``text`` into lines no wider than ``available``.
+
+    Breaks on spaces, and never mid-word: a hyphenation this module cannot
+    do correctly is worse than a slightly ragged edge. A single word longer
+    than the line is emitted on its own and overflows, which is visible and
+    therefore fixable, rather than silently truncated.
+
+    Parameters
+    ----------
+    text : str
+        The line to break.
+    size : float
+        Font size in user units.
+    available : float
+        Width to fit, in the same units.
+
+    Returns
+    -------
+    list of str
+        At least one line, even for empty input.
+
+    Examples
+    --------
+    >>> mono_wrap("the final boundary has not been determined", 10, 150)
+    ['the final boundary has', 'not been determined']
+
+    A word wider than the line keeps its own:
+
+    >>> mono_wrap("antidisestablishmentarianism is long", 10, 60)
+    ['antidisestablishmentarianism', 'is long']
+    """
+    words = str(text).split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if mono_width(candidate, size) <= available:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines

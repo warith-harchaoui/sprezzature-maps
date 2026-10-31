@@ -66,6 +66,20 @@ model. Each is written up, with its source, in
                        position taken by omission.
 ====================== ===================================================
 
+And one that applies to any plate at all, because a map is mostly type:
+
+====================== ===================================================
+``text-unreadable``    A label collides with another, runs off the plate,
+                       or is set below a size a reader can take. Measured
+                       from the same font metrics the label placer uses,
+                       over the rendered markup -- so it sees the furniture
+                       the placer never knew about: the scale bar, the
+                       legend card, the break values under a colour strip,
+                       the provenance footer. Every collision this rule has
+                       found so far was between one of those and something
+                       else. See ``scripts/_legibility.py``.
+====================== ===================================================
+
 Static: it reads the SVG the generator wrote and nothing else. No rendering,
 no network, no geometry.
 
@@ -96,6 +110,11 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree.ElementTree import ParseError
+
+#: What :func:`_legibility_findings` catches when handed something that
+#: is not well-formed XML.
+ET_PARSE_ERRORS = (ParseError,)
 
 #: The note a classed legend prints: "5 classes, natural breaks".
 _METHOD_RE = re.compile(r">\s*(\d+)\s+classes?,\s*([^<]+?)\s*</text>")
@@ -296,7 +315,34 @@ def audit(svg: str) -> list[Finding]:
         ))
 
     findings.extend(_situation_findings(text, labels))
+    findings.extend(_legibility_findings(svg))
     return findings
+
+
+def _legibility_findings(svg: str) -> list[Finding]:
+    """Report every label a reader could not read.
+
+    Folded into ``audit`` rather than given a command of its own, because
+    the loop is the point: render, audit, fix, render. A second command
+    is a second thing to remember, and the defects this catches are
+    exactly the ones nobody remembers to look for -- a ruler printed
+    through a colour strip, a footer running a word off the edge, two
+    town names whose halos have fused.
+
+    Measured on the *un-stripped* document: the base64 the rest of this
+    module drops is a relief raster, and the parser needs the markup
+    around it intact.
+    """
+    from sprezzature_maps import _load_script
+
+    try:
+        problems = _load_script("_legibility").unreadable(svg)
+    except ET_PARSE_ERRORS:
+        # Not every SVG this reads was written here, and a document the
+        # XML parser refuses is a finding of its own -- but not this
+        # one's, and the other nine rules are regex-based and still hold.
+        return [Finding("unparseable", "the document is not well-formed XML")]
+    return [Finding("text-unreadable", line) for line in problems]
 
 
 def _layer_is_drawn(text: str, layer_id: str) -> bool:

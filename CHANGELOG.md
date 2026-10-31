@@ -69,6 +69,50 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Added
 
+- **`audit` reads the type as well as the markup.** A map is mostly type,
+  and this repository already placed *labels* with measured font metrics
+  and a collision policy. It did not place the furniture that way: the
+  scale bar at a corner, the legend card at another, the break values
+  under a colour strip, the provenance footer at the foot — each correct
+  on the plate it was tuned on, each found colliding on one it was not.
+
+  `scripts/_legibility.py` rebuilds every `<text>`'s ink rectangle from
+  the same metrics the placer uses and reports what collides, what runs
+  off the plate, and what is set too small. Folded into `audit` rather
+  than given a command of its own: the loop is render, audit, fix,
+  render, and a second command is a second thing to remember.
+
+  The first run reported **25 723 collisions**, of which about forty were
+  real — the choropleth's 173 hover bubbles are real text at real
+  coordinates, held at `opacity:0` until a pointer arrives. A measurement
+  that buries its own signal is not one. With those excluded, along with
+  rotated labels (an upright box around a river name is wider than its
+  ink by its own length) and consecutive lines of one set block (leading
+  is a typographic decision, not a collision): 19 real findings, now 0.
+
+  What they were, and what each cost:
+
+  * **The halo was not counted.** The placer measures ink; a haloed name
+    is 1.2 units wider on every side. "Los Angeles" and "Washington,
+    D.C." were placed 1.2 apart and drawn with their outlines fused.
+    `place_labels` takes a `halo` argument now and keeps
+    `halo + font_size / 10`.
+  * **The footer ran off the plate.** Measured in the proportional
+    advance while set in the monospace one. `_textbox` gained
+    `MONO_ADVANCE`, measured with fontTools across the four faces the
+    stack can resolve (max 0.6182, SF Mono), and `mono_wrap`.
+  * **The footer's opaque band swallowed names.** Drawn last, over
+    everything: Constanța, Jerusalem, Bouaké and CENTRAL AFRICAN REP.
+    disappeared without a word. The band is reserved now, and a
+    *hand-placed* name under any furniture raises an error naming it —
+    the same treatment a name placed outside the drawn map already got.
+  * **The subtitle ran into the north arrow.** It wraps to the room
+    actually left at the right, counting the arrow, the locator and a
+    top-right legend card.
+
+- **The date is stamped under the title**, which is where the guidelines
+  put it and where a reader looks first. The footer keeps the full line.
+
 - **A value per administrative unit: the regional choropleth.** The gap it
   closes is the one a data scientist actually walks into. `areas_of_control`
   colours a unit by *who holds it*, which is categorical. `make_choropleth`
