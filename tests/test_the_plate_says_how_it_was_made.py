@@ -27,12 +27,32 @@ from sprezzature_maps.audit import audit
 ROOT = Path(__file__).resolve().parent.parent
 
 
+#: Vertical step between two labels in the fixtures below, in user units.
+#: Wider than the 16-unit default type they are set in, so each label gets
+#: its own line and nothing here collides by construction.
+_LINE = 28.0
+
+
 def plate(*labels: str, root_attrs: str | None = None, extra: str = "") -> str:
-    """A minimal SVG carrying the given visible text."""
+    """A minimal SVG carrying the given visible text, one label per line.
+
+    The labels are positioned, and they have to be. ``audit`` used to read
+    only *what* a plate says; it also measures *where* now, through
+    :mod:`scripts/_legibility`, and a ``<text>`` with no ``x``/``y`` is
+    drawn at the origin -- so an SVG written as a bag of bare ``<text>``
+    elements stacks every one of them on the same spot. A browser really
+    does overprint them, so the finding was right and the fixture was
+    wrong: it reported ``text-unreadable`` on the one plate in this file
+    that is supposed to be faultless, which made the baseline below assert
+    the opposite of what it says.
+    """
     attrs = root_attrs if root_attrs is not None else (
         'role="img" aria-labelledby="t"'
     )
-    texts = "".join(f"<text>{label}</text>" for label in labels)
+    texts = "".join(
+        f'<text x="40" y="{40 + _LINE * n:.0f}">{label}</text>'
+        for n, label in enumerate(labels)
+    )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" {attrs}>'
         f'<title id="t">A plate</title>{texts}{extra}</svg>'
