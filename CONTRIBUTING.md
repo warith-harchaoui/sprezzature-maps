@@ -8,7 +8,7 @@ pip install -e ~/sprezzature-figures
 
 git clone https://github.com/warith-harchaoui/sprezzature-maps
 cd sprezzature-maps
-pip install -e ".[dev,cli,api,mcp]"
+pip install -e ".[dev,api,mcp]"
 ```
 
 `sprezzature-maps` depends on `sprezzature-figures` for shared rendering
