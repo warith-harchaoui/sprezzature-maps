@@ -89,6 +89,26 @@ def make_choropleth(*args: Any, **kwargs: Any) -> Path:
     return _load_script("make_choropleth").make_choropleth(*args, **kwargs)
 
 
+def classification_methods() -> tuple[str, ...]:
+    """The class-break methods ``make_choropleth(classes=...)`` accepts.
+
+    Read from ``scripts/_classify.py``, which is where they are defined and
+    where each one's cost is written down, so a surface that offers them does
+    not have to carry a second list of its own. The HTTP body did carry one,
+    and a list repeated is a list that drifts: whichever copy a reader happens
+    to hold becomes the set of methods they believe exists.
+
+    Returns
+    -------
+    tuple of str
+        In the order a chooser should consider them. ``None`` — no
+        classification at all, which is still the generator's default — is
+        deliberately not a member: it is the absence of a choice, not one of
+        the choices.
+    """
+    return tuple(_load_script("_classify").METHODS)
+
+
 def make_situation_map(*args: Any, **kwargs: Any) -> Path:
     """Render a layered areas-of-control situation map. See ``scripts/make_situation_map.py`` for the full signature."""
     return _load_script("make_situation_map").make_situation_map(*args, **kwargs)
@@ -199,6 +219,7 @@ def replay_report(svg: str, cfg: Any, files: Any = ()) -> dict[str, Any]:
 __all__ = [
     "acled_events",
     "article_sidecar",
+    "classification_methods",
     "make_choropleth",
     "make_density",
     "make_situation_map",

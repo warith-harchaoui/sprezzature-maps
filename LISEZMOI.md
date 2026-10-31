@@ -154,7 +154,11 @@ qui n'apparie **rien** arrête la planche plutôt que de dessiner une carte
 grise et confiante d'une faute de nom de colonne, et une cellule qui n'est
 pas un nombre l'arrête aussi plutôt que d'être jetée comme si l'unité
 n'avait pas de donnée. La légende imprime les bornes et nomme la méthode :
-la planche satisfait l'audit par construction.
+la planche satisfait l'audit par construction — et elle compte les classes
+que les données ont **permises**, pas celles que le config a demandées. Les
+ex æquo font fusionner des bornes, ce qui est ordinaire : `classes: 6` sur
+des comptages avec une longue série de zéros ne fait pas six classes, et une
+légende qui l'affirmerait sous six pastilles serait une clé de rien.
 
 Vivre dans la carte de situation plutôt que dans un générateur à soi, c'est
 tout l'intérêt : elle hérite de la projection conique, du relief texturé, des

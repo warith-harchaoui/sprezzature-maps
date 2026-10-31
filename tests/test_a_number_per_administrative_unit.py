@@ -141,6 +141,45 @@ def test_given_breaks_are_labelled_as_given() -> None:
     assert (breaks, method, classes) == ([10.0, 20.0, 30.0], "given", 4)
 
 
+def test_the_legend_counts_the_classes_it_got_not_the_ones_it_asked_for() -> None:
+    """A plate may not state a number of classes the data did not support.
+
+    Counts with a long run of zeros are the commonest choropleth input there
+    is, and a quantile cut through them lands several boundaries on the same
+    number. ``classify`` collapses those on purpose — it says so in its own
+    docstring — so ``classes: 5`` here yields far fewer. Restating the request
+    as the result printed "5 classes, quantiles" under a strip of five
+    swatches with every unit in one colour: swatches keying nothing, and a
+    number no reader could have obtained from the data.
+
+    The assertion is ``classes == len(breaks) + 1`` rather than a literal
+    count, because the literal is a property of the collapse rule and not of
+    the thing under test; ``classes < 5`` is what keeps the data honest about
+    biting at all.
+
+    Five is also the default, so this was reachable by a config that named
+    ``values:`` and chose no number at all.
+    """
+    counts = [0.0] * 40 + [1.0, 2.0, 3.0, 17.0]
+    breaks, method, classes = msm._value_classes({"classes": 5, "method": "quantile"}, counts)
+    assert method == "quantile"
+    assert classes == len(breaks) + 1
+    assert classes < 5, "pick data the collapse actually bites on, or this proves nothing"
+
+
+def test_a_distribution_that_admits_no_classification_says_one_class() -> None:
+    """The floor of the same rule: identical values are one class, not five.
+
+    ``classify`` returns no breaks at all when the values are all equal, and
+    the honest legend for that is a single swatch. Five swatches over it would
+    be a ramp invented entirely by the renderer.
+    """
+    breaks, _method, classes = msm._value_classes({"classes": 5}, [7.0] * 12)
+    assert (breaks, classes) == ([], 1)
+    # And the colour strip follows the count, so there is one swatch to draw.
+    assert len(msm._value_colors({}, classes, False)) == 1
+
+
 def test_an_unknown_method_raises_with_the_list() -> None:
     with pytest.raises(ValueError, match="natural|jenks|quantile"):
         msm._value_classes({"method": "vibes"}, [1.0, 2.0])

@@ -99,6 +99,12 @@ make-map choropleth --out world.svg
 # Your own data (JSON file: a list of {"id": ..., "value": ...} rows).
 make-map choropleth --data my-data.json --out world.svg --title "My indicator"
 
+# Classed rather than stretched. Reach for it whenever the values are skewed:
+# the unclassed default puts most territories in the bottom of the ramp and
+# leaves numbers ten times apart looking the same. The legend names the method
+# and counts the classes the data supported, which can be fewer than asked.
+make-map choropleth --data my-data.csv --classes 5 --method jenks --out world.svg
+
 # A region config.
 make-map situation_map --config my-region.yaml --out region.svg
 ```

@@ -198,25 +198,54 @@ def headtail_breaks(values: Sequence[float], k: int | None = None) -> list[float
     return _dedupe_breaks(breaks)
 
 
+def _drop_the_empty_floor(breaks: list[float], values: Sequence[float]) -> list[float]:
+    """Drop boundaries at or below the smallest value.
+
+    The same honesty :func:`_dedupe_breaks` applies to boundaries that share a
+    number, applied to the one boundary that cannot be seen to share anything:
+    a break sitting *on* the minimum. :func:`class_index` puts a value in the
+    class above every boundary it is not strictly below, so a break equal to
+    ``min(values)`` bounds a first class no value can ever fall in — a swatch
+    on the legend keying nothing, and a class in the count that is not there.
+
+    It is not a corner case: it is what ties at the bottom produce, and counts
+    with a long run of zeros are the commonest input a choropleth gets. On
+    forty zeros and four small numbers, ``quantile`` with ``k = 5`` put its
+    only surviving break on zero, so every unit on the map sat in class 1 and
+    class 0 was unreachable.
+    """
+    data = sorted(float(v) for v in values if v == v and abs(v) != float("inf"))
+    if not data:
+        return breaks
+    return [b for b in breaks if b > data[0]]
+
+
 def classify(values: Sequence[float], k: int, method: str) -> list[float]:
     """
     Interior class breaks for `values`, by `method`.
 
     Returns ``k - 1`` boundaries at most — fewer when the data cannot support
-    that many distinct ones. An empty list means the values admit no useful
-    classification (all equal, or fewer values than classes), and the caller
-    should fall back to its unclassed ramp rather than draw a legend of
-    identical swatches.
+    that many distinct ones, which includes boundaries the methods place on
+    the minimum (see :func:`_drop_the_empty_floor`). An empty list means the
+    values admit no useful classification (all equal, or fewer values than
+    classes), and the caller should fall back to its unclassed ramp rather
+    than draw a legend of identical swatches.
+
+    A caller that reports a class count must take it from the length of what
+    comes back and not from `k`: the two differ exactly when the data could
+    not support the request, which is the case worth being honest about.
     """
     if method not in METHODS:
         raise ValueError(f"unknown classification method {method!r}; expected one of {METHODS}")
     if method == "quantile":
-        return quantile_breaks(values, k)
-    if method == "equal":
-        return equal_breaks(values, k)
-    if method == "jenks":
-        return jenks_breaks(values, k)
-    return headtail_breaks(values, k)
+        breaks = quantile_breaks(values, k)
+    elif method == "equal":
+        breaks = equal_breaks(values, k)
+    elif method == "jenks":
+        breaks = jenks_breaks(values, k)
+    else:
+        breaks = headtail_breaks(values, k)
+    return _drop_the_empty_floor(breaks, values)
 
 
 def diverging_classify(
