@@ -159,8 +159,15 @@ def improve(
             f"the loop reads the rendered map back, so it needs a raster; "
             f"{destination.name} is not a .png"
         )
-    if renderer is None:
-        from sprezzature_maps.studio.render import render as renderer  # noqa: PLW0127
+    draw = renderer
+    if draw is None:
+        # A separate name rather than reassigning the parameter: mypy does not
+        # narrow `renderer` across the import, and silencing it would hide the
+        # one thing worth knowing here — that the default is resolved lazily,
+        # so a caller who injects a renderer never imports the real one.
+        from sprezzature_maps.studio.render import render as default_renderer
+
+        draw = default_renderer
 
     ceiling = MAX_ROUNDS if max_rounds is None else min(max_rounds, MAX_ROUNDS)
 
@@ -172,7 +179,7 @@ def improve(
     reason = "max_rounds"
 
     for index in range(1, ceiling + 1):
-        image = renderer(kind_name, payload, out=destination, title=title, **settings)
+        image = draw(kind_name, payload, out=destination, title=title, **settings)
         reading = read_map(client, image)
         proposed = propose_repairs(reading, kind_name, settings)
         safe_now = [r for r in proposed if r.safe]
