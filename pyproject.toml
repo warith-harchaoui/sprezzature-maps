@@ -86,6 +86,23 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "fastapi-mcp>=0.3",
     "mcp<2.0",
+
+    # The Studio's model layer, `sprezzature_maps/studio/assistant/`. It is the
+    # one path to a model: nothing here names a backend, a model tag or an
+    # Ollama port, and `client.py` imports this package *lazily*, inside the
+    # call, so the Studio's editor and every test of the assistant work with it
+    # absent.
+    #
+    # The floor matches `sprezzature-figures`, which carries the same layer —
+    # and it was checked rather than copied: at tag `v0.4.0`,
+    # `best_engine_ai_helper.llm.chat` already took all four keywords this
+    # layer passes (`system`, `images`, `json_schema`, `temperature`), so the
+    # floor is the oldest release the call shape actually works against.
+    #
+    # Not part of this package's presentation, by standing decision: it belongs
+    # to the ai-helpers family, and sprezzature depends on it without
+    # advertising it.
+    "best-engine-ai-helper>=0.4.0",
 ]
 
 [project.optional-dependencies]
