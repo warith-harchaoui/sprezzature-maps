@@ -56,6 +56,7 @@ from typing import Any
 import click
 
 from sprezzature_maps.data import parse_mapping, read_choropleth_rows
+from sprezzature_maps.kinds import kind as kind_of
 from sprezzature_maps.kinds import kind_names
 
 from . import classification_methods, make_choropleth, make_density, make_situation_map
@@ -279,6 +280,131 @@ def density_cmd(
     if bins:
         kwargs["bins"] = bins
     click.echo(str(make_density(**kwargs)))
+
+
+@main.command("improve")
+@click.option(
+    "--kind",
+    "kind_name",
+    type=click.Choice(kind_names()),
+    required=True,
+    help="Which kind of map to render and then look at.",
+)
+@click.option(
+    "--data",
+    "data_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Per-territory rows, for a choropleth.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Region configuration, for a situation map.",
+)
+@click.option(
+    "--points",
+    "points_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Event positions, for a density map.",
+)
+@click.option(
+    "--map",
+    "mapping",
+    multiple=True,
+    metavar="ROLE=COLUMN",
+    help="Bind a column to a role. Repeatable.",
+)
+@click.option("--out", required=True, help="Where the map goes. Must be a .png.")
+@click.option("--title", default=None, help="Your words. The loop never rewrites them.")
+@click.option(
+    "--rounds",
+    type=int,
+    default=None,
+    help="Lower the ceiling on rounds. It cannot be raised: every round renders "
+         "and reads a map.",
+)
+def improve_cmd(
+    kind_name: str,
+    data_path: str | None,
+    config_path: str | None,
+    points_path: str | None,
+    mapping: tuple[str, ...],
+    out: str,
+    title: str | None,
+    rounds: int | None,
+) -> None:
+    """Render a map, look at it, and repair what is safe to repair.
+
+    The loop renders, hands the PNG to a vision model, matches what it read
+    against a table of cues, and changes one keyword at a time from a ladder
+    that ends. It never applies anything that can alter what the map says
+    about the data -- the classification method, the number of classes, the
+    frame -- and prints those for you to decide instead.
+
+    Needs a model that `best-engine-ai-helper` can reach.
+    """
+    from sprezzature_maps.data import read_density_points, read_situation_config
+    from sprezzature_maps.studio.assistant import default_client
+    from sprezzature_maps.studio.ralph import improve
+
+    kind = kind_of(kind_name)
+    #: shape -> (the option the user passes, what they passed, how to read it)
+    supplied = {
+        "rows": ("--data", data_path),
+        "config": ("--config", config_path),
+        "points": ("--points", points_path),
+    }
+    wanted_flag, wanted_value = supplied[kind.data_shape]
+    wrong = [flag for shape, (flag, value) in supplied.items() if value and shape != kind.data_shape]
+    if wrong:
+        raise click.ClickException(
+            f"a {kind.name} consumes {kind.data_shape}, so it takes {wanted_flag}, "
+            f"not {', '.join(wrong)}"
+        )
+    if not wanted_value:
+        raise click.ClickException(f"a {kind.name} needs {wanted_flag}")
+
+    try:
+        if kind.data_shape == "rows":
+            payload = read_choropleth_rows(wanted_value, _parse_mapping(mapping))
+        elif kind.data_shape == "points":
+            payload = read_density_points(wanted_value)
+        else:
+            payload = read_situation_config(wanted_value)
+    except ValueError as bad:
+        raise click.ClickException(str(bad)) from bad
+
+    try:
+        result = improve(
+            default_client(),
+            kind_name,
+            payload,
+            out=out,
+            title=title,
+            max_rounds=rounds,
+        )
+    except ValueError as bad:
+        raise click.ClickException(str(bad)) from bad
+
+    click.echo(str(result.image))
+    for round_ in result.rounds:
+        read = round_.reading
+        seen = read.kind_seen or "could not tell"
+        click.echo(f"round {round_.index}: read as {seen}, {len(round_.reading.issues)} issue(s)")
+        for repair in round_.applied:
+            click.echo(f"  applied {repair.option}={repair.value}  ({repair.because})")
+    click.echo(f"stopped: {result.reason}")
+    if not result.improved:
+        click.echo("nothing was changed")
+    for repair in result.for_a_person:
+        click.echo(
+            f"for you to decide: {repair.option}={repair.value}  ({repair.because}) "
+            f"-- it can change what the map says about the data"
+        )
 
 
 @main.command("situation-new")

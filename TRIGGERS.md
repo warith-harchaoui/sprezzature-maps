@@ -75,6 +75,7 @@ have a list of things that happened at coordinates, density.
 | Density | `make-map density --out where.svg` | `render_density` |
 | Audit a finished plate | `make-map audit plate.svg` | — |
 | Which kinds exist | `make-map list` (or `--help`) | `list_kinds` |
+| Render it, look at it, repair what is safe | `make-map improve --kind density --points e.json --out m.png` | — |
 
 A conflict export has no CLI of its own: the loaders are a Python call that
 builds the config the situation map then renders.
@@ -97,6 +98,28 @@ surface is this repo's HTTP routes and those render into a response, while
 the audit reads plates already sitting on the caller's disk — which an HTTP
 renderer never sees. It is on both CLIs instead, `make-map audit` and
 `sprezzature-maps audit`.
+
+---
+
+## Asked whether the map is any good, not for another map
+
+> **A judgement about a rendered map is the trigger**, not a request to draw
+> one: "is this readable", "the legend is too small", "can you make this
+> clearer", "fix the colours", « la légende est illisible », « rends ça plus
+> lisible ». The caller already has a map, or is about to, and what they want
+> is for someone to *look at it*.
+
+`make-map improve` renders, hands the PNG to a vision model, and changes one
+keyword at a time from a ladder that ends. It needs a model that
+`best-engine-ai-helper` can reach, which is why it has no MCP tool: an agent
+calling it would be an agent calling a model through a tool, and the agent can
+look at the PNG itself.
+
+What it will not do on its own is the part worth knowing before routing to it.
+It never changes anything that can alter what the map *says about the data* —
+the classification method, the number of classes, the frame, counts per area.
+Those it prints for a person to decide. So "make it legible" is a job for it,
+and "re-cut the classes so my country looks worse" is not.
 
 ---
 
