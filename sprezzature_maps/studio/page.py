@@ -85,7 +85,9 @@ def render_editor_html(
     payload_text: str = "",
     title: str = "",
     svg_url: str | None = None,
+    png_url: str | None = None,
     error: str | None = None,
+    report: list[str] | None = None,
 ) -> str:
     """Render the editor page for one kind.
 
@@ -105,6 +107,15 @@ def render_editor_html(
         Where the rendered map can be fetched. Served from a route rather
         than inlined: a situation plate is 2.2 MB of SVG, and inlining that
         into every re-render makes the page heavier than the map.
+    error : str, optional
+    png_url : str, optional
+        Where an improved map can be fetched, when the loop produced one. The
+        loop renders PNG because a vision model has to be shown a picture.
+    report : list of str, optional
+        What the loop did, one line per round, plus what it refused to do
+        alone. Shown under the map: a reader who asked for an improvement is
+        owed the account of it, and the changes it declined are the ones they
+        have to decide.
     error : str, optional
         A message to show instead of a map. Shown *above* the form, because a
         reader who has just been refused is looking at what they typed.
@@ -128,7 +139,24 @@ def render_editor_html(
     error_html = (
         f'<p class="error" role="alert">{escape(error)}</p>' if error else ""
     )
-    if svg_url:
+    report_html = (
+        '<section class="report" aria-label="What the loop did"><ol>'
+        + "".join(f"<li>{escape(line)}</li>" for line in report)
+        + "</ol></section>"
+        if report
+        else ""
+    )
+    if png_url:
+        # The loop renders PNG, because what it does is show the picture to a
+        # vision model, and a model handed SVG source reads the markup instead
+        # of looking. So the improved map arrives as a raster and is shown as
+        # one; `alt` names the kind rather than describing the map, because
+        # nothing here has read it.
+        figure_html = (
+            f'<figure><img src="{escape(png_url)}" '
+            f'alt="The improved {escape(entry.label.lower())}, rendered."></figure>'
+        )
+    elif svg_url:
         figure_html = (
             f'<figure><object type="image/svg+xml" data="{escape(svg_url)}">'
             f"<p>The rendered {escape(entry.label.lower())} could not be displayed "
@@ -168,6 +196,8 @@ def render_editor_html(
   }}
   @media (max-width: 52rem) {{ main {{ grid-template-columns: 1fr; }} }}
   form {{ display: flex; flex-direction: column; gap: 0.75rem; }}
+  .report ol {{ margin: 1rem 0 0; padding-left: 1.4rem; line-height: 1.5; }}
+  .report li {{ margin-bottom: 0.35rem; }}
   label {{ font-size: 0.85rem; color: var(--fg-secondary); }}
   textarea, input[type=text] {{
     width: 100%; background: var(--card-bg); color: var(--fg);
@@ -210,9 +240,10 @@ def render_editor_html(
       <textarea id="payload" name="payload" spellcheck="false">{escape(payload_text)}</textarea>
       <p class="help">{help_text} {escape(EMPTY_IS_FINE)}</p>
       <button type="submit">Render</button>
+      <button type="submit" formaction="improve">Render, look, repair</button>
     </form>
   </section>
-  <section>{figure_html}</section>
+  <section>{figure_html}{report_html}</section>
 </main>
 <p style="padding:0 2rem 2rem;color:var(--fg-secondary);font-size:0.8rem">
   Fonts served from <code>{escape(FONTS_URL_PREFIX)}</code>; nothing is fetched

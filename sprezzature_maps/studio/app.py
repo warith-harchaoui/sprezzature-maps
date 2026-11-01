@@ -179,6 +179,119 @@ def render_map(
     )
 
 
+#: How many rounds the page allows. The command line allows more.
+#:
+#: A click should not hang for minutes. Each round renders a 4K map and shows
+#: it to a vision model, so two rounds is already several seconds of work with
+#: a local model and more with a remote one. Somebody who wants the full
+#: ceiling has `sprezzature-maps improve`, which is the surface for a thing you
+#: script rather than a thing you click.
+PAGE_ROUNDS: int = 2
+
+
+@router.post("/improve", include_in_schema=False)
+def improve_map(
+    kind: str = Form(...),
+    payload: str = Form(default=""),
+    title: str = Form(default=""),
+) -> HTMLResponse:
+    """Render what was pasted, look at it, and repair what is safe to repair.
+
+    The same form as ``/render``, and the same refusal shape: a failure comes
+    back as **200 with the page**, carrying the message and everything that was
+    typed. A reader mid-edit should not lose their paste to see an error.
+
+    What comes back that ``/render`` does not give is the account: what each
+    round read, what was changed, and — the part that matters — what the loop
+    *declined* to change on its own. Those are the repairs that can alter what
+    the map says about its data, and they are the reader's decision, so they
+    are printed rather than applied.
+    """
+    try:
+        entry = lookup_kind(kind)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        data = _payload_from_text(entry.data_shape, payload)
+    except ValueError as exc:
+        return HTMLResponse(
+            render_editor_html(entry, payload_text=payload, title=title, error=str(exc))
+        )
+
+    # Imported here and not at module scope: the editor must open, and its
+    # other two routes must work, on a machine with no model installed.
+    from sprezzature_maps.studio.assistant import default_client
+    from sprezzature_maps.studio.ralph import improve
+
+    token = uuid.uuid4().hex
+    out = _OUTPUT_DIR / f"{token}.png"
+    try:
+        result = improve(
+            default_client(),
+            entry.name,
+            data,
+            out=out,
+            title=title or None,
+            max_rounds=PAGE_ROUNDS,
+        )
+    except Exception as exc:  # noqa: BLE001 - the page says what happened
+        # Anything from here is a model that did not answer, a backend that is
+        # not running, or a renderer that refused. All of them are things the
+        # reader can act on, and none of them should cost them their paste.
+        return HTMLResponse(
+            render_editor_html(
+                entry, payload_text=payload, title=title,
+                error=f"the loop could not finish: {exc}",
+            )
+        )
+
+    _RENDERED[token] = Path(result.image)
+    return HTMLResponse(
+        render_editor_html(
+            entry,
+            payload_text=payload,
+            title=title,
+            png_url=f"map/{token}.png",
+            report=report_lines(result),
+        )
+    )
+
+
+def report_lines(result: Any) -> list[str]:
+    """The loop's account, as the page prints it.
+
+    A function rather than a comprehension inside the route, because it is the
+    part a test should be able to read without driving HTTP.
+    """
+    lines = [
+        f"round {r.index}: read as {r.reading.kind_seen or 'could not tell'}, "
+        f"score {r.reading.score_total}/500, {len(r.reading.issues)} issue(s)"
+        for r in result.rounds
+    ]
+    for round_ in result.rounds:
+        for repair in round_.applied:
+            lines.append(f"applied {repair.option}={repair.value} — {repair.because}")
+    lines.append(f"stopped: {result.reason}")
+    if not result.improved:
+        lines.append("nothing was changed")
+    for repair in result.for_a_person:
+        lines.append(
+            f"for you to decide: {repair.option}={repair.value} — {repair.because} "
+            "(it can change what the map says about the data)"
+        )
+    return lines
+
+
+@router.get("/map/{token}.png", include_in_schema=False)
+def rendered_png(token: str) -> FileResponse:
+    """Serve one improved map. The loop writes PNG; see :func:`improve_map`."""
+    path = _RENDERED.get(token)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="no such rendered map")
+    return FileResponse(path, media_type="image/png")
+
+
 @router.get("/map/{token}.svg", include_in_schema=False)
 def rendered(token: str) -> FileResponse:
     """Serve one rendered map.
