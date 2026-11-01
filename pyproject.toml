@@ -52,25 +52,24 @@ dependencies = [
     "numpy>=1.24",
     # The command line, and the only parser since 2026-10-25.
     "click>=8.1",
+
+    # ------------------------------------------------- une seule installation
+    # Folded in from the extras on 2026-11-01. The base was 8
+    # dependencies, so `pip install sprezzature-maps` installed almost nothing and
+    # did almost nothing: choosing the right extra was a thing a reader had to
+    # know before the package could do its job. Across the suite that was 59
+    # extras over eleven repositories, six of them with a base of one.
+    #
+    # The surfaces are not features and they are not optional any more: the
+    # HTTP app and the MCP server are two of this package's five front doors,
+    # and a door you have to install separately is a door people do not find.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "fastapi-mcp>=0.3",
+    "mcp<2.0",
 ]
 
 [project.optional-dependencies]
-# HTTP surface (sprezzature_maps/api.py) -- also carries the GUI gallery
-# page, served as static routes on the same FastAPI app.
-api = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-]
-# MCP surface via fastapi-mcp (sprezzature_maps/mcp.py) -- mounts the
-# FastAPI app as MCP tools so any MCP-aware host can call them directly.
-mcp = [
-    "fastapi-mcp>=0.3",
-    # Same pin sprezzature-figures carries: fastapi-mcp 0.4.0 declares
-    # mcp>=1.12.0 with no upper bound, but calls mcp's Server(...)
-    # positionally -- mcp 2.0.0 made a parameter keyword-only, breaking
-    # FastApiMCP(...) construction. Pin below 2.0 until fastapi-mcp fixes it.
-    "mcp<2.0",
-]
 dev = [
     "pytest>=8.0",
     # The suite is 519 tests that each redraw a plate, and a plate costs
@@ -99,7 +98,7 @@ dev = [
     # ever opened its output. BSD-3-Clause, pure Python, like this package.
     "pypdf>=4.0",
     # starlette 1.9.0 moved its TestClient onto httpx2. This repository's
-    # CI installs `.[dev,...]` and never reads requirements-dev.txt, so the
+    # CI installs `.[dev]` and never reads requirements-dev.txt, so the
     # declaration has to be where the install actually looks.
     "httpx2>=2.0.0",
 ]

@@ -24,9 +24,10 @@ administrative routes, but the allowlist is written explicitly anyway so
 that any future route stays hidden from MCP by default, until someone
 deliberately tags it as safe to expose, rather than the reverse.
 
-Install the extra to pull in ``fastapi-mcp``::
+``fastapi-mcp`` is a base dependency since 2026-11-01, so there is no
+extra to ask for::
 
-    pip install 'sprezzature-maps[api,mcp]'
+    pip install 'sprezzature-maps'
 
 Then run the MCP server::
 
@@ -66,8 +67,10 @@ except ImportError:  # pragma: no cover - dependency guard
         not a stack trace.
         """
         print(
-            "sprezzature-maps MCP surface requires fastapi-mcp. "
-            "Install with: pip install 'sprezzature-maps[api,mcp]'",
+            "sprezzature-maps MCP surface could not import fastapi-mcp, which is a "
+            "base dependency since 2026-11-01 -- a broken install rather than "
+            "a missing extra. Reinstall with: "
+            "pip install 'sprezzature-maps'",
             file=sys.stderr,
         )
         sys.exit(1)

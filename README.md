@@ -39,7 +39,7 @@ which plot points or grid cells rather than real coastlines:
 
 ```bash
 pip install sprezzature-maps                 # the three generators
-pip install 'sprezzature-maps[api,mcp]'      # plus the HTTP API and the MCP server
+pip install 'sprezzature-maps'      # plus the HTTP API and the MCP server
 ```
 
 `sprezzature-maps` depends on `sprezzature-figures` for rendering primitives
@@ -608,12 +608,12 @@ command line, installed by default, under two spellings — `make-map` and
 anything the other cannot (they were two commands until 2026-10-25, an
 argparse one and a richer Click twin behind a `[cli]` extra, which is why
 older notes count five); as an HTTP API
-(`sprezzature-maps[api]`) that publishes an OpenAPI schema (a
+(`sprezzature-maps`) that publishes an OpenAPI schema (a
 machine-readable description of every endpoint, letting other tools
 generate documentation or client code automatically) and a small gallery
 page at its root; and as an MCP surface (Model Context Protocol, the
 standard that lets an AI assistant call a tool directly) under
-`sprezzature-maps[api,mcp]`.
+`sprezzature-maps`.
 
 ## Roadmap
 

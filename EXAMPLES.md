@@ -138,10 +138,10 @@ the file.
 A plate that passes is not thereby a good map. It is one a reader can argue
 with.
 
-## HTTP API (`sprezzature-maps[api]`)
+## HTTP API (`sprezzature-maps`)
 
 ```bash
-pip install 'sprezzature-maps[api]'
+pip install 'sprezzature-maps'
 # uvicorn is the server that actually runs the API code and listens for
 # requests; --reload restarts it automatically whenever a source file
 # changes, handy while developing.
@@ -207,7 +207,7 @@ cat my-data.csv | sprezzature-maps choropleth --data - --out world.svg
 sprezzature-maps situation-map --config my-region.yaml --out region.svg
 ```
 
-## MCP (`sprezzature-maps[api,mcp]`)
+## MCP (`sprezzature-maps`)
 
 MCP, the Model Context Protocol, is the standard that lets an AI
 assistant call a tool directly instead of a human typing a command. This
@@ -216,7 +216,7 @@ extra exposes the same HTTP routes as MCP tools (`list_kinds`,
 to call.
 
 ```bash
-pip install 'sprezzature-maps[api,mcp]'
+pip install 'sprezzature-maps'
 sprezzature-maps-mcp
 # MCP endpoint at http://localhost:8000/mcp,
 # alongside the regular HTTP routes and the GUI at http://localhost:8000/
