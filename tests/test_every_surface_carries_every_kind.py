@@ -49,7 +49,7 @@ from click.testing import CliRunner
 import sprezzature_maps
 from sprezzature_maps.cli import main
 from sprezzature_maps.gui import _TILES
-from sprezzature_maps.kinds import KINDS, kind, kind_names
+from sprezzature_maps.kinds import DATA_SHAPES, KINDS, kind, kind_names
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -171,4 +171,36 @@ def test_triggers_routes_every_kind(entry) -> None:
     assert entry.name in triggers or needle in triggers.replace("_", ""), (
         f"TRIGGERS.md routes nothing to {entry.name}. An agent reading that "
         f"table cannot reach a kind it does not name."
+    )
+
+
+@pytest.mark.parametrize("entry", KINDS, ids=lambda e: e.name)
+def test_every_kind_declares_a_shape_that_exists(entry) -> None:
+    """``data_shape`` has to be one of the three, not a typo of one.
+
+    A free-form string would let ``"row"`` through, and the Studio's input
+    panel would then fall through to whatever its default branch is — which is
+    a map drawn from the wrong reader rather than an error.
+    """
+    assert entry.data_shape in DATA_SHAPES, (
+        f"{entry.name} declares the shape {entry.data_shape!r}; the shapes are "
+        f"{sorted(DATA_SHAPES)}"
+    )
+
+
+@pytest.mark.parametrize("entry", KINDS, ids=lambda e: e.name)
+def test_every_kind_names_a_real_data_option(entry) -> None:
+    """And ``data_option`` has to be an option the command really takes.
+
+    Read off the Click command's own parameters rather than its ``--help``
+    text: help output is prose and would match a flag mentioned in a sentence.
+    This is the half that catches a renamed flag — the registry would keep
+    printing the old name in an error message that tells the reader to pass
+    something that no longer exists.
+    """
+    command = main.commands[entry.command]
+    declared = {opt for param in command.params for opt in getattr(param, "opts", [])}
+    assert entry.data_option in declared, (
+        f"{entry.name} names {entry.data_option!r}, which `{entry.command}` does "
+        f"not take. It takes: {sorted(declared)}"
     )

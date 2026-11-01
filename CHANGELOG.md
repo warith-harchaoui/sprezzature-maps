@@ -4,6 +4,71 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added — `sprezzature_maps.data`: the three input shapes, read in one place
+
+A chart library can assume a table and ask which column plays which role. The
+three kinds here take three different things, and
+:attr:`~sprezzature_maps.kinds.MapKind.data_shape` now says which:
+`choropleth` takes **rows** bound through `id` and `value`, `situation_map`
+takes a region **config** with no table in it, and `density` takes a bare list
+of **points**.
+
+`read_choropleth_rows` and `parse_mapping` were `cli.py`'s private
+`_load_choropleth_rows` and `_parse_mapping`. **Moved, not copied** — the
+Studio needs exactly the same reading, and a second implementation of "what
+counts as a usable choropleth file" is two answers to one question. What
+changed in the move is the exception: a function that can only be called from
+a Click command is not a library function, so these raise `ValueError` and
+`cli.py` wraps them. The messages are unchanged; they were already written for
+a reader rather than for a traceback.
+
+Standard input is a parameter now instead of a reach for `sys.stdin`, which is
+why `"-"` finally has a test.
+
+### Fixed — a mistyped `--map` role was accepted and silently ignored
+
+Measured against the version in git. `_parse_mapping` checked only for the
+`=`, then stored whatever role name it found; `_load_choropleth_rows` read
+`mapping.get("id", "id")`, so an unrecognised role fell back to the default
+column. On a file carrying `id,value,Code`, `--map country=Code` came back as
+`{'country': 'Code'}` and the rows came out keyed from **`id`** — the reader
+who asked for `Code` got the wrong map and no complaint.
+
+The reason it survived is the interesting half: where the default column was
+*absent*, the old code did fail with "missing column". **It failed in the case
+where the mistake did not matter and passed in the case where it did.**
+
+`parse_mapping` refuses a role the kind does not bind and names the ones it
+does. An empty column (`--map id=`) is refused too.
+
+### Added — `tests/test_reading_the_three_shapes.py`
+
+Twenty-five cases, and the ones worth naming are the error paths, because they
+are what a reader meets on a bad afternoon: a missing column names the row,
+the real columns and the flag that fixes it; an unsupported extension lists
+the supported ones *from the data*, so the message cannot drift from the
+branches; a bad point names its index, because one bad row in a ten-thousand
+row export otherwise surfaces as a `TypeError` from inside the renderer; and a
+config that is a list says the zones are a list *inside* it, which is the
+mistake someone actually makes.
+
+The `.jsonl` case carries a blank line on purpose: a stray newline in a
+generated export is ordinary, and a reader that raised on it would fail on
+files nothing is wrong with.
+
+### Changed — the registry knows what each kind eats
+
+`MapKind` gains `data_shape` and `data_option`, and `DATA_SHAPES` names the
+three. The guard checks that `data_shape` is one of them — a free-form string
+would let `"row"` through and the Studio's input panel would fall to its
+default branch, which is a map read by the wrong reader rather than an error —
+and that `data_option` is an option the Click command **really takes**, read
+off the command's parameters rather than its help text, because prose would
+match a flag mentioned in a sentence. Sabotage-checked: renaming `--points` to
+`--events` in the registry fails with the real option list in the message.
+
+786 tests passed, `ruff check` propre.
+
 ### Added — one list of map kinds, which five surfaces were each keeping by hand
 
 `sprezzature_maps.kinds` carries the registry: `KINDS`, `kind_names()` and

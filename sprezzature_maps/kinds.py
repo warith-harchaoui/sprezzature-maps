@@ -69,6 +69,17 @@ class MapKind:
         The HTTP route that renders it, as ``api.py`` declares it.
     renderer : str
         The name this package exports for it, e.g. ``make_choropleth``.
+    data_shape : str
+        What the kind *consumes*, which is the fact a chart library never has
+        to carry: one of ``"rows"``, ``"config"`` or ``"points"``. A
+        choropleth takes per-territory rows bound through roles, a situation
+        map takes a region configuration with no table in it, and a density
+        map takes a bare list of positions. Added when the Studio needed to
+        choose an input panel — one list, so the Studio does not become the
+        sixth place that knows which kind eats what.
+    data_option : str
+        The command-line option that supplies it, for an error message or a
+        hint that has to name the real flag.
     """
 
     name: str
@@ -77,6 +88,8 @@ class MapKind:
     command: str
     endpoint: str
     renderer: str
+    data_shape: str
+    data_option: str
 
 
 #: Every kind, in the order the gallery shows them: the two that came from
@@ -93,6 +106,8 @@ KINDS: tuple[MapKind, ...] = (
         command="choropleth",
         endpoint="/v1/choropleth",
         renderer="make_choropleth",
+        data_shape="rows",
+        data_option="--data",
     ),
     MapKind(
         name="situation_map",
@@ -105,6 +120,8 @@ KINDS: tuple[MapKind, ...] = (
         command="situation-map",
         endpoint="/v1/situation-map",
         renderer="make_situation_map",
+        data_shape="config",
+        data_option="--config",
     ),
     MapKind(
         name="density",
@@ -117,8 +134,16 @@ KINDS: tuple[MapKind, ...] = (
         command="density",
         endpoint="/v1/density",
         renderer="make_density",
+        data_shape="points",
+        data_option="--points",
     ),
 )
+
+
+#: Every shape a kind can consume. Named so a reader of
+#: :attr:`MapKind.data_shape` does not have to collect the set by eye, and so
+#: :mod:`tests.test_every_surface_carries_every_kind` can refuse a typo in one.
+DATA_SHAPES: frozenset[str] = frozenset({"rows", "config", "points"})
 
 
 def kind_names() -> tuple[str, ...]:
