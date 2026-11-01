@@ -38,9 +38,12 @@ which plot points or grid cells rather than real coastlines:
 ## Install
 
 ```bash
-pip install sprezzature-maps                 # the three generators
-pip install 'sprezzature-maps'      # plus the HTTP API and the MCP server
+pip install sprezzature-maps
 ```
+
+One line, and it is everything: the three generators, the library, both
+command lines, the HTTP API, the MCP server and the editor. There are no
+feature extras — `[dev]` is the test toolchain and is not one.
 
 `sprezzature-maps` depends on `sprezzature-figures` for rendering primitives
 the two products share (embedding fonts inside the SVG file so it looks the
@@ -303,9 +306,30 @@ Unicode-aware typesetter and its bibliography tool) into
 catalogue of 126 chart kinds (`density` was born here, after the split).
 Splitting them out was a deliberate product decision:
 the editor, the conversational chart editor that ships with
-`sprezzature-figures`, will not grow map support. Maps get their own,
-separate Editor once that is built. Until then, this repo is library and
-command line only, with no editor UI.
+`sprezzature-figures`, will not grow map support. Maps got their own,
+separate Editor instead, and it ships here:
+
+```sh
+sprezzature-maps          # http://127.0.0.1:8010/
+```
+
+The reason the two are separate is the data, not the branding. A chart Editor
+can assume a table and ask which column plays which role. These three kinds
+take three different things — rows per territory for a choropleth, a region
+*configuration* with no table in it for a situation map, and a bare list of
+`[lon, lat]` positions for a density map — and teaching one input panel all
+three would have made the chart Editor worse at charts to make it mediocre at
+maps.
+
+It is FastAPI and server-rendered HTML rather than NiceGUI, which the figures
+Editor uses. Measured before deciding: NiceGUI costs **20 packages** nothing
+else in this graph brings, a websocket stack for one surface's view, while
+FastAPI and uvicorn are already base dependencies here. And the figures
+editor's own numbers say the view is the cheap half to choose — 117 of its
+5397 lines touch NiceGUI, and its ingest, recommendation, export and Ralph
+subpackages touch it in **0 of 34 files**. That separation is what is worth
+copying, so everything in `sprezzature_maps.editor` that *decides* anything
+is importable and testable without a server.
 
 ## Status
 
@@ -602,18 +626,22 @@ carries its own `data-*` attributes (`data-confidence`, `data-precision`,
 `data-area-share`), so the assessment can be read back out of the finished
 file rather than only looked at.
 
-The library is reachable four ways: as a Python import; as a Click
-command line, installed by default, under two spellings — `make-map` and
-`sprezzature-maps` resolve to the same callable, so neither reaches
-anything the other cannot (they were two commands until 2026-10-25, an
-argparse one and a richer Click twin behind a `[cli]` extra, which is why
-older notes count five); as an HTTP API
-(`sprezzature-maps`) that publishes an OpenAPI schema (a
-machine-readable description of every endpoint, letting other tools
-generate documentation or client code automatically) and a small gallery
-page at its root; and as an MCP surface (Model Context Protocol, the
-standard that lets an AI assistant call a tool directly) under
-`sprezzature-maps`.
+The library is reachable five ways, and all five install with the package:
+
+- **as a Python import**, `import sprezzature_maps`;
+- **as a Click command line** under two spellings — `make-map` and
+  `sprezzature-maps` resolve to the same callable, so neither reaches
+  anything the other cannot. (They were two separate commands until
+  2026-10-25, an argparse one and a richer Click twin behind a `[cli]` extra,
+  which is why older notes count differently.)
+- **as an HTTP API**, `uvicorn sprezzature_maps.api:app`, publishing an
+  OpenAPI schema — a machine-readable description of every endpoint, so other
+  tools can generate documentation or client code automatically — and a small
+  gallery page at its root;
+- **as an MCP surface** (Model Context Protocol, the standard that lets an AI
+  assistant call a tool directly), `sprezzature-maps-mcp`;
+- **as the editor**, `sprezzature-maps`, which is the one a person
+  opens rather than a program calls.
 
 ## Roadmap
 

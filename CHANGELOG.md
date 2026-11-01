@@ -4,6 +4,68 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added — the editor opens: `sprezzature-maps`
+
+Three routes and a page, and the promise `CODING.md`, `README.md` and
+`LISEZMOI.md` had all been carrying — "maps get their own when there is one" —
+is kept. All three said there was no editor here; they say what there is now.
+
+`GET /` is the editor for one kind, chosen by `?kind=`, so a kind is an
+address that can be shared, bookmarked and tested with one request. An unknown
+`?kind=` is a 404 naming the kinds that exist: falling back to the first one
+would be friendlier and wrong, because a reader with a stale bookmark would
+spend a while wondering why the page looks unfamiliar.
+
+**The pasted text is read by the command line's own readers.** The textarea's
+content is written to a temporary file with the right suffix and handed to
+`sprezzature_maps.data` — the very functions `--data`, `--config` and
+`--points` call. It costs one write per render, which is nothing beside
+projecting a coastline, and it buys the property that matters: the editor
+cannot come to a different conclusion than the command line about the same
+bytes. It also inherits every message already written for a terminal, and a
+test asserts one of them arrives unchanged in a web page — "Row 0: missing
+column 'id' or 'value' (available: …). Use --map id=<col>" — which is the
+point rather than a coincidence.
+
+**A refusal returns 200 with the same page**, carrying the message and
+everything that was typed. A 4xx with a bare detail would be correct for an
+API and wrong here: the reader is mid-edit, and losing the paste in order to
+see the error is a worse outcome than the error. Two tests assert exactly
+that, because it is the kind of behaviour a later refactor tidies into a
+proper status code.
+
+The rendered map is served from a route rather than inlined — a situation
+plate is 2.2 MB of SVG, and inlining that into every re-render makes the page
+heavier than the map. Tokens are random and looked up in a dict, so a crafted
+token cannot name a path; traversal is the obvious thing to try on a route
+ending `.svg`, and a test tries it.
+
+No JavaScript, because the page does not need any: choosing a kind is a link,
+supplying data is a form, and the input panel differs per kind from
+`data_shape` — so the branch happens where the knowledge is instead of being
+shipped to the browser to happen again.
+
+### Changed — one palette, two pages
+
+`gui.THEME_CSS` and `gui.font_face_css` are extracted and public. the editor
+needed the same tokens and the same three Roboto families, and two pages with
+two hand-kept copies of one palette is the same defect as the five hand-kept
+lists of three map kinds `kinds.py` exists to end, in a different register.
+
+Light first on bare `:root`, dark only inside the media query, so every colour
+has exactly one definition outside it.
+
+### Fixed — four sentences my own extras sweep had hollowed out
+
+Folding the extras into the base rewrote `sprezzature-maps[api]` and
+`sprezzature-maps[mcp]` down to the bare package name, which left parentheses
+that repeat it and say nothing: "as an HTTP API (`sprezzature-maps`)", "under
+`sprezzature-maps`", `## HTTP API (`sprezzature-maps`)`, `## MCP
+(`sprezzature-maps`)`. One body still read "this extra exposes the same HTTP
+routes". All five are rewritten to name the command or the server that
+actually answers, and the surfaces paragraph counts five ways instead of four
+now that the editor is one of them.
+
 ### Added — `sprezzature_maps.editor`, and its rendering core
 
 The separate Editor `CODING.md` and `LISEZMOI.md` both promised before a line

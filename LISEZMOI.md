@@ -219,9 +219,32 @@ figures en résolution d'impression, compilé avec `xelatex`/`biber`
 la scission). Les en extraire a été une
 décision de produit délibérée : the editor, l'éditeur de
 graphiques conversationnel livré avec `sprezzature-figures`, ne gagnera
-pas le support des cartes. Les cartes auront leur propre éditeur séparé,
-une fois construit. D'ici là, ce dépôt reste bibliothèque et ligne de
-commande uniquement, sans interface d'édition.
+pas le support des cartes. Les cartes ont donc le leur, séparé, et il est
+ici :
+
+```sh
+sprezzature-maps          # http://127.0.0.1:8010/
+```
+
+Ce qui sépare les deux, c'est la donnée et non l'image de marque. un éditeur de
+graphiques peut supposer un tableau et demander quelle colonne joue quel rôle.
+Ces trois types prennent trois choses différentes — des lignes par territoire
+pour un choroplèthe, une *configuration* de région sans aucun tableau dedans
+pour une carte de situation, et une liste nue de positions `[lon, lat]` pour
+une carte de densité. Apprendre les trois à un seul panneau d'entrée aurait
+rendu l'éditeur des graphiques moins bon en graphiques pour le rendre médiocre
+en cartes.
+
+Il est en FastAPI et HTML rendu côté serveur, et non en NiceGUI comme celui de
+figures. Mesuré avant de décider : NiceGUI coûte **20 paquets** que rien
+d'autre dans ce graphe n'apporte, soit une pile websocket pour la vue d'une
+seule surface, alors que FastAPI et uvicorn sont déjà en dépendances de base
+ici. Et les chiffres de l'éditeur de figures disent que la vue est la moitié bon
+marché à choisir : 117 de ses 5397 lignes touchent NiceGUI, et ses
+sous-paquets `ingest`, `recommendation`, `export` et `ralph` le touchent dans
+**0 fichier sur 34**. C'est cette séparation qu'il faut copier, donc tout ce
+qui *décide* quelque chose dans `sprezzature_maps.editor` est importable et
+testable sans serveur.
 
 ## État du projet
 
@@ -533,19 +556,22 @@ attributs `data-*` (`data-confidence`, `data-precision`,
 `data-area-share`), pour que l'évaluation se relise hors du fichier fini
 au lieu de seulement se regarder.
 
-La bibliothèque se joint de quatre façons : par import Python ; par une
+La bibliothèque se joint de cinq façons, et les cinq s'installent avec
+le paquet : par import Python ; par une
 ligne de commande Click, installée par défaut, sous deux orthographes —
 `make-map` et `sprezzature-maps` résolvent vers le même appelable, donc
 aucune n'atteint ce que l'autre n'atteint pas (c'étaient deux commandes
 jusqu'au 2026-10-25, une argparse et un jumeau Click plus riche derrière
-un extra `[cli]`, d'où le cinq des notes plus anciennes) ; par une
-API HTTP (`sprezzature-maps`) qui publie un schéma OpenAPI (une
-description de chaque point d'entrée lisible par une machine,
-permettant à d'autres outils de générer automatiquement de la
-documentation ou du code client) et une petite page de galerie à sa
-racine ; et par une surface MCP (Model Context Protocol, le standard
-qui permet à un assistant IA d'appeler un outil directement) sous
-`sprezzature-maps`.
+un extra `[cli]`, d'où le compte différent des notes plus anciennes) ;
+par une **API HTTP**, `uvicorn sprezzature_maps.api:app`, qui publie un
+schéma OpenAPI — une description de chaque point d'entrée lisible par une
+machine, permettant à d'autres outils de générer automatiquement de la
+documentation ou du code client — et une petite page de galerie à sa
+racine ; par une **surface MCP** (Model Context Protocol, le standard
+qui permet à un assistant IA d'appeler un outil directement),
+`sprezzature-maps-mcp` ; et par le **Editor**,
+`sprezzature-maps`, qui est celui qu'une personne ouvre plutôt
+qu'un programme appelle.
 
 ## Feuille de route
 
