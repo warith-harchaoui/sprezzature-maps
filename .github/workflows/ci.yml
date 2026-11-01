@@ -128,3 +128,19 @@ jobs:
           for f in scripts/*.py; do
             python -m doctest "$f"
           done
+
+      # The package's own modules, which until 2026-11-01 ran **nowhere**.
+      # pytest collects no doctests here (no `--doctest-modules` in addopts)
+      # and the sweep above walks `scripts/` only -- while its own comment
+      # says "Every module, not a hand-written list". Measured: twelve worked
+      # examples in `sprezzature_maps/`, one of them stale since `density`
+      # arrived. `gui.render_gallery_html` promised two gallery tiles and the
+      # page had three, and nothing could say so.
+      #
+      # Run through pytest rather than by extending the loop above: `python
+      # -m doctest sprezzature_maps/api.py` imports the path as a top-level
+      # module, so its relative imports fail for a mechanical reason that has
+      # nothing to do with the examples. pytest imports them as package
+      # modules, which is what they are. Costs under a second.
+      - name: Doctests (the package)
+        run: python -m pytest -q --doctest-modules sprezzature_maps

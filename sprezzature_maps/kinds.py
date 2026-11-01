@@ -80,6 +80,12 @@ class MapKind:
     data_option : str
         The command-line option that supplies it, for an error message or a
         hint that has to name the real flag.
+    payload_keyword : str
+        The keyword argument :attr:`renderer` takes the data under — ``data``,
+        ``config`` or ``points``. The three generators each named it for their
+        own shape, which is reasonable in isolation and leaves any caller
+        dispatching on the kind. Recorded here so the dispatch is a table
+        lookup, and so a renamed parameter fails a test instead of a render.
     """
 
     name: str
@@ -90,6 +96,7 @@ class MapKind:
     renderer: str
     data_shape: str
     data_option: str
+    payload_keyword: str
 
 
 #: Every kind, in the order the gallery shows them: the two that came from
@@ -108,6 +115,7 @@ KINDS: tuple[MapKind, ...] = (
         renderer="make_choropleth",
         data_shape="rows",
         data_option="--data",
+        payload_keyword="data",
     ),
     MapKind(
         name="situation_map",
@@ -122,6 +130,7 @@ KINDS: tuple[MapKind, ...] = (
         renderer="make_situation_map",
         data_shape="config",
         data_option="--config",
+        payload_keyword="config",
     ),
     MapKind(
         name="density",
@@ -136,6 +145,7 @@ KINDS: tuple[MapKind, ...] = (
         renderer="make_density",
         data_shape="points",
         data_option="--points",
+        payload_keyword="points",
     ),
 )
 

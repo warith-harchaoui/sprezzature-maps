@@ -4,6 +4,76 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added — `sprezzature_maps.editor`, and its rendering core
+
+The separate Editor `CODING.md` and `LISEZMOI.md` both promised before a line
+of it existed: "maps get their own when there is one". This is the first part
+of that one — the engine, interface-free.
+
+`editor.render.render(kind, payload, out=...)` renders **any** kind through
+one call, and contains no `if kind ==`. The three generators each named their
+data parameter for their own shape — `make_choropleth(data=...)`,
+`make_situation_map(config=...)`, `make_density(points=...)` — which is
+reasonable in isolation and leaves every caller dispatching on the kind. So
+`MapKind` gains `payload_keyword`, and the dispatch is a table lookup. A guard
+introspects the **real signature** of each loaded generator, so a renamed
+parameter fails a test rather than a render; read from the signature and not
+the docstring, because a docstring would keep saying the old name for as long
+as nobody re-read it.
+
+**No NiceGUI**, and the measurement that decided it rather than a preference.
+NiceGUI costs **20 packages** nothing else in the graph brings —
+`python-socketio`, `python-engineio`, `aiohttp`, `bidict`, `wsproto`,
+`simple-websocket`, `orjson`, `markdown2`, `docutils`, `tinycss2` and the rest
+— a websocket stack for one surface's view. FastAPI and uvicorn are already
+base dependencies here, and `gui.py` already serves hand-written HTML for the
+reason it states in its own docstring. And `sprezzature-figures`' Editor says
+the view is the cheap half to choose: 117 of its 5397 lines touch NiceGUI
+(**2.2%**), and its `assistant`, `export`, `ingest`, `ralph` and
+`recommendation` subpackages are at **0 of 34 files**. The engine was already
+portable. That separation is the pattern worth copying, not the toolkit — so
+everything here that *decides* anything is importable and testable without a
+server.
+
+### Added — the editor frames what it is given
+
+`make_density`'s own default bounding box is the continental United States,
+which is right for a generator with a demo dataset and no way to ask. It is
+wrong for a panel somebody pastes a file into: the first thing tried while
+writing this was Paris, London and Berlin, and the answer was `ValueError: no
+point fell inside the bbox; nothing to draw` — accurate, and a dead end, with
+nothing wrong with the data.
+
+`editor.render.infer_bbox` frames the points, widened by a margin so the
+outermost events are not sitting on the edge where the binning has half a cell
+of neighbours. A single point, or several at one address, gives a zero-extent
+box no projection can scale, so it is widened to a minimum span instead. An
+explicit `bbox` always wins, and the command line keeps its documented default
+untouched: that is a different promise to a different reader.
+
+### Fixed — the package's doctests ran nowhere, and one had gone stale
+
+`gui.render_gallery_html`'s worked example asserted `html.count("<article")
+== 2`. The gallery derives its tiles from the registry and has **three**.
+
+No gate said so, and that is the finding: pytest collects no doctests here
+(no `--doctest-modules` in `addopts`), and the CI's doctest sweep walks
+`scripts/*.py` only — under a comment reading "Every module, not a
+hand-written list". Twelve worked examples in `sprezzature_maps/` were
+running nowhere at all.
+
+A second step runs them, through pytest rather than by extending the shell
+loop: `python -m doctest sprezzature_maps/api.py` imports the path as a
+top-level module, so its relative imports fail for a mechanical reason that
+has nothing to do with the examples. pytest imports them as the package
+modules they are. Under a second.
+
+The same docstring also promised a Google Fonts request, two releases after
+that request was removed — the page serves all three Roboto families from
+the mounted local directory. The example now counts `@font-face` rules and
+asserts `googleapis` does not appear, so the claim is checked rather than
+restated.
+
 ### Fixed — `pydantic` was imported and declared nowhere
 
 `sprezzature_maps/api.py` does an unguarded `from pydantic import BaseModel,

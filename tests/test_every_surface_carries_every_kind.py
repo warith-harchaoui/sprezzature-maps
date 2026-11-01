@@ -204,3 +204,30 @@ def test_every_kind_names_a_real_data_option(entry) -> None:
         f"{entry.name} names {entry.data_option!r}, which `{entry.command}` does "
         f"not take. It takes: {sorted(declared)}"
     )
+
+
+@pytest.mark.parametrize("entry", KINDS, ids=lambda e: e.name)
+def test_every_kind_names_the_keyword_its_renderer_takes(entry) -> None:
+    """``payload_keyword`` has to be a parameter the generator really has.
+
+    The three generators each named their data parameter for their own shape —
+    ``data``, ``config``, ``points`` — which is reasonable in isolation and
+    leaves every caller dispatching on the kind.
+    :mod:`sprezzature_maps.editor.render` looks it up here instead, so it has
+    no ``if kind ==`` in it.
+
+    Introspected from the loaded generator rather than read from its
+    docstring: a renamed parameter would leave the docstring saying the old
+    name for as long as nobody re-read it, and the failure would be a
+    ``TypeError`` from inside a render rather than a sentence here.
+    """
+    import inspect
+
+    import sprezzature_maps
+
+    generator = sprezzature_maps._load_script(entry.renderer).__dict__[entry.renderer]
+    parameters = inspect.signature(generator).parameters
+    assert entry.payload_keyword in parameters, (
+        f"{entry.name} says its data goes in as {entry.payload_keyword!r}, and "
+        f"{entry.renderer} takes {sorted(parameters)}"
+    )

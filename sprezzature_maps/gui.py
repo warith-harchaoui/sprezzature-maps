@@ -165,16 +165,29 @@ def render_gallery_html() -> str:
     Returns
     -------
     str
-        A standalone HTML document (doctype through closing ``</html>``),
-        self-contained except for the Google Fonts stylesheet request for
-        the three Roboto families -- everything else (CSS, JS) is inline,
-        so this can be served as-is with no static-file directory.
+        A standalone HTML document (doctype through closing ``</html>``).
+        Self-contained: the CSS and JS are inline and the three Roboto
+        families are declared as ``@font-face`` rules pointing at
+        :data:`FONTS_URL_PREFIX`, which the app mounts from
+        sprezzature-figures' bundled directory. Nothing is fetched from a
+        third party -- this docstring claimed a Google Fonts request until
+        2026-11-01, two releases after that request was removed.
 
     Examples
     --------
+    One tile per kind, counted rather than named, so this cannot say two
+    while the registry holds three. It did: the expectation sat at ``2`` from
+    the days before ``density``, and no gate ran it — pytest collects no
+    doctests here and the CI's doctest sweep walks ``scripts/`` only. Fixed
+    together with the sweep.
+
     >>> html = render_gallery_html()
-    >>> html.count("<article")
-    2
+    >>> html.count("<article") == len(KINDS)
+    True
+    >>> "googleapis" in html
+    False
+    >>> html.count("@font-face")
+    3
     """
     tiles_html = "\n".join(_tile_html(tile) for tile in _TILES)
     return f"""<!doctype html>
