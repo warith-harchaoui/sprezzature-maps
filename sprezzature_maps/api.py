@@ -4,8 +4,9 @@ sprezzature-maps: the FastAPI HTTP surface.
 Module summary
 --------------
 FastAPI is a Python web framework for building HTTP APIs. This module
-uses it to expose :func:`sprezzature_maps.make_choropleth` and
-:func:`sprezzature_maps.make_situation_map` over HTTP, so either map
+uses it to expose :func:`sprezzature_maps.make_choropleth`,
+:func:`sprezzature_maps.make_situation_map` and
+:func:`sprezzature_maps.make_density` over HTTP, so any map
 type can be rendered from any programming language that can make an HTTP
 request, not only from Python. These are the same shared functions the
 ``make-map`` command line and the richer ``sprezzature-maps`` Click
@@ -80,6 +81,7 @@ from sprezzature_figures.fonts import FONTS_DIR as _FONTS_DIR
 from . import __version__ as _VERSION
 from . import make_choropleth, make_situation_map
 from .gui import FONTS_URL_PREFIX, render_gallery_html
+from .kinds import kind_names
 
 #: Maps an output format name to the Content-Type the response carries.
 #: Kept as a small local dict (rather than importing mimetypes) since this
@@ -96,7 +98,8 @@ app = FastAPI(
     title="Sprezzature Maps API",
     description=(
         "HTTP surface for sprezzature-maps: hand-authored SVG world maps -- "
-        "choropleth and layered areas-of-control situation maps."
+        "choropleth maps, layered areas-of-control situation plates and "
+        "accumulation maps."
     ),
     version=_VERSION,
     docs_url="/docs",
@@ -300,9 +303,14 @@ def kinds() -> list[str]:
     -------
     list of str
         ``["choropleth", "density", "situation_map"]``: this repo's whole
-        scope is exactly those three map kinds.
+        scope is exactly those three map kinds. Sorted, and derived from
+        :data:`sprezzature_maps.kinds.KINDS` — this docstring said the point
+        of the route was to let a caller "discover them programmatically
+        rather than hardcode the names", and the body hardcoded them anyway.
+        It was the fifth hand-written list of the same three in this package;
+        ``list`` was the one that had gone stale at two.
     """
-    return ["choropleth", "density", "situation_map"]
+    return sorted(kind_names())
 
 
 # The gallery page sets three Roboto families and links them at this prefix

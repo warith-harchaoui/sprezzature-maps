@@ -8,8 +8,8 @@ Renders the single HTML page served at the FastAPI app's root address
 kind, modeled on the sprezzature-figures gallery
 (https://sprezzature.ai/figures.html) but scaled down to
 match this smaller repository. That larger page groups around 95 chart
-kinds into thematic sections; this repo has exactly two kinds, so it
-needs only one section, one tile per kind, and no navigation between them.
+kinds into thematic sections; this repo has three, so it needs only one
+section, one tile per kind, and no navigation between them.
 
 The design follows the ``sprezzature-ui`` house rules, applied here by
 hand rather than through an actual build toolchain: bringing in an
@@ -28,7 +28,7 @@ around the page's one CSS transition, the tile hover effect.
 
 Each tile's map is not a static screenshot. A small vanilla JavaScript
 module (plain JavaScript, no framework) calls this same app's own
-``/v1/choropleth`` and ``/v1/situation-map`` routes with an empty
+``/v1/choropleth``, ``/v1/situation-map`` and ``/v1/density`` routes with an empty
 request body, which makes each generator fall back to its own built-in
 demo data, and inserts the SVG text that comes back directly into the
 page. That is a deliberate choice, not a shortcut: it keeps the GUI
@@ -57,6 +57,8 @@ from sprezzature_figures.fonts import (
     web_font_faces_css,
 )
 
+from sprezzature_maps.kinds import KINDS
+
 #: Where the FastAPI app mounts sprezzature-figures' bundled font directory
 #: (see :mod:`sprezzature_maps.api`). Named here rather than in ``api.py``
 #: because the CSS below has to point at the same path the app serves, and
@@ -73,37 +75,18 @@ _PAGE_FACES: tuple[str, ...] = ("sans", "serif", "mono")
 #: The tiles this gallery shows, in display order. Kept as a plain
 #: tuple-of-dicts (not a dataclass) since this is the only place the shape
 #: is used -- a dataclass here would be ceremony without a second consumer.
-_TILES: tuple[dict[str, str], ...] = (
+#: One tile per kind, derived from the registry so the gallery cannot show a
+#: different set from what ``sprezzature-maps list`` prints. The titles and the
+#: prose were written here first and moved to
+#: :mod:`sprezzature_maps.kinds` unchanged; this now reads them back.
+_TILES: tuple[dict[str, str], ...] = tuple(
     {
-        "kind": "choropleth",
-        "title": "Choropleth",
-        "description": (
-            "World map, one value per country on a perceptual OKLCH ramp "
-            "(sequential or auto-detected diverging), Equal Earth projection "
-            "so colored area is not lying about country size."
-        ),
-        "endpoint": "/v1/choropleth",
-    },
-    {
-        "kind": "situation_map",
-        "title": "Situation map",
-        "description": (
-            "Layered areas-of-control plate for any region: real national "
-            "outlines, bathymetry halo, classed pastel zones, dual-unit "
-            "scale bar -- the geopolitics-desk look, parameterized."
-        ),
-        "endpoint": "/v1/situation-map",
-    },
-    {
-        "kind": "density",
-        "title": "Density",
-        "description": (
-            "An accumulation map: where events fell, rather than a value per "
-            "territory. Points are binned into a luminous field and the "
-            "geography emerges from the data rather than being drawn under it."
-        ),
-        "endpoint": "/v1/density",
-    },
+        "kind": entry.name,
+        "title": entry.label,
+        "description": entry.description,
+        "endpoint": entry.endpoint,
+    }
+    for entry in KINDS
 )
 
 
@@ -200,7 +183,7 @@ def render_gallery_html() -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sprezzature-maps</title>
-<meta name="description" content="Hand-authored SVG world maps: choropleth and situation maps.">
+<meta name="description" content="Hand-authored SVG world maps: choropleth, situation and density maps.">
 <style>{_font_face_css()}</style>
 <style>
   :root {{

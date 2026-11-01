@@ -52,15 +52,34 @@ click = pytest.importorskip("click")
 from click.testing import CliRunner  # noqa: E402
 
 from sprezzature_maps.cli import main  # noqa: E402
+from sprezzature_maps.kinds import kind_names  # noqa: E402
 
 runner = CliRunner()
 
 
-def test_list_prints_both_kinds() -> None:
-    """`list` is a plain, scriptable one-kind-per-line output."""
+def test_list_prints_every_kind() -> None:
+    """`list` is a plain, scriptable one-kind-per-line output.
+
+    It was ``test_list_prints_both_kinds``, and it asserted
+    ``["choropleth", "situation_map"]`` — a literal pair, written when there
+    were two. ``density`` was born in this repository afterwards, and this test
+    then **guaranteed the defect**: ``sprezzature-maps list`` answered two
+    kinds of three, and the suite was green on it because the expectation had
+    gone stale in the same direction as the code.
+
+    That is the worst shape a test can take. A missing test leaves a defect
+    unnoticed; a test that asserts the defect makes it look reviewed. The
+    expectation is read from :func:`sprezzature_maps.kinds.kind_names` now, so
+    the command and the test cannot drift apart — and
+    ``tests/test_every_surface_carries_every_kind.py`` holds the registry
+    against all five surfaces so the registry itself cannot be the stale one.
+    """
     result = runner.invoke(main, ["list"])
     assert result.exit_code == 0
-    assert result.output.splitlines() == ["choropleth", "situation_map"]
+    assert tuple(result.output.splitlines()) == kind_names(), (
+        f"`list` prints {result.output.splitlines()} and the registry holds "
+        f"{list(kind_names())}"
+    )
 
 
 def test_choropleth_demo(tmp_path: Path) -> None:
