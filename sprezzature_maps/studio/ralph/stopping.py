@@ -83,6 +83,7 @@ def should_stop(
     repairs_applied: int,
     previous_signatures: frozenset[str] | None,
     repairs_available: int,
+    previous_score: int | None = None,
 ) -> tuple[bool, str | None]:
     """Whether to stop after this round, and why.
 
@@ -102,6 +103,9 @@ def should_stop(
         Last round's complaints, or None on the first round.
     repairs_available : int
         How many repairs the proposer found that may be applied unattended.
+    previous_score : int or None
+        Last round's :attr:`~sprezzature_maps.studio.assistant.schemas.MapReading.score_total`.
+        None on the first round, when there is nothing to have regressed from.
 
     Returns
     -------
@@ -115,10 +119,20 @@ def should_stop(
     ...             repairs_applied=0, previous_signatures=None, repairs_available=0)
     (True, 'readable')
     """
+    if reading.verdict == "blocked":
+        return True, "blocked"
     if asked_for and reading.kind_seen and reading.kind_seen != asked_for:
         return True, "wrong_kind_rendered"
+    if reading.verdict == "satisfied":
+        return True, "satisfied"
     if not has_blocking(reading):
         return True, "readable"
+    if previous_score is not None and reading.score_total < previous_score:
+        # The rule the first version could not have: a reading with no numbers
+        # in it cannot be compared with the one before it, so a loop built on
+        # one cannot tell progress from change — it will trade a legible
+        # legend for a cluttered coastline and call it a round.
+        return True, "render_regressed"
     current = signature_set(reading)
     if previous_signatures is not None and current == previous_signatures:
         return True, "repeated_issue_signature"

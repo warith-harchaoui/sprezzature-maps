@@ -34,9 +34,9 @@ from pathlib import Path
 from typing import Any
 
 from sprezzature_maps.studio.assistant.client import LLMClient
-from sprezzature_maps.studio.assistant.read_map import read_map
 from sprezzature_maps.studio.assistant.schemas import MapReading
 
+from .critic import request_critique
 from .repair import Repair, apply_safe, propose_repairs
 from .stopping import MAX_ROUNDS, should_stop, signature_set
 
@@ -119,6 +119,7 @@ def improve(
     renderer: Renderer | None = None,
     options: dict[str, Any] | None = None,
     title: str | None = None,
+    profile: Any = None,
     max_rounds: int | None = None,
 ) -> RalphResult:
     """Render the map, read it back, and repair what is safe to repair.
@@ -140,6 +141,10 @@ def improve(
         Starting options. Anything absent keeps the renderer's own default.
     title : str, optional
         Passed through unchanged. The loop never rewrites a user's words.
+    profile : DataProfile, optional
+        The data described without its values, for the critic's context. Never
+        the data itself — judging whether a map is honest about its data needs
+        to know what the data is shaped like, not what is in it.
     max_rounds : int, optional
         Overrides :data:`~sprezzature_maps.studio.ralph.stopping.MAX_ROUNDS`
         downward only; a caller cannot ask for more rounds than the ceiling.
@@ -175,12 +180,21 @@ def improve(
     rounds: list[RalphRound] = []
     offered: list[Repair] = []
     previous: frozenset[str] | None = None
+    previous_score: int | None = None
     applied_count = 0
     reason = "max_rounds"
 
     for index in range(1, ceiling + 1):
         image = draw(kind_name, payload, out=destination, title=title, **settings)
-        reading = read_map(client, image)
+        reading = request_critique(
+            client,
+            image,
+            kind_name,
+            options=settings,
+            title=title or "",
+            profile=profile,
+            previous=rounds[-1].reading if rounds else None,
+        )
         proposed = propose_repairs(reading, kind_name, settings)
         safe_now = [r for r in proposed if r.safe]
         this_round = RalphRound(
@@ -200,6 +214,7 @@ def improve(
             repairs_applied=applied_count,
             previous_signatures=previous,
             repairs_available=len(safe_now),
+            previous_score=previous_score,
         )
         if stop:
             reason = why or "readable"
@@ -209,6 +224,7 @@ def improve(
         this_round.applied = safe_now
         applied_count += len(safe_now)
         previous = signature_set(reading)
+        previous_score = reading.score_total
 
     seen: set[tuple[str, Any]] = set()
     unique: list[Repair] = []

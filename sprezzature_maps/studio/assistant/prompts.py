@@ -14,6 +14,8 @@ Warith HARCHAOUI <warithmetics@deraison.ai>
 
 from __future__ import annotations
 
+from typing import Any
+
 import sprezzature_maps.kinds as kinds
 from sprezzature_maps.data import CHOROPLETH_ROLES
 
@@ -99,6 +101,84 @@ def choose_prompt(request: str, profile: DataProfile) -> str:
         f"What the person asked for:\n{request or '(they did not say)'}\n\n"
         "Choose one kind, bind the roles if the kind binds any, and say why in "
         "one or two sentences a person could disagree with."
+    )
+
+
+CRITIQUE_SYSTEM = (
+    "You look at a rendered map and judge it on five dimensions, each 0 to "
+    "100, and you judge them by looking rather than by what you were told the "
+    "map contains. A score you cannot justify from the image is a score you "
+    "should put near 50 and explain in an issue. You answer only with JSON "
+    "matching the schema you are given, and you never invent a kind of map."
+)
+
+
+def critique_prompt(
+    kind_name: str,
+    *,
+    options: dict[str, Any] | None = None,
+    title: str = "",
+    profile: DataProfile | None = None,
+    previous: str = "",
+) -> str:
+    """Ask for a judgement, with the context that makes one possible.
+
+    Deliberately narrow, and the same discipline as
+    :func:`choose_prompt`: the kind, the options it was rendered with, the
+    user's title, and a description of the data. **Never a value.** A reader
+    asked to judge whether a map is honest about its data does not need the
+    data; it needs to know what the data is *shaped* like.
+
+    The previous round's issues are passed through when there is one, because
+    a critique that cannot see what was already said repeats it — which a loop
+    reads as "no progress" and stops on.
+
+    Parameters
+    ----------
+    kind_name : str
+        The kind that was rendered.
+    options : dict, optional
+        The keyword options it was rendered with.
+    title : str
+        The title on the map, if any.
+    profile : DataProfile, optional
+        Headers, shapes and counts.
+    previous : str
+        Last round's issues, one per line.
+
+    Returns
+    -------
+    str
+    """
+    kind = kinds.kind(kind_name)
+    setting = ", ".join(f"{k}={v!r}" for k, v in sorted((options or {}).items())) or "(defaults)"
+    shape = (
+        f"{profile.rows} rows, columns: "
+        + ", ".join(f"{c.name} ({c.looks_like})" for c in profile.columns)
+        if profile and profile.columns
+        else "(not described)"
+    )
+    tail = f"\n\nLast round you said:\n{previous}" if previous else ""
+    return (
+        f"This is a {kind.name}: {kind.description}\n"
+        f"Rendered with: {setting}\n"
+        f"Title on the map: {title!r}\n"
+        f"The data behind it: {shape}\n\n"
+        "Judge it on these five, 0 to 100 each:\n"
+        "- readability: can the legend, the labels and the title be read at "
+        "the size they are drawn?\n"
+        "- colour_separation: can the classes be told apart, including by a "
+        "reader with a colour vision deficiency?\n"
+        "- geographic_honesty: does the frame hold the data without cropping "
+        "it, and does the projection avoid lying about area or shape? This is "
+        "the one a bar chart has no equivalent of — say what you see, not what "
+        "you assume.\n"
+        "- clarity: does the thing being shown stand out from the furniture — "
+        "coastlines, relief, city labels?\n"
+        "- answers_the_question: does this map answer what its title claims?\n\n"
+        "Then a verdict: 'satisfied' if it can ship, 'needs_changes' if "
+        "something fixable remains, 'blocked' if it cannot be read at all."
+        f"{tail}"
     )
 
 

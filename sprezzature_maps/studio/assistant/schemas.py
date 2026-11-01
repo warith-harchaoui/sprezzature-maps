@@ -26,6 +26,12 @@ from pydantic import BaseModel, Field, field_validator
 from sprezzature_maps.data import CHOROPLETH_ROLES
 from sprezzature_maps.kinds import kind_names
 
+#: What a reading concludes. Three states and not a number, because "ship it"
+#: and "this cannot be read at all" are decisions, while the scores below are
+#: observations — and a loop needs the decision to stop and the observations to
+#: tell whether it is getting anywhere.
+VERDICTS: tuple[str, ...] = ("satisfied", "needs_changes", "blocked")
+
 #: What a column looks like, as a closed vocabulary. Deliberately coarse: the
 #: distinctions that change which map can be drawn, and no others.
 COLUMN_LOOKS: tuple[str, ...] = (
@@ -203,13 +209,55 @@ class MapReading(BaseModel):
         size they are drawn.
     issues : list of MapIssue
         Everything else, worst first.
+    verdict : str
+        One of :data:`VERDICTS`.
+    readability, colour_separation, geographic_honesty, clarity,
+    answers_the_question : int
+        0 to 100, each judged by looking.
+
+        Five, and they are a map's and not a chart's.
+        ``sprezzature-figures`` scores message alignment, readability, visual
+        hierarchy, accessibility and data fidelity; four of those transfer and
+        one does not, because the way a *map* misleads has no analogue on a
+        bar chart: an equal-area projection drawn as if it were conformal, a
+        frame that crops the data, a colour ramp whose classes do not match
+        how the values are actually distributed. That is
+        ``geographic_honesty``, and it is the dimension worth having a
+        separate number for.
+
+        The scores exist so a loop can tell *progress* from *change*: a total
+        that falls after a repair is a regression, and a loop that cannot see
+        one will happily trade a legible legend for a cluttered coastline.
     """
 
     kind_seen: str = ""
     title_read: str = ""
     legend_present: bool = False
     legend_readable: bool = False
+    verdict: str = "needs_changes"
+    readability: int = 50
+    colour_separation: int = 50
+    geographic_honesty: int = 50
+    clarity: int = 50
+    answers_the_question: int = 50
     issues: list[MapIssue] = Field(default_factory=list)
+
+    @field_validator("verdict")
+    @classmethod
+    def _known_verdict(cls, value: str) -> str:
+        if value not in VERDICTS:
+            raise ValueError(f"verdict must be one of {', '.join(VERDICTS)}, got {value!r}")
+        return value
+
+    @field_validator(
+        "readability", "colour_separation", "geographic_honesty", "clarity",
+        "answers_the_question",
+    )
+    @classmethod
+    def _in_range(cls, value: int) -> int:
+        if not 0 <= value <= 100:
+            raise ValueError(f"a score runs 0 to 100, got {value}")
+        return value
 
     @field_validator("kind_seen")
     @classmethod
@@ -224,3 +272,19 @@ class MapReading(BaseModel):
     def blocking(self) -> list[MapIssue]:
         """The issues that make the map unreadable."""
         return [i for i in self.issues if i.severity == "blocking"]
+
+    @property
+    def score_total(self) -> int:
+        """The five dimensions added up, 0 to 500.
+
+        A total and not an average, because the comparison a loop makes is
+        between two totals of its own rounds — and an average hides how many
+        dimensions moved.
+        """
+        return (
+            self.readability
+            + self.colour_separation
+            + self.geographic_honesty
+            + self.clarity
+            + self.answers_the_question
+        )
