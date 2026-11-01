@@ -49,139 +49,44 @@ Author
 
 from __future__ import annotations
 
-import csv
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import click
 
+from sprezzature_maps.data import parse_mapping, read_choropleth_rows
 from sprezzature_maps.kinds import kind_names
 
 from . import classification_methods, make_choropleth, make_density, make_situation_map
 
 
 def _parse_mapping(pairs: tuple[str, ...]) -> dict[str, str]:
-    """Parse repeated ``--map role=column`` options into a dict.
+    """``--map role=column`` into a dict, in Click's vocabulary.
 
-    Parameters
-    ----------
-    pairs : tuple of str
-        Each element is one ``--map`` option's raw value, expected in
-        ``"role=column"`` form.
-
-    Returns
-    -------
-    dict of str to str
-        ``{role: column}``, e.g. ``{"id": "Code", "value": "Score"}``.
-
-    Raises
-    ------
-    click.ClickException
-        If any entry is missing the ``=`` separator.
-
-    Examples
-    --------
-    >>> _parse_mapping(("id=Code", "value=Score"))
-    {'id': 'Code', 'value': 'Score'}
+    The parsing moved to :func:`sprezzature_maps.data.parse_mapping` so the
+    Editor reads files the same way this does; what stays here is the
+    translation. A library function raises :class:`ValueError`; a command line
+    prints ``Error: ...`` and exits 2, and the reader of a terminal should not
+    be shown a traceback for a mistyped flag.
     """
-    mapping: dict[str, str] = {}
-    for pair in pairs:
-        # Split on the FIRST "=" only: a column header could itself
-        # contain "=" (unusual, but not impossible for a hand-edited
-        # CSV), and the role name never does.
-        if "=" not in pair:
-            raise click.ClickException(
-                f"--map expects role=column (e.g. --map id=Code), got: {pair!r}"
-            )
-        role, _, column = pair.partition("=")
-        mapping[role.strip()] = column.strip()
-    return mapping
+    try:
+        return parse_mapping(pairs)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 def _load_choropleth_rows(data_path: str, mapping: dict[str, str]) -> list[dict[str, Any]]:
-    """Load choropleth rows from a CSV or JSON file, applying ``--map``.
+    """Choropleth rows from a file, in Click's vocabulary.
 
-    Parameters
-    ----------
-    data_path : str
-        Path to a ``.csv``/``.tsv`` or ``.json``/``.jsonl`` file, or
-        ``"-"`` to read CSV from stdin.
-    mapping : dict of str to str
-        ``{"id": <column name>, "value": <column name>}``, from
-        :func:`_parse_mapping`. Empty means the file's own columns are
-        already named ``id``/``value``.
-
-    Returns
-    -------
-    list of dict
-        Rows in the ``[{"id": str, "value": float}, ...]`` shape
-        :func:`~sprezzature_maps.make_choropleth` expects.
-
-    Raises
-    ------
-    click.ClickException
-        If the file is missing, has an unsupported extension, or a
-        required column is not present after mapping.
-
-    Examples
-    --------
-    >>> import tempfile, os
-    >>> fd, path = tempfile.mkstemp(suffix=".csv")
-    >>> _ = os.write(fd, b"id,value\\n840,12.5\\n124,-3.2\\n")
-    >>> os.close(fd)
-    >>> rows = _load_choropleth_rows(path, {})
-    >>> os.unlink(path)
-    >>> rows
-    [{'id': '840', 'value': 12.5}, {'id': '124', 'value': -3.2}]
+    See :func:`sprezzature_maps.data.read_choropleth_rows`, which this wraps
+    for the same reason as above. The messages are unchanged in the move:
+    they were already written for a reader.
     """
-    id_col = mapping.get("id", "id")
-    value_col = mapping.get("value", "value")
-
-    if data_path == "-":
-        # Reading from stdin only makes sense as CSV (JSON piped in
-        # would need its own flag to disambiguate from CSV) -- keep
-        # the stdin path single-purpose rather than guessing a format.
-        reader = csv.DictReader(sys.stdin)
-        raw_rows = list(reader)
-    else:
-        path = Path(data_path)
-        if not path.is_file():
-            raise click.ClickException(f"--data file not found: {data_path}")
-        suffix = path.suffix.lower()
-        if suffix in (".csv", ".tsv"):
-            delimiter = "\t" if suffix == ".tsv" else ","
-            with path.open(newline="", encoding="utf-8") as f:
-                raw_rows = list(csv.DictReader(f, delimiter=delimiter))
-        elif suffix == ".json":
-            loaded = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(loaded, list):
-                raise click.ClickException(
-                    f"--data JSON must be a list of rows, got {type(loaded).__name__}"
-                )
-            raw_rows = loaded
-        elif suffix == ".jsonl":
-            raw_rows = [
-                json.loads(line)
-                for line in path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
-        else:
-            raise click.ClickException(
-                f"Unsupported --data extension: {suffix!r} (expected .csv/.tsv/.json/.jsonl)"
-            )
-
-    rows: list[dict[str, Any]] = []
-    for i, raw in enumerate(raw_rows):
-        if id_col not in raw or value_col not in raw:
-            raise click.ClickException(
-                f"Row {i}: missing column {id_col!r} or {value_col!r} "
-                f"(available: {sorted(raw.keys())}). Use --map id=<col> --map value=<col> "
-                "if your file names them differently."
-            )
-        rows.append({"id": str(raw[id_col]), "value": float(raw[value_col])})
-    return rows
+    try:
+        return read_choropleth_rows(data_path, mapping)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @click.group()
