@@ -368,6 +368,7 @@ def improve_cmd(
     if not wanted_value:
         raise click.ClickException(f"a {kind.name} needs {wanted_flag}")
 
+    payload: Any
     try:
         if kind.data_shape == "rows":
             payload = read_choropleth_rows(wanted_value, _parse_mapping(mapping))
