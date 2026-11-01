@@ -23,6 +23,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# The one list of map kinds every surface reads. Imported here so
+# `sprezzature_maps.KINDS` is reachable without knowing the submodule, and
+# at the top because the generators below are loaded lazily -- this is a
+# plain dataclass registry and costs nothing at import time.
+from sprezzature_maps.kinds import KINDS, MapKind, kind, kind_names
+
 __version__ = "1.0.0"
 
 # In the source tree the generators live in scripts/; once installed they
@@ -217,6 +223,8 @@ def replay_report(svg: str, cfg: Any, files: Any = ()) -> dict[str, Any]:
 
 
 __all__ = [
+    "KINDS",
+    "MapKind",
     "acled_events",
     "article_sidecar",
     "classification_methods",
@@ -224,6 +232,8 @@ __all__ = [
     "make_density",
     "make_situation_map",
     "plate_provenance",
+    "kind",
+    "kind_names",
     "replay_report",
     "ucdp_events",
 ]

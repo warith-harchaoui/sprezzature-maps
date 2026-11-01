@@ -57,6 +57,8 @@ from typing import Any
 
 import click
 
+from sprezzature_maps.kinds import kind_names
+
 from . import classification_methods, make_choropleth, make_density, make_situation_map
 
 
@@ -189,9 +191,18 @@ def main() -> None:
 
 @main.command("list")
 def list_cmd() -> None:
-    """Print the two map kinds this repo carries."""
-    for kind in ("choropleth", "situation_map"):
-        click.echo(kind)
+    """Print every map kind this repo carries.
+
+    Read from :data:`sprezzature_maps.kinds.KINDS` rather than written here.
+    It used to be a hard-coded ``("choropleth", "situation_map")``, and that
+    is how this command came to answer **two kinds of three**: ``density`` was
+    born in this repository after the other two were extracted from
+    `sprezzature-figures`, and every list written before it had to be
+    revisited by hand. The gallery, the HTTP routes and ``TRIGGERS.md`` were;
+    this one, the one a reader asks directly, was not.
+    """
+    for name in kind_names():
+        click.echo(name)
 
 
 @main.command("audit")

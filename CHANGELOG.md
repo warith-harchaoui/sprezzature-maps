@@ -4,6 +4,63 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added — one list of map kinds, which five surfaces were each keeping by hand
+
+`sprezzature_maps.kinds` carries the registry: `KINDS`, `kind_names()` and
+`kind()`, one entry per kind with its label, its gallery paragraph, its CLI
+command, its HTTP route and the name this package exports for it.
+
+**This was not tidying. One of the five lists was wrong.**
+`sprezzature-maps list` hard-coded `("choropleth", "situation_map")` and
+answered **two kinds of three**: `density` was born in this repository after
+the other two were extracted from `sprezzature-figures`, so every list written
+before it had to be revisited by hand. The gallery was, the HTTP routes were,
+`TRIGGERS.md` was — the one nobody revisited is the one a reader asks
+directly. A reader asking the tool what it can draw was told something false.
+
+**And a test guaranteed it.** `test_list_prints_both_kinds` asserted
+`["choropleth", "situation_map"]`, a literal pair written when there were two.
+So the suite was green on the defect, because the expectation had gone stale in
+the same direction as the code. That is the worst shape a test can take: a
+missing test leaves a defect unnoticed, while a test that asserts the defect
+makes it look reviewed. It reads the registry now, and is renamed for what it
+checks.
+
+`GET /v1/kinds` was the fifth list, and its own docstring already carried the
+right intention — the route exists "so a caller can discover them
+programmatically rather than hardcode the names" — above a body that returned
+a hardcoded literal. It returns `sorted(kind_names())`, which is the same
+output it documented, now derived.
+
+### Added — `tests/test_every_surface_carries_every_kind.py`
+
+What makes the registry binding rather than decorative. Every surface is read
+back from the **running code** — the Click group's real `commands`, the
+FastAPI app's real `routes`, the gallery's real `_TILES`, the package's real
+`__all__` — and compared against the registry. Grepping the source would pass
+on a command defined and never registered, or a route declared under an
+unreachable prefix.
+
+It opens with a count assertion, because every other test in the file iterates
+the registry and would pass vacuously on an empty one — which is the failure
+mode the original defect *was*. Sabotage-checked three ways: restoring the
+hard-coded pair fails with the printed list beside the registry's; deleting a
+kind fails on the count before anything else can go quietly green; and
+pointing a kind at a route that does not exist names the routes that do.
+
+A kind missing from `TRIGGERS.md` fails too. That table is machine-read, so a
+kind it does not name exists in the package and not in the vocabulary anyone
+reaches it by — present, and undiscoverable.
+
+### Fixed — four stale sentences about the count
+
+`cli.py`'s `list` docstring said "the two map kinds this repo carries".
+`gui.py` said "this repo has exactly two kinds" and advertised "choropleth and
+situation maps" in its `<meta name="description">`, so the gallery's own
+summary omitted a third of it. `api.py`'s module docstring named two
+generators of three.
+
+
 ### Changed — one `pip install`
 
 **Everything this package does now installs with it.** 3 extras became
