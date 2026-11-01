@@ -4,6 +4,52 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Fixed — `pydantic` was imported and declared nowhere
+
+`sprezzature_maps/api.py` does an unguarded `from pydantic import BaseModel,
+Field` at module level, and `pydantic` appeared in **no** `pyproject.toml`
+table. It resolved anyway, because `fastapi` requires it, which is why three
+readers all had nothing to say: pip never had to resolve it, mypy reads an
+installed package as installed, and CI imports `api.py` successfully for the
+same transitive reason.
+
+**The exposure is real, measured on the index rather than argued.**
+`fastapi 0.115.0` — which this package's own `fastapi>=0.115` floor permits —
+requires `pydantic!=1.8,...,<3.0.0,>=1.7.4`. A resolver may therefore hand this
+package **pydantic 1.x**, where `BaseModel` and `Field` both exist and the API
+around them does not: `Config` instead of `model_config`, `dict()` instead of
+`model_dump()`. The import would succeed and the behaviour would differ, which
+is the worst shape a dependency defect takes. The installed fastapi here is
+0.135.3 and requires `>=2.9.0`, so nothing is broken today; what was missing
+is the manifest saying what the code needs.
+
+`pydantic>=2.0` is declared, with that measurement in the comment beside it.
+`sprezzature-figures` carries the same line for the same import and the same
+reason.
+
+### Added — `tests/test_every_import_is_declared.py`, ported from figures
+
+Which is how the above was found, and the only reason worth porting a test.
+`CODING.md` already said it: "a pattern proven on one side is the default for
+the other."
+
+It walks every `import` in `sprezzature_maps/` and `scripts/` and asserts each
+third-party top-level name resolves to something the manifest declares, in any
+table. `tests/` is out of scope — a test may import something only the
+developer lane has, and `[dev]` is where that is declared.
+
+It opens with a non-vacuity check, because a scanner that silently matches
+nothing is the failure mode the file exists to prevent in the dependency table
+and it would be absurd for the guard to have it too: the walk has to find more
+than 25 files and more than 8 third-party names, and `numpy` and `pyproj` have
+to be among them. Sabotage-checked by deleting the `pydantic` line, which
+fails naming the exact file that imports it.
+
+It deliberately does not assert the converse. A distribution declared and
+imported nowhere is a different question — it may be there for a generator
+that lives elsewhere, or to pin a transitive floor — and asserting it would be
+a decision rather than a defect.
+
 ### Added — `sprezzature_maps.data`: the three input shapes, read in one place
 
 A chart library can assume a table and ask which column plays which role. The

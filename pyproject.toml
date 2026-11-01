@@ -64,6 +64,25 @@ dependencies = [
     # HTTP app and the MCP server are two of this package's five front doors,
     # and a door you have to install separately is a door people do not find.
     "fastapi>=0.115",
+    # Named because `sprezzature_maps/api.py` does an unguarded
+    # `from pydantic import BaseModel, Field` at module level, and nothing
+    # here declared it -- it arrived only because fastapi requires it.
+    #
+    # Measured on the index rather than assumed: **fastapi 0.115.0, which the
+    # floor above permits, requires `pydantic>=1.7.4,<3.0.0`**. A resolver is
+    # therefore free to hand this package pydantic 1.x, where `BaseModel` and
+    # `Field` both exist and the API around them does not -- `Config` instead
+    # of `model_config`, `dict()` instead of `model_dump()`. The import would
+    # succeed and the behaviour would differ, which is the worst shape of
+    # dependency defect. The installed fastapi here is 0.135.3 and requires
+    # `>=2.9.0`, so nothing is broken today; what was missing is the manifest
+    # saying what the code imports.
+    #
+    # `sprezzature-figures` carries the same line for the same import and the
+    # same reason. Found here by porting its
+    # `tests/test_every_import_is_declared.py`, which is what CODING.md means
+    # by "a pattern proven on one side is the default for the other".
+    "pydantic>=2.0",
     "uvicorn[standard]>=0.30",
     "fastapi-mcp>=0.3",
     "mcp<2.0",
