@@ -41,7 +41,7 @@ schématiques par points ou par grille restés dans `sprezzature-figures`
 
 ```bash
 pip install sprezzature-maps                 # les trois générateurs
-pip install 'sprezzature-maps[api,mcp]'      # plus l'API HTTP et le serveur MCP
+pip install 'sprezzature-maps'      # plus l'API HTTP et le serveur MCP
 ```
 
 `sprezzature-maps` dépend de `sprezzature-figures` pour les primitives de rendu
@@ -539,13 +539,13 @@ ligne de commande Click, installée par défaut, sous deux orthographes —
 aucune n'atteint ce que l'autre n'atteint pas (c'étaient deux commandes
 jusqu'au 2026-10-25, une argparse et un jumeau Click plus riche derrière
 un extra `[cli]`, d'où le cinq des notes plus anciennes) ; par une
-API HTTP (`sprezzature-maps[api]`) qui publie un schéma OpenAPI (une
+API HTTP (`sprezzature-maps`) qui publie un schéma OpenAPI (une
 description de chaque point d'entrée lisible par une machine,
 permettant à d'autres outils de générer automatiquement de la
 documentation ou du code client) et une petite page de galerie à sa
 racine ; et par une surface MCP (Model Context Protocol, le standard
 qui permet à un assistant IA d'appeler un outil directement) sous
-`sprezzature-maps[api,mcp]`.
+`sprezzature-maps`.
 
 ## Feuille de route
 

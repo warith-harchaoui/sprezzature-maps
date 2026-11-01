@@ -33,9 +33,10 @@ What ships here
   left out.
 - ``GET /``: the GUI gallery page (see :mod:`sprezzature_maps.gui`).
 
-Install the extra to get the runtime dependencies::
+FastAPI and uvicorn are base dependencies since 2026-11-01, so there
+is no extra to ask for::
 
-    pip install 'sprezzature-maps[api]'
+    pip install 'sprezzature-maps'
 
 Then run the app with any ASGI server::
 
@@ -67,8 +68,10 @@ try:
     from fastapi.staticfiles import StaticFiles
 except ImportError as exc:  # pragma: no cover - dependency guard
     raise ImportError(
-        "The FastAPI HTTP surface requires the [api] extra. "
-        "Install with: pip install 'sprezzature-maps[api]'"
+        "The FastAPI HTTP surface could not import fastapi, which is a base "
+        "dependency since 2026-11-01 -- so this is a broken install rather "
+        "than a missing extra. Reinstall with: "
+        "pip install 'sprezzature-maps'"
     ) from exc
 
 from pydantic import BaseModel, Field
