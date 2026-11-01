@@ -90,6 +90,46 @@ _TILES: tuple[dict[str, str], ...] = tuple(
 )
 
 
+#: The palette and the typographic base, shared by every page this package
+#: serves. Extracted from the gallery's own stylesheet on 2026-11-01, when the
+#: Studio needed the same tokens: two pages with two hand-kept copies of one
+#: palette is the same defect as the five hand-kept lists of three map kinds
+#: that `kinds.py` exists to end, in a different register.
+#:
+#: Light first on bare ``:root`` and dark only inside the media query, so a
+#: colour has exactly one definition outside it -- a token defined only under
+#: ``prefers-color-scheme`` borrows whatever the host paints.
+THEME_CSS: str = f"""
+  :root {{
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1d1d1f;
+    --fg-secondary: #6e6e73;
+    --border: #e5e5ea;
+    --card-bg: #fafafa;
+    --accent: #007aff;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg: #0b0b0d;
+      --fg: #f2f2f7;
+      --fg-secondary: #9a9aa0;
+      --border: #2c2c2e;
+      --card-bg: #151517;
+      --accent: #409cff;
+    }}
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: {SANS_STACK};
+    line-height: 1.5;
+  }}
+"""
+
+
 def _tile_html(tile: dict[str, str]) -> str:
     """Render one gallery tile's HTML.
 
@@ -126,7 +166,7 @@ def _tile_html(tile: dict[str, str]) -> str:
     </article>"""
 
 
-def _font_face_css() -> str:
+def font_face_css() -> str:
     """``@font-face`` rules for this page's three families, self-hosted.
 
     The page used to pull Roboto, Roboto Serif and Roboto Mono from
@@ -197,35 +237,9 @@ def render_gallery_html() -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sprezzature-maps</title>
 <meta name="description" content="Hand-authored SVG world maps: choropleth, situation and density maps.">
-<style>{_font_face_css()}</style>
+<style>{font_face_css()}</style>
+<style>{THEME_CSS}</style>
 <style>
-  :root {{
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --fg: #1d1d1f;
-    --fg-secondary: #6e6e73;
-    --border: #e5e5ea;
-    --card-bg: #fafafa;
-    --accent: #007aff;
-  }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{
-      --bg: #0b0b0d;
-      --fg: #f2f2f7;
-      --fg-secondary: #9a9aa0;
-      --border: #2c2c2e;
-      --card-bg: #151517;
-      --accent: #409cff;
-    }}
-  }}
-  * {{ box-sizing: border-box; }}
-  body {{
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: {SANS_STACK};
-    line-height: 1.5;
-  }}
   header {{
     display: flex;
     align-items: baseline;

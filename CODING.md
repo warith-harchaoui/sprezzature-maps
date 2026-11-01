@@ -195,8 +195,20 @@ Where they part, and why — each stated in the code that parts:
 - **Schematic place-shaped charts stay there.** Hex maps, dot density, spike
   maps and binned grids plot points or cells; this repo draws real coastlines
   under a real projection. `TRIGGERS.md` routes on exactly that question.
-- **No Studio here.** The conversational editor ships with the figures
-  package; maps get their own when there is one.
+- **The Studio here is its own, not the figures one extended.** That was the
+  standing decision — "maps get their own when there is one" — and since
+  2026-11-01 there is one: `sprezzature_maps.studio`, opened by
+  `sprezzature-maps-studio`. The reason it is separate is the data: a chart
+  Studio can assume a table and ask which column plays which role, and these
+  three kinds take rows, a configuration and a list of positions.
+
+  It is FastAPI and server-rendered HTML, not NiceGUI, and that was measured
+  rather than preferred: NiceGUI costs 20 packages nothing else here brings,
+  FastAPI and uvicorn are already base dependencies, and `gui.py` already
+  serves hand-written markup for the reason it states. What *is* copied from
+  the figures Studio is its accidental best property — 117 of its 5397 lines
+  touch NiceGUI, and its engine subpackages touch it in 0 of 34 files — so
+  everything here that decides anything is importable without a server.
 
 A pattern proven on one side is the default for the other. That includes the
 unglamorous ones: `TRIGGERS.md` is machine-read on both sides, and

@@ -314,7 +314,7 @@ def kinds() -> list[str]:
 
 
 # The gallery page sets three Roboto families and links them at this prefix
-# (see :func:`sprezzature_maps.gui._font_face_css`). Serving them from
+# (see :func:`sprezzature_maps.gui.font_face_css`). Serving them from
 # sprezzature-figures' bundled font directory is what lets the page stay
 # self-hosted: it used to fetch the same three from fonts.googleapis.com,
 # which put a third-party request on every load of a tool that otherwise needs
