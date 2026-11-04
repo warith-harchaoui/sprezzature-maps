@@ -156,6 +156,9 @@ Repository = "https://github.com/warith-harchaoui/sprezzature-maps"
 [tool.setuptools]
 packages = [
     "sprezzature_maps",
+    "sprezzature_maps.studio",
+    "sprezzature_maps.studio.assistant",
+    "sprezzature_maps.studio.ralph",
     "sprezzature_maps_scripts",
     "sprezzature_maps_geo",
 ]
