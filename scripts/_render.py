@@ -52,8 +52,6 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
-import click
-
 #: The root ``width``/``height`` of a plate sized for a printed page.
 #:
 #: ``print_width`` puts a physical size on the root (``width="90mm"``), which
@@ -456,6 +454,10 @@ def render_cli(
     None
         The SVG is written as a side effect; nothing is returned.
     """
+    # click is the command line only: the choropleth kit on sprezzature.ai
+    # imports this module as a library on a machine with nothing installed.
+    import click
+
     default_out = svg_example_path(script_file, figure_id)
 
     @click.command(
@@ -543,6 +545,8 @@ def _write_figure(
         ("language", language, "en"),
     ):
         if name not in params and asked != default:
+            import click  # the command line's error; never reached as a library
+
             raise click.UsageError(
                 f"--{name} {asked!r} was asked for, and this generator does "
                 f"not accept it: build_svg() takes "
