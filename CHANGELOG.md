@@ -4,6 +4,8 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-04: click everywhere, and the documentation says what the code does
+
 ### Changed
 
 - **Click is the only command-line parser in the package.** Four argparse
