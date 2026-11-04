@@ -4,6 +4,28 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Click is the only command-line parser in the package.** Four argparse
+  parsers had outlived the 2026-10-25 front door: the one behind
+  `sprezzature-maps audit` (and `python -m sprezzature_maps.audit`), the
+  `--host` / `--port` parser of `sprezzature-maps-mcp`, `render_cli` in
+  `scripts/_render.py` that the choropleth and density generators share, and
+  the `--config` / `--out` / `--render` parser of
+  `scripts/make_situation_map.py`. All four are click now, with the same
+  options, defaults, choices, help texts and exit codes (2 on a usage error,
+  0 on `--help`, 1 on findings for the audit). `-h` answers alongside
+  `--help`. `tests/test_click_is_the_only_parser.py` runs every
+  `[project.scripts]` entry with `--help` and expects click's `Usage:` line,
+  and refuses any shipped module that imports argparse.
+- **The container serves `/mcp` too.** The `Dockerfile` CMD and the
+  `docker-compose.yml` command now run `sprezzature-maps-mcp --host 0.0.0.0
+  --port 8000` instead of `uvicorn sprezzature_maps.api:app`. The MCP
+  endpoint is mounted on the same FastAPI app as the `/v1/...` routes, so one
+  container on one port answers both. `README.md`, `LISEZMOI.md`,
+  `TRIGGERS.md` and `EXAMPLES.md` said the image had no `/mcp`; they now
+  say it does.
+
 ### Docs
 
 A pass over every Markdown file against the code as it stands, with each

@@ -118,43 +118,50 @@ else:
         argv : list of str or None, optional
             Arguments to parse. ``None`` reads ``sys.argv``.
         """
-        import argparse
         import os
 
-        parser = argparse.ArgumentParser(
-            prog="sprezzature-maps-mcp",
-            description=(
+        import click
+
+        @click.command(
+            "sprezzature-maps-mcp",
+            help=(
                 "Serve the sprezzature-maps MCP tools over HTTP. Every tool is a "
                 "route on the same FastAPI app, with the MCP endpoint "
                 "mounted beside them."
             ),
-            formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog=(
                 "Defaults come from SPREZZATURE_MAPS_HOST and "
-                "SPREZZATURE_MAPS_PORT when those are set.\n"
+                "SPREZZATURE_MAPS_PORT when those are set.\n\n"
                 "The host defaults to 127.0.0.1: pass --host 0.0.0.0 to "
                 "accept connections from outside this machine."
             ),
+            context_settings={"help_option_names": ["-h", "--help"]},
         )
-        parser.add_argument(
+        @click.option(
             "--host",
             default=os.environ.get("SPREZZATURE_MAPS_HOST", "127.0.0.1"),
-            help="Interface to bind (default: %(default)s).",
+            show_default=True,
+            help="Interface to bind.",
         )
-        parser.add_argument(
+        @click.option(
             "--port",
             type=int,
             default=int(os.environ.get("SPREZZATURE_MAPS_PORT", "8000")),
-            help="Port to bind (default: %(default)s).",
+            show_default=True,
+            help="Port to bind.",
         )
-        args = parser.parse_args(argv)
+        def serve(host: str, port: int) -> None:
+            """Bind and serve; the help text is ``help=`` above."""
+            import uvicorn
 
-        import uvicorn
+            # Single worker: the generator-module cache (sys.modules, see
+            # __init__.py's _load_script) is process-local state, so multiple
+            # workers would each pay the same import cost independently.
+            uvicorn.run(app, host=host, port=port, workers=1)
 
-        # Single worker: the generator-module cache (sys.modules, see
-        # __init__.py's _load_script) is process-local state, so multiple
-        # workers would each pay the same import cost independently rather
-        uvicorn.run(app, host=args.host, port=args.port, workers=1)
+        # Standalone mode: click prints a usage error and exits 2, and
+        # `--help` exits 0, the two exits the argparse parser used to make.
+        serve.main(args=argv, prog_name="sprezzature-maps-mcp")
 
 
 if __name__ == "__main__":  # pragma: no cover

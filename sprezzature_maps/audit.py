@@ -106,13 +106,14 @@ Author
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree.ElementTree import ParseError
+
+import click
 
 #: What :func:`_legibility_findings` catches when handed something that
 #: is not well-formed XML.
@@ -437,45 +438,80 @@ def _plates(target: Path) -> list[Path]:
     return sorted(p for p in target.rglob("*.svg") if p.is_file())
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Audit one plate or a folder of them. Returns the exit code."""
-    parser = argparse.ArgumentParser(
-        prog="sprezzature-maps audit",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=(
-            "Check that a rendered map says enough about itself for a reader "
-            "to question it. Eleven checks. On any plate: the classification "
-            "method named, the class breaks printed, no-data distinguishable "
-            "from low, a vintage or a schematic statement, a title, an "
-            "accessible name, and every label readable. On a regional plate: "
-            "a locator inset, a date on areas of control, zones graded by "
-            "confidence, and the disclaimer a disputed boundary owes."
-        ),
-        epilog=(
-            "Examples:\n"
-            "  sprezzature-maps audit plate.svg\n"
-            "  sprezzature-maps audit assets/ --format json\n"
-            "\n"
-            "What it does not do: judge whether the right classification was "
-            "chosen or whether the data is any good. Those are cartography, "
-            "not parsing. This checks the plate says enough for someone to "
-            "ask.\n"
-        ),
-    )
-    parser.add_argument("target", type=Path, help="An SVG plate, or a folder of them.")
-    parser.add_argument(
-        "--format", choices=("text", "json"), default="text",
-        help="Output shape (default: text).",
-    )
-    args = parser.parse_args(argv)
+_AUDIT_HELP = (
+    "Check that a rendered map says enough about itself for a reader "
+    "to question it. Eleven checks. On any plate: the classification "
+    "method named, the class breaks printed, no-data distinguishable "
+    "from low, a vintage or a schematic statement, a title, an "
+    "accessible name, and every label readable. On a regional plate: "
+    "a locator inset, a date on areas of control, zones graded by "
+    "confidence, and the disclaimer a disputed boundary owes."
+)
 
-    if not args.target.exists():
-        sys.stderr.write(f"{args.target}: no such file or directory\n")
+# `\b` keeps click from rewrapping the examples onto one line.
+_AUDIT_EPILOG = (
+    "\b\n"
+    "Examples:\n"
+    "  sprezzature-maps audit plate.svg\n"
+    "  sprezzature-maps audit assets/ --format json\n"
+    "\n"
+    "What it does not do: judge whether the right classification was "
+    "chosen or whether the data is any good. Those are cartography, "
+    "not parsing. This checks the plate says enough for someone to "
+    "ask."
+)
+
+
+@click.command(
+    "audit",
+    help=_AUDIT_HELP,
+    epilog=_AUDIT_EPILOG,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.argument("target", type=click.Path(path_type=Path))
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output shape (default: text).",
+)
+def _audit_command(target: Path, fmt: str) -> int:
+    """Run the audit; the docstring is not the help, ``help=`` is."""
+    return _run_audit(target, fmt)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Audit one plate or a folder of them. Returns the exit code.
+
+    The click command is run outside its standalone mode so the exit code
+    comes back as a value, which is what ``sprezzature-maps audit`` and the
+    tests call this for. A usage error still prints and exits 2, as the
+    argparse parser this replaced did; ``--help`` still exits 0.
+    """
+    try:
+        result = _audit_command.main(
+            args=argv, prog_name="sprezzature-maps audit", standalone_mode=False
+        )
+    except click.exceptions.UsageError as exc:
+        exc.show()
+        raise SystemExit(2) from None
+    except click.exceptions.Exit as exc:
+        raise SystemExit(exc.exit_code) from None
+    except click.exceptions.Abort:
+        raise SystemExit(130) from None
+    return result if isinstance(result, int) else 0
+
+
+def _run_audit(target: Path, fmt: str) -> int:
+    """Audit ``target`` and print the report in ``fmt``. Returns the exit code."""
+    if not target.exists():
+        sys.stderr.write(f"{target}: no such file or directory\n")
         return 2
 
-    plates = _plates(args.target)
+    plates = _plates(target)
     if not plates:
-        sys.stderr.write(f"{args.target}: no SVG found\n")
+        sys.stderr.write(f"{target}: no SVG found\n")
         return 2
 
     report: dict[str, list[Finding]] = {}
@@ -485,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     total = sum(len(f) for f in report.values())
 
-    if args.format == "json":
+    if fmt == "json":
         json.dump(
             {
                 "plates": len(plates),
