@@ -157,9 +157,9 @@ the half-done case, and those are usually the best buy. Cost: a day.
 **[svgis](https://github.com/fitnr/svgis): `--data-fields`, already taken, and
 worth finishing.** svgis writes a feature's own fields into `data-*`
 attributes so the drawing stays queryable after it is drawn. Control zones and
-markers here carry theirs. Choropleth regions do not, which is the layer where
-it would matter most: `data-value`, `data-class` and `data-method` on every
-country path would let a page extract the table back out of the picture, and
+markers here carry theirs. Choropleth country paths now carry `data-name`,
+`data-id` and `data-value`, so a page can already extract the table back out
+of the picture. What they still lack is `data-class` and `data-method`, which
 would let `sprezzature_maps/audit.py` check the drawn colours against the
 stated breaks instead of trusting the legend text. Cost: an afternoon in
 `scripts/make_choropleth.py`, and it closes a loop the audit cannot close

@@ -8,8 +8,8 @@ assistant call a tool directly, the way a human would click a button or
 run a command. This module adapts the FastAPI application defined in
 :mod:`sprezzature_maps.api` into MCP tools, so any MCP-aware host (an
 agent runtime, an IDE integration, a custom shell) can call
-``render_choropleth``, ``render_situation_map``, and ``list_kinds`` as
-first-class tools of its own. It does this with :mod:`fastapi_mcp`
+``health``, ``list_kinds``, ``render_choropleth``, ``render_situation_map``
+and ``render_density`` as first-class tools of its own. It does this with :mod:`fastapi_mcp`
 (https://github.com/tadata-org/fastapi_mcp): one line of code wraps the
 entire existing HTTP surface, so none of the route logic gets written a
 second time here (per CODING.md §23.1: MCP is a way of reaching existing
@@ -38,7 +38,8 @@ Then run the MCP server::
 Usage example
 -------------
 >>> # Register the MCP endpoint in your client. It publishes:
->>> #   health / list_kinds / render_choropleth / render_situation_map
+>>> #   health / list_kinds / render_choropleth / render_situation_map /
+>>> #   render_density
 
 Author
 ------
@@ -55,16 +56,16 @@ except ImportError:  # pragma: no cover - dependency guard
 
     def main(argv: list[str] | None = None) -> None:
         """
-        Entry point when the MCP extra is not installed.
+        Entry point when ``fastapi-mcp`` cannot be imported.
 
         Takes the same ``argv`` as the real entry point and ignores it:
         the two variants are reached through the same console script, so
         a caller that passes arguments must not get a ``TypeError`` from
         the branch that happens to be missing a dependency.
 
-        Says which extra is missing and stops. Reaching an MCP
-        command without the ``[mcp]`` extra needs a one-line fix,
-        not a stack trace.
+        Says which dependency is missing and stops. ``fastapi-mcp`` is a
+        base dependency, so this is a broken install: it needs a one-line
+        fix, not a stack trace.
         """
         print(
             "sprezzature-maps MCP surface could not import fastapi-mcp, which is a "
@@ -86,8 +87,9 @@ else:
         app,
         name="sprezzature-maps",
         description=(
-            "Sprezzature Maps MCP tools: render a world choropleth or a "
-            "regional situation map as hand-authored SVG (or PNG/PDF/JPG)."
+            "Sprezzature Maps MCP tools: render a world choropleth, a "
+            "regional situation map or an accumulation (density) map as "
+            "hand-authored SVG (or PNG/PDF/JPG)."
         ),
         include_tags=["meta", "actions"],
     )

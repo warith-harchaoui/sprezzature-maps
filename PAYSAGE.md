@@ -171,10 +171,10 @@ et ce sont en général les meilleures affaires. Coût : une journée.
 **[svgis](https://github.com/fitnr/svgis) : `--data-fields`, déjà pris, et à
 finir.** svgis inscrit les champs propres d'une entité en attributs `data-*`
 pour que le dessin reste interrogeable une fois dessiné. Les zones de
-contrôle et les marqueurs portent les leurs ici. Les régions du choroplèthe,
-non, et c'est pourtant la couche où cela compterait le plus : `data-value`,
-`data-class` et `data-method` sur chaque tracé de pays permettraient à une
-page d'extraire la table hors de l'image, et permettraient à
+contrôle et les marqueurs portent les leurs ici. Les tracés de pays du
+choroplèthe portent désormais `data-name`, `data-id` et `data-value`, si bien
+qu'une page peut déjà extraire la table hors de l'image. Il leur manque encore
+`data-class` et `data-method`, qui permettraient à
 `sprezzature_maps/audit.py` de vérifier les couleurs dessinées contre les
 seuils annoncés au lieu de croire le texte de la légende. Coût : une
 après-midi dans `scripts/make_choropleth.py`, et cela referme une boucle que

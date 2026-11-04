@@ -92,10 +92,12 @@ Usage
 -----
 ::
 
-    sprezzature-maps-audit plate.svg
-    sprezzature-maps-audit plates/ --format json
+    sprezzature-maps audit plate.svg
+    sprezzature-maps audit plates/ --format json
 
-Exits 1 when any finding is reported.
+``make-map audit`` is the same command. There is no separate
+``sprezzature-maps-audit`` entry point; ``python -m sprezzature_maps.audit``
+runs this module directly. Exits 1 when any finding is reported.
 
 Author
 ------
@@ -438,18 +440,21 @@ def _plates(target: Path) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     """Audit one plate or a folder of them. Returns the exit code."""
     parser = argparse.ArgumentParser(
-        prog="sprezzature-maps-audit",
+        prog="sprezzature-maps audit",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
             "Check that a rendered map says enough about itself for a reader "
-            "to question it: the classification method named, the class "
-            "breaks printed, no-data distinguishable from low, a vintage, a "
-            "title, and an accessible name."
+            "to question it. Eleven checks. On any plate: the classification "
+            "method named, the class breaks printed, no-data distinguishable "
+            "from low, a vintage or a schematic statement, a title, an "
+            "accessible name, and every label readable. On a regional plate: "
+            "a locator inset, a date on areas of control, zones graded by "
+            "confidence, and the disclaimer a disputed boundary owes."
         ),
         epilog=(
             "Examples:\n"
-            "  sprezzature-maps-audit plate.svg\n"
-            "  sprezzature-maps-audit assets/ --format json\n"
+            "  sprezzature-maps audit plate.svg\n"
+            "  sprezzature-maps audit assets/ --format json\n"
             "\n"
             "What it does not do: judge whether the right classification was "
             "chosen or whether the data is any good. Those are cartography, "

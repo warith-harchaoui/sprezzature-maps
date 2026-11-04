@@ -13,6 +13,13 @@ and small multiples are all in `make_situation_map.py` and all unused by
 `build_situation_examples.py`. The cheapest improvement available is not new
 code.
 
+*Since this was written:* a regional plate now gets the locator inset by
+default, unless it opts out or is already wide enough to place itself
+(`_inset_settings` in `make_situation_map.py`), and the disputed-boundary
+disclaimer is added to the footer on its own. `make-map audit` checks both,
+with `no-locator` and `disputed-unflagged`. The table below is the state on
+the date above.
+
 | Capability | In the renderer | Used by a plate |
 |---|---|---|
 | `inset` (locator) | yes | no |

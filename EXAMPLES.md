@@ -3,11 +3,11 @@
 Practical, runnable recipes for `sprezzature-maps`. See [`README.md`](README.md)
 for install instructions.
 
-This file grows alongside the project's surfaces (the Python library, the
-command-line tools, the HTTP API, the Model Context Protocol or MCP
-integration that lets an AI assistant call these tools directly, the
-browser GUI). It is not written once and left as-is: expect new sections
-as those surfaces land. The three example images below are not hand-picked
+This file covers the project's surfaces: the Python library, the command
+line, the HTTP API, the Model Context Protocol (MCP) server that lets an AI
+assistant call these tools directly, and the gallery page. the editor, the
+editor a person opens with `sprezzature-maps`, is described in the
+README. The three example images below are not hand-picked
 screenshots; they are the actual output of `make_choropleth()`,
 `make_situation_map()` and `make_density()` called with no arguments, and
 they cannot silently drift from what the code produces — not because
@@ -111,7 +111,7 @@ make-map situation_map --config my-region.yaml --out region.svg
 
 ### Reading a plate back
 
-The fourth tool is the one that reads rather than draws, and it is missing
+`audit` is the sub-command that reads rather than draws, and it is missing
 from most of this file's examples because it is the last step rather than the
 first:
 
@@ -120,7 +120,10 @@ make-map audit world.svg                 # exit 1 on any finding
 make-map audit plates/ --format json     # a whole folder, machine-readable
 ```
 
-Six static rules over a rendered SVG. The two that catch the most:
+Eleven static rules over a rendered SVG: six for any map, a legibility rule
+for every word on the plate, and four more for a regional situation plate
+(the full list is in [`TRIGGERS.md`](TRIGGERS.md)). The two that catch the
+most:
 
 - **the classification method has to be named.** The same numbers under
   quantiles and under natural breaks put different countries in the dark
@@ -175,6 +178,20 @@ open http://localhost:8000/docs
 open http://localhost:8000/
 ```
 
+### In a container
+
+`docker-compose.yml` declares the port, the volume and the command, so the
+whole onboarding is one line:
+
+```bash
+docker compose up -d
+curl -s localhost:8000/health
+# {"status":"ok"}
+
+# The command line, inside the same image. ./work is mounted at /work.
+docker compose run --rm api make-map choropleth --out /work/world.svg
+```
+
 ## The same command, under its suite name (`sprezzature-maps`)
 
 Everything above works under this name too, and everything here works
@@ -190,6 +207,7 @@ directly (comma-separated, tab-separated, or one-JSON-object-per-line) and
 sprezzature-maps list
 # choropleth
 # situation_map
+# density
 
 # A CSV with your own column names, bound explicitly.
 sprezzature-maps choropleth \
@@ -205,22 +223,36 @@ sprezzature-maps choropleth --data my-data.csv --no-diverging --out world.svg
 cat my-data.csv | sprezzature-maps choropleth --data - --out world.svg
 
 sprezzature-maps situation-map --config my-region.yaml --out region.svg
+
+# A starter config for a new plate, already furnished, then the plate.
+sprezzature-maps situation-new --country Moldova --out moldova.yaml
+
+# An accumulation map from a JSON list of [lon, lat] pairs.
+sprezzature-maps density --points events.json --bins 160 --out where.svg
+
+# Render, read the PNG with a local vision model, apply only the safe repairs.
+sprezzature-maps improve --kind choropleth --data my-data.csv --out world.png
 ```
 
 ## MCP
 
 MCP, the Model Context Protocol, is the standard that lets an AI
 assistant call a tool directly instead of a human typing a command. It
-exposes the same HTTP routes as MCP tools (`list_kinds`,
-`render_choropleth`, `render_situation_map`) for any MCP-aware assistant
-to call.
+exposes the same HTTP routes as MCP tools, named by each route's
+`operation_id`: `health`, `list_kinds`, `render_choropleth`,
+`render_situation_map` and `render_density`.
 
 ```bash
 pip install sprezzature-maps
-sprezzature-maps-mcp
+sprezzature-maps-mcp                     # 127.0.0.1:8000 by default
+sprezzature-maps-mcp --host 0.0.0.0 --port 9000
 # MCP endpoint at http://localhost:8000/mcp,
 # alongside the regular HTTP routes and the GUI at http://localhost:8000/
 ```
+
+`uvicorn sprezzature_maps.api:app` and the Docker image serve the HTTP routes
+without the `/mcp` endpoint; the endpoint is mounted by `sprezzature-maps-mcp`
+(or `uvicorn sprezzature_maps.mcp:app`).
 
 Point an MCP client's server configuration at that URL. The tool
 descriptions it advertises come straight from the FastAPI (the Python
@@ -549,7 +581,7 @@ make_situation_map(config=cfg, out="sudan.svg")
 
 ```xml
 <metadata id="provenance" data-generator="sprezzature-maps"
-          data-version="0.17.0" data-config-sha256="9a1f…">
+          data-version="1.0.0" data-config-sha256="9a1f…">
   <provenance-input data-name="sudan-2024.csv" data-sha256="3f2a…" data-bytes="4812051"/>
 </metadata>
 ```
@@ -571,7 +603,7 @@ Reading it back is the other half:
 from sprezzature_maps import plate_provenance, replay_report
 
 plate_provenance(svg)
-# {"generator": "sprezzature-maps", "version": "0.17.0",
+# {"generator": "sprezzature-maps", "version": "1.0.0",
 #  "config_sha256": "9a1f…", "inputs": [{"name": "sudan-2024.csv", ...}]}
 
 report = replay_report(svg, cfg, ["sudan-2024.csv"])

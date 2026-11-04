@@ -95,18 +95,17 @@ def main() -> None:
     """sprezzature-maps: render hand-authored SVG world maps."""
 
 
+# Read from `sprezzature_maps.kinds.KINDS` rather than written here. It used
+# to be a hard-coded ("choropleth", "situation_map"), and that is how this
+# command came to answer two kinds of three: `density` was born in this
+# repository after the other two were extracted from sprezzature-figures, and
+# every list written before it had to be revisited by hand. The gallery, the
+# HTTP routes and TRIGGERS.md were; this one, the one a reader asks directly,
+# was not. The history lives here rather than in the docstring because Click
+# prints the docstring as `--help`.
 @main.command("list")
 def list_cmd() -> None:
-    """Print every map kind this repo carries.
-
-    Read from :data:`sprezzature_maps.kinds.KINDS` rather than written here.
-    It used to be a hard-coded ``("choropleth", "situation_map")``, and that
-    is how this command came to answer **two kinds of three**: ``density`` was
-    born in this repository after the other two were extracted from
-    `sprezzature-figures`, and every list written before it had to be
-    revisited by hand. The gallery, the HTTP routes and ``TRIGGERS.md`` were;
-    this one, the one a reader asks directly, was not.
-    """
+    """Print every map kind this package draws, one per line."""
     for name in kind_names():
         click.echo(name)
 
@@ -124,8 +123,9 @@ def list_cmd() -> None:
 def audit_cmd(target: str, fmt: str) -> None:
     """Check that a rendered plate says how it was made.
 
-    The twin of ``make-map audit``: same engine, the other parser. A
-    brick that only makes is half a brick.
+    TARGET is one SVG plate or a folder of them. Eleven static rules; exits 1
+    on any finding, 0 when every plate is clean, 2 when TARGET holds no SVG.
+    A brick that only makes is half a brick.
     """
     from sprezzature_maps.audit import main as audit_main
 

@@ -18,9 +18,12 @@ RUN pip install --no-cache-dir "."
 EXPOSE 8000
 
 # Serve the thing the image was built with. The previous default printed a
-# `--help` message and exited, which is a container that does nothing: this
-# image carries the HTTP API, the MCP surface and the GUI gallery, so the
-# useful default is to run them. Override with any of the CLIs:
+# `--help` message and exited, which is a container that does nothing. The
+# default serves the HTTP API and the gallery page at `/`. It does NOT serve
+# the MCP endpoint: `sprezzature_maps.api:app` has no `/mcp`, which is mounted
+# only when `sprezzature_maps.mcp` is imported. Override the command for MCP
+# or for the command line:
 #
+#   docker run --rm -p 8000:8000 IMAGE sprezzature-maps-mcp --host 0.0.0.0
 #   docker run --rm -v "$PWD:/out" IMAGE make-map choropleth --out /out/world.svg
 CMD ["uvicorn", "sprezzature_maps.api:app", "--host", "0.0.0.0", "--port", "8000"]

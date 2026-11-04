@@ -3,8 +3,9 @@
 Adapted from [sprezzature-figures](https://github.com/warith-harchaoui/sprezzature-figures)'
 own `CODING.md` (the repo `sprezzature-maps` was split out of). The two files
 are kept in sync in spirit, by hand, not by an automated check, since the two
-repos have since diverged on which surfaces they expose (no Editor, the
-conversational chart editor, and no dataviz dependency tier here).
+repos have since diverged on which surfaces they expose (this repository has
+its own map Editor rather than the figures one, and no dataviz dependency
+tier).
 
 ## Language
 
@@ -141,13 +142,15 @@ its own module.
 
 ## Dependencies
 
-Declare every dependency in `pyproject.toml`, under `[project.dependencies]`
-or `[project.optional-dependencies]`. Do not pin an exact version there
-(use a `>=` lower bound only). `requirements.txt` and `requirements-dev.txt`
-exist only as `pip` entry points that pick which optional extras to
-install; `pyproject.toml` stays the one place version constraints are
-decided, so there is nothing in those two files that could drift out of
-sync when a bound changes.
+Declare every runtime dependency in `pyproject.toml`, under
+`[project.dependencies]`. Since 2026-11-01 there are no feature extras: the
+HTTP API, the MCP server and the command line are all in the base install.
+`[project.optional-dependencies]` holds only `dev`, the test and lint
+toolchain. Use a `>=` lower bound rather than an exact pin; a ceiling is
+allowed when it is argued in a comment beside it (`mcp<2.0`, `mypy<3`).
+`requirements.txt` installs the package itself (`-e .`) and
+`requirements-dev.txt` adds the toolchain on top. `pyproject.toml` stays the
+place version constraints are decided.
 
 ## Vendored geo data
 
