@@ -31,7 +31,7 @@ which plot points or grid cells rather than real coastlines:
 
 | Kind | Script | What it draws |
 |---|---|---|
-| `choropleth` (a map where each region is filled with a colour that encodes a number, the classic "which country scores highest" map) | `scripts/make_choropleth.py` | A world map, one fill colour per country on a single pale-to-navy blue scale; countries with no data fall back to neutral grey. |
+| `choropleth` (a map where each region is filled with a colour that encodes a number, the classic "which country scores highest" map) | `scripts/make_choropleth.py` | A world map, one fill colour per country on a pale-to-navy blue scale, or on a diverging scale when the values change sign; countries with no data fall back to neutral grey. |
 | `situation_map` | `scripts/make_situation_map.py` | A layered "who controls what" plate for any region: the map auto-centres itself on that region using a Lambert conformal conic projection (see below), draws real national outlines from a bundled Natural Earth base map, shades the sea floor near the coast, fills zones by category in pastel colours, marks flashpoints, and adds a scale bar in two units at once (kilometres and miles). |
 | `density` (an accumulation map: where events *fell*, rather than a value per territory) | `scripts/make_density.py` | No coastline, no border, no graticule. Point events are binned into a luminous field; the land appears because events fell on it and the sea stays dark because none did, so a reader recognises the shape without being shown it. Vector, binned, one path per level. |
 
@@ -41,9 +41,10 @@ which plot points or grid cells rather than real coastlines:
 pip install sprezzature-maps
 ```
 
-One line, and it is everything: the three generators, the library, both
-command lines, the HTTP API, the MCP server and the Studio. There are no
-feature extras — `[dev]` is the test toolchain and is not one.
+One line, and it is everything: the three generators, the library, the
+command line, the HTTP API, the MCP server and the Studio. There are no
+feature extras. `[dev]` holds the test toolchain (pytest, ruff, mypy and
+the rest) and adds no feature. Python 3.10 to 3.13.
 
 `sprezzature-maps` depends on `sprezzature-figures` for rendering primitives
 the two products share (embedding fonts inside the SVG file so it looks the
@@ -65,15 +66,17 @@ pip install -e ~/sprezzature-maps
 ## Use
 
 ```python
-from sprezzature_maps import make_choropleth, make_situation_map
+from sprezzature_maps import make_choropleth, make_density, make_situation_map
 
 make_choropleth(out="world.svg")          # demo data if none supplied
 make_situation_map(out="region.svg")      # bundled demo config
+make_density(out="where.svg")             # synthetic demo points
 ```
 
 ```bash
 make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
+make-map density --points events.json --out where.svg
 ```
 
 Starting a new regional plate is one command, and what it writes already
@@ -84,6 +87,110 @@ make-map situation-new --country Moldova --out moldova.yaml
 make-map situation_map --config moldova.yaml --out moldova.svg
 make-map audit moldova.svg          # clean, as written
 ```
+
+The output format follows the extension of `--out`: `.svg`, `.png`, `.jpg`,
+`.pdf` or `.eps`.
+
+## Five ways in
+
+One engine, reached five ways. All five install with the package, and every
+one of them calls the same library functions.
+
+### 1. The Python library
+
+`import sprezzature_maps` exports:
+
+| Name | What it does |
+|---|---|
+| `make_choropleth`, `make_situation_map`, `make_density` | Render one plate and return the path written |
+| `classification_methods()` | The class-break methods a choropleth accepts: `quantile`, `equal`, `jenks`, `headtail` |
+| `acled_events`, `ucdp_events` | Turn an ACLED or UCDP GED export into a situation-map config fragment |
+| `article_sidecar(svg)` | Read back the title, alt text, description, zones, markers and numbered callouts of a finished plate |
+| `plate_provenance(svg)`, `replay_report(svg, cfg, files)` | Read a plate's provenance stamp, and check whether a config and files are what drew it |
+| `KINDS`, `MapKind`, `kind`, `kind_names` | The registry of the three map kinds that every surface reads |
+
+### 2. The command line
+
+Built with Click, a Python library for command-line tools with
+sub-commands. It answers to two names, `sprezzature-maps` and `make-map`,
+which point at the same function. Two sub-commands also take two
+spellings: `situation-map` or `situation_map`, and `situation-new` or
+`situation_new`. Until 2026-10-25 there were two separate commands, an
+argparse one and a richer Click twin behind a `[cli]` extra, which is why
+older notes count differently.
+
+| Sub-command | What it does | Main options |
+|---|---|---|
+| `list` | Print the three map kinds | none |
+| `choropleth` | Render a world choropleth | `--data` (CSV, TSV, JSON or JSONL; `-` reads CSV from stdin), `--map id=COL --map value=COL`, `--classes 2..12`, `--method`, `--diverging/--no-diverging`, `--relief/--no-relief`, `--simplify`, `--title`, `--out` |
+| `situation-map` | Render a situation map from a YAML config | `--config`, `--title`, `--out` |
+| `situation-new` | Write a starter config for a new situation plate | `--country` or `--bbox west,south,east,north`, `--title`, `--subtitle`, `--as-of YYYY-MM-DD`, `--out` |
+| `density` | Render an accumulation map | `--points` (JSON list of `[lon, lat]`), `--bins`, `--title`, `--out` |
+| `audit` | Check that a finished plate says how it was made | `TARGET` (a file or a folder), `--format text\|json` |
+| `improve` | Render a map, read it with a vision model, apply only the safe repairs | `--kind`, `--data` / `--config` / `--points`, `--map`, `--out` (a `.png`), `--title`, `--rounds` |
+
+`improve` needs a local vision model. It never changes the classification
+method, the number of classes or the frame on its own: it prints those for
+a person to decide.
+
+The library and the HTTP API take options the command line does not
+expose, such as `breaks`, `cities`, `rivers`, `width` and `height` for a
+choropleth, or `bbox`, `width` and `caption` for a density map.
+
+### 3. The HTTP API, with Docker and compose
+
+FastAPI, a Python web framework, serves the generators over HTTP:
+
+```bash
+uvicorn sprezzature_maps.api:app --host 127.0.0.1 --port 8000
+```
+
+| Route | operation_id | What it does |
+|---|---|---|
+| `GET /health` | `health` | Liveness probe, returns `{"status": "ok"}` |
+| `GET /v1/kinds` | `list_kinds` | `["choropleth", "density", "situation_map"]` |
+| `POST /v1/choropleth` | `render_choropleth` | Render a choropleth from JSON rows `{"id", "value"}`, or the demo |
+| `POST /v1/situation-map` | `render_situation_map` | Render a situation map from a config object, or the Europe demo |
+| `POST /v1/density` | `render_density` | Render an accumulation map from `[lon, lat]` points, or the demo |
+| `GET /` | none | The gallery page |
+| `GET /docs`, `GET /redoc` | none | Interactive documentation generated from the OpenAPI schema |
+
+Every body field is optional, and `format` picks `svg`, `png`, `pdf` or
+`jpg`. The repository carries a `Dockerfile` and a `docker-compose.yml`.
+`docker compose up -d` builds the image and serves the same app on port
+8000, with `./work` mounted at `/work` for files going in and out.
+
+### 4. The MCP server
+
+MCP, the Model Context Protocol, is the standard that lets an AI assistant
+call a tool directly. `sprezzature-maps-mcp` serves the HTTP app with an
+MCP endpoint mounted at `/mcp`, on `127.0.0.1:8000` by default (`--host`,
+`--port`, or the `SPREZZATURE_MAPS_HOST` and `SPREZZATURE_MAPS_PORT`
+variables). Its tools are the five API routes above, named by their
+`operation_id`: `health`, `list_kinds`, `render_choropleth`,
+`render_situation_map` and `render_density`. The audit, the starter config
+and `improve` have no MCP tool, because they work on files on the caller's
+disk. The compose file runs `sprezzature_maps.api:app`, which has no
+`/mcp`; run `sprezzature-maps-mcp --host 0.0.0.0` in the container to get
+one.
+
+### 5. The skill
+
+The agent skill `sprezzature-maps` ships with the
+[sprezzature](https://github.com/warith-harchaoui/sprezzature) hub
+repository, not with this one. It routes an agent to the calls above.
+[`TRIGGERS.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/TRIGGERS.md)
+holds the routing rules it follows.
+
+### And the Studio, for a person
+
+`sprezzature-maps-studio` opens an editor on `http://127.0.0.1:8010/`
+(`--host`, `--port`, `--reload`). Paste rows, a config or points, render,
+and optionally run the same look-and-repair loop as `improve`. It is a page
+a person opens rather than a surface a program calls. Why it exists apart
+from the figures Studio is explained [below](#why-a-separate-repo-not-a-chart-type-in-sprezzature-figures).
+
+## Recipes
 
 ### What moved between two dates
 
@@ -165,14 +272,21 @@ locator, the footer and the disclaimers.
 make-map audit world.svg            # exit 1 on any finding
 ```
 
-Ten static rules over a rendered plate, because a map is read the way a text
-is: did it **name the classification method** (the same numbers in quantiles
-and in natural breaks tell two different stories), does it carry its
-**provenance**, does it hide rows it could not place, does it have a title and
-labelled breaks. A plate that passes is not thereby a good map — it is one a
+Eleven static rules over a rendered plate, because a map is read the way a
+text is. Six apply to any plate. Did it **name the classification method**
+(`method-unnamed`: the same numbers in quantiles and in natural breaks tell
+two different stories)? Does it print its class breaks (`breaks-missing`)?
+Does it name the no-data fill, so absent does not read as low
+(`no-data-hidden`)? Does it say when it was true, or that it is a schematic
+(`no-provenance`)? Does it have a title (`untitled`) and an accessible name
+(`unlabelled`)? A plate that passes is not thereby a good map. It is one a
 reader can argue with.
 
-Four of the ten only apply to a **regional** plate, and come from the
+A seventh, `text-unreadable`, applies to every plate too and is described
+below: it measures whether every word can be read.
+
+Four more only apply to a **regional** plate (`no-locator`,
+`undated-control`, `evidence-unclassed`, `disputed-unflagged`), and come from the
 standards such a plate gets read against — the UNHCR Mapping Guidelines for
 the furniture, the Institute for the Study of War for the evidence model.
 Does it carry a **locator**, so a reader who does not know where this is can
@@ -336,18 +450,23 @@ is importable and testable without a server.
 Published on PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
 with a green CI workflow (lint, tests, and doctests on every push and pull
 request to `main`; see `.github/workflows/ci.yml`): `pytest` passes, all
-three kinds render from their bundled demo data, and both command lines
-render them to real SVG files. Still early — the API is not frozen, and
-there is no FIGURES.md-style catalogue page yet (with three kinds, this
-README is the catalogue).
+three kinds render from their bundled demo data, and the command line
+renders them to real SVG files. There is no FIGURES.md-style catalogue page
+(with three kinds, this README is the catalogue).
 
-Five worked situation maps live in `scripts/build_situation_examples.py`,
-regenerated with `python scripts/build_situation_examples.py`: Ukraine,
-Syria and Libya as historical snapshots, and Sudan and eastern DRC drawn
-from open-source reporting to late September 2026. Each is schematic by
-construction, says so on the plate, and keeps its claim lines in readable
-Python rather than an opaque data file, so a reader who disagrees can see
-exactly which coordinates to argue with.
+Fifteen worked situation maps live in `scripts/build_situation_examples.py`,
+regenerated into `assets/situation-maps/` with
+`python scripts/build_situation_examples.py` (or one by name, such as
+`python scripts/build_situation_examples.py sudan`). Six are thematic:
+Ukraine, the lower Dnieper (the plate that goes with an article, with its
+numbered marks), Syria and Libya as historical snapshots, and Sudan and
+eastern DRC drawn from open-source reporting to late September 2026. Each
+of those is schematic by construction, says so on the plate, and keeps its
+claim lines in readable Python rather than an opaque data file, so a reader
+who disagrees can see exactly which coordinates to argue with. The other
+nine are reference plates with no thematic layer: Switzerland, Iberia,
+western Europe, the Himalaya, the Caribbean, the Andes, the Sahel, the
+Strait of Hormuz, and the South China Sea, drawn with no claim line on it.
 
 `choropleth` draws with: an Equal Earth projection (a projection that
 keeps every country's true relative area, so a huge but visually
@@ -626,22 +745,8 @@ carries its own `data-*` attributes (`data-confidence`, `data-precision`,
 `data-area-share`), so the assessment can be read back out of the finished
 file rather than only looked at.
 
-The library is reachable five ways, and all five install with the package:
-
-- **as a Python import**, `import sprezzature_maps`;
-- **as a Click command line** under two spellings — `make-map` and
-  `sprezzature-maps` resolve to the same callable, so neither reaches
-  anything the other cannot. (They were two separate commands until
-  2026-10-25, an argparse one and a richer Click twin behind a `[cli]` extra,
-  which is why older notes count differently.)
-- **as an HTTP API**, `uvicorn sprezzature_maps.api:app`, publishing an
-  OpenAPI schema — a machine-readable description of every endpoint, so other
-  tools can generate documentation or client code automatically — and a small
-  gallery page at its root;
-- **as an MCP surface** (Model Context Protocol, the standard that lets an AI
-  assistant call a tool directly), `sprezzature-maps-mcp`;
-- **as the Studio**, `sprezzature-maps-studio`, which is the one a person
-  opens rather than a program calls.
+The five ways to reach all of this are listed under
+[Five ways in](#five-ways-in).
 
 ## Roadmap
 

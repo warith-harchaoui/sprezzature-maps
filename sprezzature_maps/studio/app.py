@@ -3,7 +3,7 @@ sprezzature-maps Studio: the HTTP surface, which is the whole interface.
 
 Module summary
 --------------
-Three routes. A page, a render, and the rendered file:
+Five routes. A page, two renders, and the rendered file in two formats:
 
 ``GET /``
     The editor for one kind, chosen by ``?kind=``. Addressable, so a kind can
@@ -12,6 +12,12 @@ Three routes. A page, a render, and the rendered file:
     Reads the pasted payload, renders, and comes back with the same page
     carrying the map — and carrying what was typed, so a refusal does not lose
     it.
+``POST /improve``
+    The same form, then the look-and-repair loop (``sprezzature-maps
+    improve``): renders a PNG, reads it with a vision model, applies only the
+    repairs that cannot change what the map says, and prints the others.
+``GET /map/{token}.png``
+    The PNG the loop rendered.
 ``GET /map/{token}.svg``
     The rendered file. Served rather than inlined: a situation plate is 2.2 MB
     of SVG and inlining that into every re-render makes the page heavier than

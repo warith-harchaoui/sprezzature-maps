@@ -4,6 +4,55 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Docs
+
+A pass over every Markdown file against the code as it stands, with each
+command, flag, route and count checked against the source or `--help`.
+
+- **The audit has eleven rules, not six or ten.** `README.md` and
+  `LISEZMOI.md` said ten, `TRIGGERS.md` and `EXAMPLES.md` said six; the code
+  has six general rules, `text-unreadable`, and four for regional plates.
+  All four files now name them.
+- **The MCP tools are five.** `EXAMPLES.md` listed three and left out
+  `render_density` and `health`. The docs now say that `/mcp` is mounted by
+  `sprezzature-maps-mcp` and not by `uvicorn sprezzature_maps.api:app`, the
+  Docker image or the compose file.
+- **Fifteen worked situation plates, not five.** The README and LISEZMOI now
+  name the six thematic plates and the nine reference plates in
+  `scripts/build_situation_examples.py`, and where they are written.
+- **`sprezzature-maps list` prints three kinds.** `EXAMPLES.md` still showed
+  two.
+- **A "Five ways in" section** in the README and LISEZMOI: the library's
+  exports, every sub-command with its options (`density`, `improve`, `list`
+  and `situation-new` were missing or only mentioned in passing), every HTTP
+  route with its `operation_id`, Docker and compose, the MCP server, the
+  skill (shipped from the hub, not from here) and the Studio.
+- **LISEZMOI caught up with README.** It had no French for the conflict
+  loaders, the small multiples or the provenance stamp, and its install
+  block still showed two `pip install` lines for what is one.
+- **`TRIGGERS.md` routes on the three data shapes** (`rows`, `config`,
+  `points`, the registry's own `data_shape`) and a finished plate, with
+  phrasings as confirmation only. It now lists every tool, including
+  `health`, `classification_methods`, `article_sidecar` and the Studio, and
+  its surface table has a library and an HTTP column.
+- **`CONTRIBUTING.md`** said neither package was on PyPI and that `slow`
+  tests were excluded by default. Both are on PyPI, and `addopts` deselects
+  nothing. Its doctest and lint commands now match CI, mypy included.
+- **`CODING.md`** said there was no Studio here, and described
+  `requirements.txt` as choosing extras that no longer exist.
+- **`LANDSCAPE.md` / `PAYSAGE.md`** said choropleth paths carry no `data-*`
+  attributes. They carry `data-name`, `data-id` and `data-value`.
+- **`references/situation-map-requirements.md`** gains a dated note: the
+  locator inset is now on by default for a regional plate.
+- **Help strings and docstrings** that said something false:
+  `sprezzature-maps audit --help` called itself "the twin of `make-map
+  audit` ... the other parser"; `audit.py` advertised a
+  `sprezzature-maps-audit` command that does not exist; the
+  `render_choropleth` description, which MCP hosts read, gave it a Lambert
+  conformal conic projection instead of Equal Earth; `mcp.py` listed three
+  tools out of five and described the server without density; the Studio's
+  module docstring counted three routes out of five.
+
 ### Added — the Studio opens: `sprezzature-maps-studio`
 
 Three routes and a page, and the promise `CODING.md`, `README.md` and

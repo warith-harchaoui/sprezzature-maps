@@ -33,16 +33,21 @@ schématiques par points ou par grille restés dans `sprezzature-figures`
 
 | Type | Script | Ce qu'il dessine |
 |---|---|---|
-| `choropleth` (une carte où chaque région est remplie d'une couleur qui code un nombre, la carte classique du « quel pays a le score le plus élevé ») | `scripts/make_choropleth.py` | Une carte du monde, une couleur de remplissage par pays sur une seule échelle allant du pâle au bleu marine ; les pays sans donnée retombent sur un gris neutre. |
+| `choropleth` (une carte où chaque région est remplie d'une couleur qui code un nombre, la carte classique du « quel pays a le score le plus élevé ») | `scripts/make_choropleth.py` | Une carte du monde, une couleur de remplissage par pays sur une échelle allant du pâle au bleu marine, ou sur une échelle divergente quand les valeurs changent de signe ; les pays sans donnée retombent sur un gris neutre. |
 | `situation_map` | `scripts/make_situation_map.py` | Une planche en couches « qui contrôle quoi » pour n'importe quelle région : la carte se recentre automatiquement sur cette région via une projection conique conforme de Lambert (voir plus bas), trace de vrais contours nationaux depuis un fond de carte Natural Earth intégré, ombre le plancher océanique près des côtes, remplit les zones par catégorie en couleurs pastel, marque les points chauds, et ajoute une échelle en deux unités à la fois (kilomètres et miles). |
 | `density` (une carte d'accumulation : *où* les événements sont tombés, plutôt qu'une valeur par territoire) | `scripts/make_density.py` | Aucun trait de côte, aucune frontière, aucun graticule. Les événements ponctuels sont agrégés en un champ lumineux ; la terre apparaît parce que des événements y sont tombés et la mer reste sombre parce qu'aucun n'y est tombé, si bien qu'un lecteur reconnaît la forme sans qu'on la lui montre. Vectoriel, agrégé, un tracé par niveau. |
 
 ## Installation
 
 ```bash
-pip install sprezzature-maps                 # les trois générateurs
-pip install 'sprezzature-maps'      # plus l'API HTTP et le serveur MCP
+pip install sprezzature-maps
 ```
+
+Une seule ligne, et elle installe tout : les trois générateurs, la
+bibliothèque, la ligne de commande, l'API HTTP, le serveur MCP et le Studio.
+Il n'y a pas d'extra de fonctionnalité. `[dev]` porte l'outillage de test
+(pytest, ruff, mypy et le reste) et n'ajoute aucune fonctionnalité. Python 3.10
+à 3.13.
 
 `sprezzature-maps` dépend de `sprezzature-figures` pour les primitives de rendu
 que les deux produits partagent (intégrer les polices directement dans le
@@ -65,15 +70,17 @@ pip install -e ~/sprezzature-maps
 ## Utilisation
 
 ```python
-from sprezzature_maps import make_choropleth, make_situation_map
+from sprezzature_maps import make_choropleth, make_density, make_situation_map
 
 make_choropleth(out="world.svg")          # données de démonstration si rien n'est fourni
 make_situation_map(out="region.svg")      # configuration de démonstration intégrée
+make_density(out="where.svg")             # points de démonstration synthétiques
 ```
 
 ```bash
 make-map choropleth --out world.svg
 make-map situation_map --config my-region.yaml --out region.svg
+make-map density --points events.json --out where.svg
 ```
 
 Commencer une planche régionale tient en une commande, et ce qu'elle écrit
@@ -84,6 +91,111 @@ make-map situation-new --country Moldova --out moldova.yaml
 make-map situation_map --config moldova.yaml --out moldova.svg
 make-map audit moldova.svg          # propre, telle quelle
 ```
+
+Le format de sortie suit l'extension de `--out` : `.svg`, `.png`, `.jpg`,
+`.pdf` ou `.eps`.
+
+## Cinq façons d'y accéder
+
+Un seul moteur, joint de cinq façons. Les cinq s'installent avec le paquet, et
+chacune appelle les mêmes fonctions de la bibliothèque.
+
+### 1. La bibliothèque Python
+
+`import sprezzature_maps` exporte :
+
+| Nom | Ce qu'il fait |
+|---|---|
+| `make_choropleth`, `make_situation_map`, `make_density` | Rendent une planche et renvoient le chemin écrit |
+| `classification_methods()` | Les méthodes de seuils qu'accepte un choroplèthe : `quantile`, `equal`, `jenks`, `headtail` |
+| `acled_events`, `ucdp_events` | Transforment un export ACLED ou UCDP GED en fragment de configuration de carte de situation |
+| `article_sidecar(svg)` | Relit le titre, le texte alternatif, la description, les zones, les marqueurs et les renvois numérotés d'une planche finie |
+| `plate_provenance(svg)`, `replay_report(svg, cfg, files)` | Lisent le tampon de provenance d'une planche, et vérifient qu'une configuration et des fichiers sont bien ce qui l'a dessinée |
+| `KINDS`, `MapKind`, `kind`, `kind_names` | Le registre des trois types de carte que lit chaque surface |
+
+### 2. La ligne de commande
+
+Construite avec Click, une bibliothèque Python pour les outils en ligne de
+commande à sous-commandes. Elle répond à deux noms, `sprezzature-maps` et
+`make-map`, qui pointent vers la même fonction. Deux sous-commandes prennent
+aussi deux orthographes : `situation-map` ou `situation_map`, et
+`situation-new` ou `situation_new`. Jusqu'au 2026-10-25, il y avait deux
+commandes distinctes, une en argparse et un jumeau Click plus riche derrière
+un extra `[cli]`, d'où le compte différent des notes plus anciennes.
+
+| Sous-commande | Ce qu'elle fait | Options principales |
+|---|---|---|
+| `list` | Imprime les trois types de carte | aucune |
+| `choropleth` | Rend un choroplèthe du monde | `--data` (CSV, TSV, JSON ou JSONL ; `-` lit du CSV sur l'entrée standard), `--map id=COL --map value=COL`, `--classes 2..12`, `--method`, `--diverging/--no-diverging`, `--relief/--no-relief`, `--simplify`, `--title`, `--out` |
+| `situation-map` | Rend une carte de situation depuis une configuration YAML | `--config`, `--title`, `--out` |
+| `situation-new` | Écrit une configuration de départ pour une nouvelle planche de situation | `--country` ou `--bbox ouest,sud,est,nord`, `--title`, `--subtitle`, `--as-of AAAA-MM-JJ`, `--out` |
+| `density` | Rend une carte d'accumulation | `--points` (liste JSON de `[lon, lat]`), `--bins`, `--title`, `--out` |
+| `audit` | Vérifie qu'une planche finie dit comment elle a été faite | `TARGET` (un fichier ou un dossier), `--format text\|json` |
+| `improve` | Rend une carte, la fait lire par un modèle de vision, n'applique que les réparations sûres | `--kind`, `--data` / `--config` / `--points`, `--map`, `--out` (un `.png`), `--title`, `--rounds` |
+
+`improve` demande un modèle de vision local. Il ne change jamais de lui-même
+la méthode de classification, le nombre de classes ni le cadre : il les
+imprime pour qu'une personne décide.
+
+La bibliothèque et l'API HTTP prennent des options que la ligne de commande
+n'expose pas, comme `breaks`, `cities`, `rivers`, `width` et `height` pour un
+choroplèthe, ou `bbox`, `width` et `caption` pour une carte de densité.
+
+### 3. L'API HTTP, avec Docker et compose
+
+FastAPI, un cadriciel web Python, sert les générateurs en HTTP :
+
+```bash
+uvicorn sprezzature_maps.api:app --host 127.0.0.1 --port 8000
+```
+
+| Route | operation_id | Ce qu'elle fait |
+|---|---|---|
+| `GET /health` | `health` | Sonde de vie, renvoie `{"status": "ok"}` |
+| `GET /v1/kinds` | `list_kinds` | `["choropleth", "density", "situation_map"]` |
+| `POST /v1/choropleth` | `render_choropleth` | Rend un choroplèthe depuis des lignes JSON `{"id", "value"}`, ou la démonstration |
+| `POST /v1/situation-map` | `render_situation_map` | Rend une carte de situation depuis un objet de configuration, ou la démonstration Europe |
+| `POST /v1/density` | `render_density` | Rend une carte d'accumulation depuis des points `[lon, lat]`, ou la démonstration |
+| `GET /` | aucun | La page de galerie |
+| `GET /docs`, `GET /redoc` | aucun | La documentation interactive tirée du schéma OpenAPI |
+
+Chaque champ du corps est facultatif, et `format` choisit `svg`, `png`, `pdf`
+ou `jpg`. Le dépôt porte un `Dockerfile` et un `docker-compose.yml`.
+`docker compose up -d` construit l'image et sert la même application sur le
+port 8000, avec `./work` monté sur `/work` pour les fichiers qui entrent et
+qui sortent.
+
+### 4. Le serveur MCP
+
+MCP, le Model Context Protocol, est le standard qui permet à un assistant IA
+d'appeler un outil directement. `sprezzature-maps-mcp` sert l'application HTTP
+avec un point d'accès MCP monté sur `/mcp`, sur `127.0.0.1:8000` par défaut
+(`--host`, `--port`, ou les variables `SPREZZATURE_MAPS_HOST` et
+`SPREZZATURE_MAPS_PORT`). Ses outils sont les cinq routes de l'API ci-dessus,
+nommés par leur `operation_id` : `health`, `list_kinds`, `render_choropleth`,
+`render_situation_map` et `render_density`. L'audit, la configuration de
+départ et `improve` n'ont pas d'outil MCP, parce qu'ils travaillent sur des
+fichiers posés sur le disque de l'appelant. Le fichier compose lance
+`sprezzature_maps.api:app`, qui n'a pas de `/mcp` ; lancez
+`sprezzature-maps-mcp --host 0.0.0.0` dans le conteneur pour en avoir un.
+
+### 5. Le skill
+
+Le skill d'agent `sprezzature-maps` est livré avec le dépôt central
+[sprezzature](https://github.com/warith-harchaoui/sprezzature), pas avec
+celui-ci. Il oriente un agent vers les appels ci-dessus.
+[`TRIGGERS.md`](TRIGGERS.md) porte les règles de routage qu'il suit.
+
+### Et le Studio, pour une personne
+
+`sprezzature-maps-studio` ouvre un éditeur sur `http://127.0.0.1:8010/`
+(`--host`, `--port`, `--reload`). On y colle des lignes, une configuration ou
+des points, on rend, et on peut lancer la même boucle de relecture et de
+réparation que `improve`. C'est une page qu'une personne ouvre plutôt qu'une
+surface qu'un programme appelle. La raison de son existence à part du Studio
+de figures est expliquée [plus bas](#pourquoi-un-dépôt-séparé-plutôt-quun-type-de-graphique-dans-sprezzature-figures).
+
+## Recettes
 
 ### Ce qui a bougé entre deux dates
 
@@ -171,15 +283,22 @@ carton de localisation, du pied de planche et des clauses.
 make-map audit world.svg            # sort 1 au moindre constat
 ```
 
-Dix règles statiques sur une planche rendue, parce qu'une carte se relit comme
-un texte : a-t-elle **nommé sa méthode de classification** (les mêmes chiffres
-en quantiles et en seuils naturels racontent deux histoires différentes),
-porte-t-elle sa **provenance**, cache-t-elle des lignes qu'elle n'a pas su
-placer, a-t-elle un titre et des bornes étiquetées ? Une planche qui passe
-n'en devient pas bonne pour autant — elle devient discutable, ce qui est le
-but.
+Onze règles statiques sur une planche rendue, parce qu'une carte se relit
+comme un texte. Six valent pour toute planche. A-t-elle **nommé sa méthode de
+classification** (`method-unnamed` : les mêmes chiffres en quantiles et en
+seuils naturels racontent deux histoires différentes) ? Imprime-t-elle ses
+bornes de classes (`breaks-missing`) ? Nomme-t-elle le remplissage « sans
+donnée », pour que l'absence ne se lise pas comme une valeur basse
+(`no-data-hidden`) ? Dit-elle quand elle était vraie, ou qu'elle est
+schématique (`no-provenance`) ? A-t-elle un titre (`untitled`) et un nom
+accessible (`unlabelled`) ? Une planche qui passe n'en devient pas bonne pour
+autant. Elle devient discutable, ce qui est le but.
 
-Quatre des dix ne valent que pour une planche **régionale**, et viennent des
+Une septième, `text-unreadable`, vaut aussi pour toute planche et est décrite
+plus bas : elle mesure si chaque mot peut se lire.
+
+Quatre autres ne valent que pour une planche **régionale** (`no-locator`,
+`undated-control`, `evidence-unclassed`, `disputed-unflagged`), et viennent des
 normes contre lesquelles on la lit — les UNHCR Mapping Guidelines pour le
 mobilier, l'Institute for the Study of War pour le modèle de preuve.
 Porte-t-elle un **carton de localisation**, pour qu'un lecteur qui ignore où
@@ -192,6 +311,71 @@ son étendue lui impose, pour les trois frontières à phrase standard ? Le
 générateur fournit désormais la première et la dernière tout seul ; les deux
 autres sont des phrases que seul un auteur peut écrire.
 
+### Depuis un jeu de données de conflit, en un appel
+
+Les deux jeux de données sur lesquels repose la recherche sur la paix et les
+conflits, [ACLED](https://acleddata.com/methodology/acled-codebook) et
+l'[UCDP Georeferenced Event Dataset](https://ucdp.uu.se/downloads/),
+consignent chacun, à côté de chaque coordonnée, **à quel point cette
+coordonnée est connue** : le `geo_precision` 1 à 3 d'ACLED, le `where_prec`
+1 à 7 d'UCDP. Le 3 d'ACLED signifie une capitale provinciale qui tient lieu de
+province entière ; le 6 d'UCDP signifie que seul le pays est connu. Les outils
+qui tracent ces données les dessinent toutes comme le même point, ce qui
+affirme un coin de rue que la source n'a jamais donné, une fois par ligne.
+
+Les marqueurs de ce générateur font déjà la distinction : un disque plein
+cerclé pour un lieu nommé, un anneau creux pour un lieu approximatif, un
+anneau brisé pour une région épinglée sur sa capitale, un rayon tracé quand le
+jeu de données en énonce un. Les chargeurs sont l'étape entre le fichier et la
+marque :
+
+```python
+from sprezzature_maps import acled_events, make_situation_map
+
+cfg = {"title": "Soudan : violence politique enregistrée, 2024"}
+cfg.update(acled_events("sudan-2024.csv", derive_region=True))
+make_situation_map(config=cfg, out="sudan.svg")
+```
+
+Une planche est aussi un document navigable : ses polygones de revendication,
+ses marques d'événement et ses commandes de légende sont atteignables au
+clavier, et chacun se nomme auprès d'un lecteur d'écran, y compris **à quel
+point la position d'une marque est connue**, pour qu'un lecteur qui ne voit
+pas un anneau brisé apprenne en mots ce qu'il signifie. Avec
+`print_width: "90mm"`, le fichier arrive à la largeur de colonne d'une revue,
+et la planche dit en points la taille à laquelle sa plus petite étiquette
+s'imprimera vraiment.
+
+`ucdp_events` fait de même pour GED, ramène ses sept degrés de précision aux
+trois dans une table écrite en clair dans `scripts/_conflict.py`, et **refuse
+de placer les lignes connues seulement au niveau du pays** : il les compte sur
+la ligne de méthode de la planche plutôt que de les jeter en silence. Voir
+[`EXAMPLES.md`](EXAMPLES.md#conflict-event-data-acled-and-ucdp-ged).
+
+### Un panneau par fenêtre de temps
+
+Une planche est un instantané ; l'essentiel de ce que la recherche dit d'un
+conflit est un changement. `small_multiples` découpe la même configuration en
+un panneau par année, trimestre, mois, semaine ou jour :
+
+```python
+cfg = {"title": "Violence politique enregistrée, par trimestre"}
+cfg.update(acled_events("export.csv", derive_region=True, size_by="fatalities"))
+cfg["small_multiples"] = {"by": "quarter", "columns": 4}
+make_situation_map(config=cfg, out="by-quarter.svg")
+```
+
+Chaque panneau vient de cette seule configuration, si bien que l'étendue, la
+projection et l'échelle des marqueurs ne peuvent pas diverger d'une image à
+l'autre comme lorsqu'on exporte une planche par fenêtre, et la feuille dessine
+une seule fois le titre, la légende, la règle et les crédits. Deux règles ne
+plient pas. **Une fenêtre vide reste un panneau** : la supprimer referme le
+trou, et les panneaux voisins se lisent alors comme consécutifs. **Une marque
+n'est placée que là où son propre `time_precision` le permet** : une ligne
+datée *mois de mars* va dans un panneau de mars et dans aucun panneau de
+semaine, et ce qui ne tient dans aucune fenêtre est compté sur la feuille
+plutôt que rangé quand même.
+
 Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira.
 Un choroplèthe demande environ une seconde. Une carte de situation dépend de
 la quantité de monde dans le cadre : la démo Europe embarquée demande une
@@ -202,6 +386,49 @@ et aux imports — payés une fois par processus, donc un serveur rend sa
 deuxième planche plus vite que la première — et le reste est de la géométrie
 réelle. `basemap: {relief: false}` supprime le coût du relief si vous n'en
 avez pas besoin.
+
+### Prouver quelles entrées ont dessiné une planche
+
+Une planche imprime déjà `method`, `source` et `as_of` : ce dont elle a été
+tirée, en prose, pour un lecteur. Rien de cela ne répond à la question qu'une
+relecture pose vraiment à une figure publiée : *est-ce l'image que ces entrées
+produisent ?* Le dessin est fonction de trois choses, le code, la
+configuration et le fichier qu'un chargeur a lu en chemin. `provenance` prend
+donc l'empreinte de chacune dans `<metadata>`, qui ne dessine aucun pixel :
+
+```python
+cfg = {"title": "Violence politique enregistrée", "provenance": True}
+cfg.update(acled_events("export.csv", derive_region=True))
+make_situation_map(config=cfg, out="plate.svg")
+```
+
+```python
+from sprezzature_maps import plate_provenance, replay_report
+
+plate_provenance(svg)   # {"version", "config_sha256", "inputs": [...]}
+
+report = replay_report(svg, cfg, ["export.csv"])
+report["replays"]       # True seulement si tout ce que le tampon nomme correspond
+report["differences"]   # ["export.csv differs: 3f2a91c0d4e8 on the plate, …"]
+```
+
+Trois choix, chacun l'inverse de l'évidence. **Le tampon consigne des
+empreintes, pas les entrées** : une configuration `areas_of_control` porte des
+coordonnées et une `source` porte un chemin qui nomme la machine de quelqu'un,
+donc embarquer l'une ou l'autre la publierait, alors qu'une empreinte ne
+publie rien et laisse quiconque détient les entrées prouver la
+correspondance. **Il ne porte aucune horloge**, puisqu'une heure de rendu
+ferait différer deux rendus des mêmes entrées et détruirait la propriété que
+le champ existe pour consigner. Et **il est désactivé par défaut**, parce
+qu'il porte la version du paquet : l'activer pour tout le monde changerait
+chaque planche versionnée à chaque nouvelle version.
+
+Une entrée tamponnée que personne ne fournit revient sous `unchecked`, pas
+comme une correspondance : la planche est alors non réfutée, ce qui n'est pas
+la même chose que reproduite. Les chargeurs de conflit remplissent la liste
+des entrées pour vous : au moment où `make_situation_map` voit la
+configuration, les lignes sont en place et le CSV a disparu, et le chargeur
+est le seul point de la chaîne qui sait encore de quel export il s'agissait.
 
 Voir [`EXAMPLES.md`](EXAMPLES.md) pour davantage de recettes, y compris
 l'API HTTP. Voir [`doc/CARTOGRAPHY.tex`](doc/CARTOGRAPHY.tex) pour la
@@ -252,20 +479,25 @@ Publié sur PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps
 avec une CI au vert (lint, tests et doctests à chaque push et pull
 request vers `main` ; voir `.github/workflows/ci.yml`) : `pytest` passe,
 les trois types de carte se rendent depuis leurs données de
-démonstration intégrées, et les deux lignes de commande produisent de
-vrais fichiers SVG. Encore jeune malgré tout : l'API n'est pas figée, et
-il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
+démonstration intégrées, et la ligne de commande produit de vrais fichiers
+SVG. Il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
 LISEZMOI en tient lieu).
 
-Cinq cartes de situation complètes vivent dans
-`scripts/build_situation_examples.py`, régénérables par
-`python scripts/build_situation_examples.py` : l'Ukraine, la Syrie et la
-Libye comme instantanés historiques, le Soudan et l'est de la RDC
-d'après des sources ouvertes jusqu'à fin septembre 2026. Chacune est
-schématique par construction, le dit sur la planche, et garde ses lignes
-de revendication en Python lisible plutôt que dans un fichier de données
-opaque : un lecteur en désaccord voit exactement quelles coordonnées
-contester.
+Quinze cartes de situation complètes vivent dans
+`scripts/build_situation_examples.py`, régénérables dans
+`assets/situation-maps/` par `python scripts/build_situation_examples.py` (ou
+une seule par son nom, par exemple
+`python scripts/build_situation_examples.py sudan`). Six sont thématiques :
+l'Ukraine, le bas Dniepr (la planche qui accompagne un article, avec ses
+repères numérotés), la Syrie et la Libye comme instantanés historiques, le
+Soudan et l'est de la RDC d'après des sources ouvertes jusqu'à fin septembre
+2026. Chacune de celles-ci est schématique par construction, le dit sur la
+planche, et garde ses lignes de revendication en Python lisible plutôt que
+dans un fichier de données opaque : un lecteur en désaccord voit exactement
+quelles coordonnées contester. Les neuf autres sont des planches de référence
+sans couche thématique : la Suisse, la péninsule Ibérique, l'Europe de
+l'Ouest, l'Himalaya, les Caraïbes, les Andes, le Sahel, le détroit d'Ormuz, et
+la mer de Chine méridionale, dessinée sans aucune ligne de revendication.
 
 `choropleth` dessine avec : une projection Equal Earth (une projection
 qui conserve la surface relative réelle de chaque pays, si bien qu'une
@@ -556,22 +788,8 @@ attributs `data-*` (`data-confidence`, `data-precision`,
 `data-area-share`), pour que l'évaluation se relise hors du fichier fini
 au lieu de seulement se regarder.
 
-La bibliothèque se joint de cinq façons, et les cinq s'installent avec
-le paquet : par import Python ; par une
-ligne de commande Click, installée par défaut, sous deux orthographes —
-`make-map` et `sprezzature-maps` résolvent vers le même appelable, donc
-aucune n'atteint ce que l'autre n'atteint pas (c'étaient deux commandes
-jusqu'au 2026-10-25, une argparse et un jumeau Click plus riche derrière
-un extra `[cli]`, d'où le compte différent des notes plus anciennes) ;
-par une **API HTTP**, `uvicorn sprezzature_maps.api:app`, qui publie un
-schéma OpenAPI — une description de chaque point d'entrée lisible par une
-machine, permettant à d'autres outils de générer automatiquement de la
-documentation ou du code client — et une petite page de galerie à sa
-racine ; par une **surface MCP** (Model Context Protocol, le standard
-qui permet à un assistant IA d'appeler un outil directement),
-`sprezzature-maps-mcp` ; et par le **Studio**,
-`sprezzature-maps-studio`, qui est celui qu'une personne ouvre plutôt
-qu'un programme appelle.
+Les cinq façons d'atteindre tout cela sont décrites sous
+[Cinq façons d'y accéder](#cinq-façons-dy-accéder).
 
 ## Feuille de route
 

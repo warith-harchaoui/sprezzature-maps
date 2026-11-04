@@ -12,18 +12,22 @@ pip install -e ".[dev]"
 ```
 
 `sprezzature-maps` depends on `sprezzature-figures` for shared rendering
-primitives; neither package is on PyPI yet, so both are installed
-editable from a local checkout (see README.md § Install).
+primitives. Both are on PyPI, so `pip install -e ".[dev]"` alone resolves
+figures from there. Install figures editable first, as above, only when you
+work on both at once (see README.md § Install). `[dev]` is the test and lint
+toolchain; there are no feature extras.
 
 ## Tests
 
 ```bash
-python -m pytest -q
+python -m pytest -q            # what CI runs adds -n auto (pytest-xdist)
 ```
 
-Tests marked `@pytest.mark.slow` (network- or rasterisation-heavy) are
-excluded by default (`pyproject.toml`'s `addopts`); run them explicitly
-with `pytest -m slow` when touching relief sampling or PNG/PDF export.
+Every test runs by default, including those marked `@pytest.mark.slow`
+(network- or rasterisation-heavy): `pyproject.toml`'s `addopts` deselects
+nothing. The marker exists so that `pytest -m slow` can select them when you
+touch relief sampling or PNG/PDF export. The PDF/EPS export tests skip
+without `rsvg-convert` (librsvg) and `pdftoppm` (poppler); CI installs both.
 
 ## Doctests
 
@@ -34,19 +38,24 @@ carries a doctest. Run one file's doctests directly:
 python -m doctest scripts/_geo_colors.py
 ```
 
-The `sprezzature_maps/` package modules use relative imports, so their
-doctests need to run through an actual import instead of a bare file
-path:
+CI runs every file under `scripts/` this way. The `sprezzature_maps/`
+package modules use relative imports, so their doctests run through pytest,
+which imports them as package modules:
 
 ```bash
-python3 -c "import doctest, sprezzature_maps.api as m; doctest.testmod(m)"
+python -m pytest -q --doctest-modules sprezzature_maps
 ```
 
 ## Lint
 
 ```bash
 ruff check sprezzature_maps scripts tests
+mypy sprezzature_maps
+mypy scripts
 ```
+
+CI runs all three, and so does the pre-push hook in `.githooks/pre-push`
+(`git config core.hooksPath .githooks` once per clone).
 
 ## Adding a boundary source
 
@@ -89,7 +98,10 @@ methodology for the full process.
 ## Releases
 
 Releases live in `CHANGELOG.md`, tagged `vX.Y.Z` in git, and published
-as GitHub releases.
+to PyPI as [`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/).
+`tests/test_release_consistency.py` checks that the version in
+`pyproject.toml`, `sprezzature_maps.__version__` and the top release heading
+of `CHANGELOG.md` agree.
 
 ## Authorship
 

@@ -9,12 +9,12 @@ uses it to expose :func:`sprezzature_maps.make_choropleth`,
 :func:`sprezzature_maps.make_density` over HTTP, so any map
 type can be rendered from any programming language that can make an HTTP
 request, not only from Python. These are the same shared functions the
-``make-map`` command line and the richer ``sprezzature-maps`` Click
-command line already call: one real implementation, several thin ways of
-reaching it, never a second copy of the rendering logic (see CODING.md
-§19.1). This module also serves the small GUI gallery page as one more
-plain HTTP route rather than as a separate application, since that page
-is really just another caller of these same two render functions.
+Click command line (``sprezzature-maps``, also spelled ``make-map``)
+already calls: one real implementation, several thin ways of reaching it,
+never a second copy of the rendering logic (see CODING.md §19.1). This
+module also serves the small GUI gallery page as one more plain HTTP route
+rather than as a separate application, since that page is really just
+another caller of these same three render functions.
 
 What ships here
 ----------------
@@ -403,8 +403,9 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
 
     This is the tool for "map this by country", "colour the regions by
     value", "a heat map of Europe", « une carte par département ». Real
-    coastlines and a real projection (Natural Earth, auto-centred Lambert
-    conformal conic) -- not a schematic grid.
+    coastlines (Natural Earth 1:50m) on a real projection (Equal Earth, which
+    keeps every country's relative area) -- not a schematic grid. Rows are
+    keyed on ISO-3166-1 numeric country codes.
 
     Every field is optional: send none and you get the demo map, which is the
     quick way to show someone the format before committing data to it.
