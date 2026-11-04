@@ -6,6 +6,11 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [1.1.0] — 2026-11-04: click everywhere, and the documentation says what the code does
 
+**The wheel ships the editor.** `sprezzature_maps.editor` and its two
+sub-packages were missing from the explicit `[tool.setuptools] packages` list,
+so the installed `sprezzature-maps` failed on its first import. Only the
+release's fresh venv saw it; a test now asks that every sub-package be listed.
+
 ### Changed
 
 - **Click is the only command-line parser in the package.** Four argparse
