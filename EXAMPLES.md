@@ -187,6 +187,7 @@ whole onboarding is one line:
 docker compose up -d
 curl -s localhost:8000/health
 # {"status":"ok"}
+# The MCP endpoint answers on the same port: http://localhost:8000/mcp
 
 # The command line, inside the same image. ./work is mounted at /work.
 docker compose run --rm api make-map choropleth --out /work/world.svg
@@ -250,9 +251,10 @@ sprezzature-maps-mcp --host 0.0.0.0 --port 9000
 # alongside the regular HTTP routes and the GUI at http://localhost:8000/
 ```
 
-`uvicorn sprezzature_maps.api:app` and the Docker image serve the HTTP routes
-without the `/mcp` endpoint; the endpoint is mounted by `sprezzature-maps-mcp`
-(or `uvicorn sprezzature_maps.mcp:app`).
+`uvicorn sprezzature_maps.api:app` serves the HTTP routes without the `/mcp`
+endpoint; the endpoint is mounted by `sprezzature-maps-mcp` (or
+`uvicorn sprezzature_maps.mcp:app`). The Docker image and `docker compose up`
+run `sprezzature-maps-mcp` on `0.0.0.0:8000`, so the container serves both.
 
 Point an MCP client's server configuration at that URL. The tool
 descriptions it advertises come straight from the FastAPI (the Python

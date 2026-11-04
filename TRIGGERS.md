@@ -110,9 +110,9 @@ the FastAPI `operation_id` of each route.
 | Read a plate back | `article_sidecar`, `plate_provenance`, `replay_report` | none | none | none |
 
 The servers: `sprezzature-maps-mcp` serves the HTTP routes with the MCP
-endpoint at `/mcp` (default `127.0.0.1:8000`). `uvicorn
-sprezzature_maps.api:app`, the Docker image and `docker compose up` serve the
-HTTP routes without `/mcp`.
+endpoint at `/mcp` (default `127.0.0.1:8000`); the Docker image and
+`docker compose up` run it on `0.0.0.0:8000`, so one container answers both.
+`uvicorn sprezzature_maps.api:app` serves the HTTP routes without `/mcp`.
 
 A conflict export has no CLI of its own: the loaders are a Python call that
 builds the config the situation map then renders.

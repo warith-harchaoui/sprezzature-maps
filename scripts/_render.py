@@ -15,8 +15,8 @@ Only the parts that really were identical, byte for byte, across every
 generator are pulled out here: the path calculation, the
 create-folder/write-file/print sequence, and, for the handful of
 generators that expose a command-line ``--out`` flag, the small amount of
-argparse (Python's standard command-line-argument parser) wiring needed
-for that flag. Each generator's own ``build_svg`` function, the part that
+click (the command-line library the whole suite uses) wiring needed for
+that flag. Each generator's own ``build_svg`` function, the part that
 actually draws the figure, stays in its own file; this module never
 touches the SVG text itself, so adopting it changes nothing about what
 gets rendered. A few generators have a non-standard ending of their own
@@ -25,10 +25,10 @@ matching PNG image); those still call :func:`write_svg` and
 :func:`svg_example_path` for the parts they do share, and keep their
 extra step written out inline.
 
-This module imports only from Python's standard library (``argparse`` and
-``pathlib``, nothing that needs installing), so it works wherever a
-generator already runs, without needing the heavier data-visualization
-dependencies some other parts of the project use. The ``wrote <path>``
+This module imports only Python's standard library and ``click``, a base
+dependency of the package, so it works wherever a generator already runs,
+without needing the heavier data-visualization dependencies some other
+parts of the project use. The ``wrote <path>``
 line is a deliberate message meant for the person running the command
 (these scripts are meant to be run by hand from a terminal), not an
 internal diagnostic log, which is why it stays a plain ``print`` rather
@@ -46,12 +46,13 @@ Author
 
 from __future__ import annotations
 
-import argparse
 import inspect
 import os
 import re
 from collections.abc import Callable
 from pathlib import Path
+
+import click
 
 #: The root ``width``/``height`` of a plate sized for a printed page.
 #:
@@ -430,7 +431,7 @@ def render_cli(
 ) -> None:
     """Run the standard ``--out`` command line for an SVG generator.
 
-    Wraps the argparse boilerplate the ``--out``-exposing generators shared:
+    Wraps the click boilerplate the ``--out``-exposing generators shared:
     a single optional ``--out`` argument that defaults to the canonical
     :func:`svg_example_path`, followed by a :func:`write_svg` of
     ``build_svg()``'s result. The default path and the ``wrote <path>`` output
@@ -456,39 +457,63 @@ def render_cli(
         The SVG is written as a side effect; nothing is returned.
     """
     default_out = svg_example_path(script_file, figure_id)
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
+
+    @click.command(
+        Path(script_file).name,
+        help=description,
+        context_settings={"help_option_names": ["-h", "--help"]},
+    )
+    @click.option(
         "--out",
-        type=Path,
+        type=click.Path(path_type=Path),
         default=default_out,
         help=f"output SVG path (default: the skill's svg-examples/{figure_id}.svg)",
     )
-    parser.add_argument(
+    @click.option(
         "--mode",
-        choices=("self-contained", "external", "static"),
+        type=click.Choice(["self-contained", "external", "static"]),
         default="self-contained",
         help="interactivity mode of the emitted SVG (default: self-contained)",
     )
-    parser.add_argument(
+    @click.option(
         "--accessibility",
-        choices=(
-            "universal",
-            "high-contrast",
-            "monochrome",
-            "deuteranopia",
-            "protanopia",
-            "tritanopia",
+        type=click.Choice(
+            [
+                "universal",
+                "high-contrast",
+                "monochrome",
+                "deuteranopia",
+                "protanopia",
+                "tritanopia",
+            ]
         ),
         default="universal",
         help="palette accessibility level (default: universal, the CVD-safe standard)",
     )
-    parser.add_argument(
+    @click.option(
         "--language",
-        choices=("en", "fr"),
+        type=click.Choice(["en", "fr"]),
         default="en",
         help="chrome-text language for title/subtitle/legend (default: en).",
     )
-    args = parser.parse_args()
+    def command(out: Path, mode: str, accessibility: str, language: str) -> None:
+        """Write the figure; the help text is ``help=`` above."""
+        _write_figure(build_svg, out, mode=mode, accessibility=accessibility, language=language)
+
+    # Standalone mode: a usage error prints and exits 2, `--help` exits 0,
+    # the same two exits the argparse parser this replaced made.
+    command.main(prog_name=Path(script_file).name)
+
+
+def _write_figure(
+    build_svg: Callable[..., str],
+    out: Path,
+    *,
+    mode: str,
+    accessibility: str,
+    language: str,
+) -> None:
+    """Build the SVG with the options ``build_svg`` accepts, then write it."""
     # Build lazily (after parsing) so ``--help`` never runs the figure code.
     # Pass ``mode`` / ``accessibility`` / ``language`` only to generators
     # whose ``build_svg`` accepts them, so this helper keeps working for
@@ -496,11 +521,11 @@ def render_cli(
     params = inspect.signature(build_svg).parameters
     kwargs = {}
     if "mode" in params:
-        kwargs["mode"] = args.mode
+        kwargs["mode"] = mode
     if "accessibility" in params:
-        kwargs["accessibility"] = args.accessibility
+        kwargs["accessibility"] = accessibility
     if "language" in params:
-        kwargs["language"] = args.language
+        kwargs["language"] = language
 
     # Asking for something this generator cannot do is an error, not a
     # shrug. Passing an option only to the generators that accept it keeps
@@ -512,18 +537,20 @@ def render_cli(
     # and the file came out in English. A reader checks the help, runs the
     # command, gets a plausible SVG, and ships an English map into a French
     # page. Nothing anywhere said no.
-    for name, asked, default in (("mode", args.mode, "self-contained"),
-                                 ("accessibility", args.accessibility, "universal"),
-                                 ("language", args.language, "en")):
+    for name, asked, default in (
+        ("mode", mode, "self-contained"),
+        ("accessibility", accessibility, "universal"),
+        ("language", language, "en"),
+    ):
         if name not in params and asked != default:
-            parser.error(
+            raise click.UsageError(
                 f"--{name} {asked!r} was asked for, and this generator does "
                 f"not accept it: build_svg() takes "
                 f"({', '.join(params) or 'no options'}). Rerun without it, "
                 f"or teach build_svg the argument."
             )
 
-    write_svg(args.out, build_svg(**kwargs))
+    write_svg(out, build_svg(**kwargs))
 
 
 if __name__ == "__main__":  # pragma: no cover - smoke check, not a generator

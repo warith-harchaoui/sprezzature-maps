@@ -299,7 +299,6 @@ and plain dict-shaped records in preference to purpose-built classes.
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import csv
 import importlib.util
@@ -315,6 +314,7 @@ from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
+import click
 import numpy as np
 from _assets import figures_scripts_dir, geo_dir
 from _classify import METHOD_LABELS, class_index, classify
@@ -9315,29 +9315,48 @@ def make_situation_map(
     return write_svg(dest, svg)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Return the argparse parser for the generator."""
-    p = argparse.ArgumentParser(description="Generate a layered situation map for any region.")
-    p.add_argument("--config", required=True, help="YAML config describing the map.")
-    p.add_argument("--out", required=True, help="Output SVG path.")
-    p.add_argument(
-        "--render",
-        action="store_true",
-        help="Also rasterise to PNG next to --out via render_diagram.py.",
-    )
-    return p
+@click.command(
+    "make_situation_map.py",
+    help="Generate a layered situation map for any region.",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+@click.option("--config", required=True, help="YAML config describing the map.")
+@click.option("--out", required=True, help="Output SVG path.")
+@click.option(
+    "--render",
+    is_flag=True,
+    help="Also rasterise to PNG next to --out.",
+)
+def _command(config: str, out: str, render: bool) -> int:
+    """Run the generator; the help text is ``help=`` above."""
+    return _generate(config, out, render)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: read config, build the SVG, optionally rasterise."""
-    args = build_parser().parse_args(argv)
-    cfg = yaml.safe_load(Path(args.config).read_text())
-    cfg["_config_dir"] = str(Path(args.config).resolve().parent)
+    """CLI entry point: read config, build the SVG, optionally rasterise.
+
+    Click runs outside its standalone mode so the exit code comes back as a
+    value. A usage error prints and exits 2, ``--help`` exits 0.
+    """
+    try:
+        result = _command.main(args=argv, standalone_mode=False)
+    except click.exceptions.UsageError as exc:
+        exc.show()
+        raise SystemExit(2) from None
+    except click.exceptions.Exit as exc:
+        raise SystemExit(exc.exit_code) from None
+    return result if isinstance(result, int) else 0
+
+
+def _generate(config: str, out_path: str, render: bool) -> int:
+    """Read ``config``, write the SVG to ``out_path``, rasterise on ``render``."""
+    cfg = yaml.safe_load(Path(config).read_text())
+    cfg["_config_dir"] = str(Path(config).resolve().parent)
     svg = build_map(cfg)
-    out = Path(args.out)
+    out = Path(out_path)
     out.write_text(svg)
     print(f"wrote {out}  ({out.stat().st_size // 1024} KB)")
-    if args.render:
+    if render:
         # Was: shell out to render_diagram.py, a script that lives in
         # sprezzature-figures and has never existed in this repository. With
         # ``check=False`` the failure was swallowed and the line below printed

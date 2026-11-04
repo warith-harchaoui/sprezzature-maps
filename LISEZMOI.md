@@ -163,7 +163,8 @@ Chaque champ du corps est facultatif, et `format` choisit `svg`, `png`, `pdf`
 ou `jpg`. Le dépôt porte un `Dockerfile` et un `docker-compose.yml`.
 `docker compose up -d` construit l'image et sert la même application sur le
 port 8000, avec `./work` monté sur `/work` pour les fichiers qui entrent et
-qui sortent.
+qui sortent. Le conteneur lance `sprezzature-maps-mcp` : le même port répond
+donc aussi au point d'accès MCP sur `/mcp` (section 4).
 
 ### 4. Le serveur MCP
 
@@ -175,9 +176,9 @@ avec un point d'accès MCP monté sur `/mcp`, sur `127.0.0.1:8000` par défaut
 nommés par leur `operation_id` : `health`, `list_kinds`, `render_choropleth`,
 `render_situation_map` et `render_density`. L'audit, la configuration de
 départ et `improve` n'ont pas d'outil MCP, parce qu'ils travaillent sur des
-fichiers posés sur le disque de l'appelant. Le fichier compose lance
-`sprezzature_maps.api:app`, qui n'a pas de `/mcp` ; lancez
-`sprezzature-maps-mcp --host 0.0.0.0` dans le conteneur pour en avoir un.
+fichiers posés sur le disque de l'appelant. L'image Docker et le fichier
+compose lancent ce serveur sur `0.0.0.0:8000` : un seul conteneur sert à la
+fois les routes `/v1/...` et `/mcp`.
 
 ### 5. Le skill
 

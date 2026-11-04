@@ -158,7 +158,9 @@ uvicorn sprezzature_maps.api:app --host 127.0.0.1 --port 8000
 Every body field is optional, and `format` picks `svg`, `png`, `pdf` or
 `jpg`. The repository carries a `Dockerfile` and a `docker-compose.yml`.
 `docker compose up -d` builds the image and serves the same app on port
-8000, with `./work` mounted at `/work` for files going in and out.
+8000, with `./work` mounted at `/work` for files going in and out. The
+container runs `sprezzature-maps-mcp`, so the same port also answers the
+MCP endpoint at `/mcp` (section 4).
 
 ### 4. The MCP server
 
@@ -170,9 +172,8 @@ variables). Its tools are the five API routes above, named by their
 `operation_id`: `health`, `list_kinds`, `render_choropleth`,
 `render_situation_map` and `render_density`. The audit, the starter config
 and `improve` have no MCP tool, because they work on files on the caller's
-disk. The compose file runs `sprezzature_maps.api:app`, which has no
-`/mcp`; run `sprezzature-maps-mcp --host 0.0.0.0` in the container to get
-one.
+disk. The Docker image and the compose file run this server on `0.0.0.0:8000`,
+so one container serves both the `/v1/...` routes and `/mcp`.
 
 ### 5. The skill
 
