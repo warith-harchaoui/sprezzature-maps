@@ -4,8 +4,12 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.1.3] — 2026-11-05
+
 ### Docs
 
+- README: the 126 chart kinds it cites are the count at the split from
+  sprezzature-figures, which draws 167 today.
 - The locator inset was described as a fifth of the plate's width (README,
   LISEZMOI); it has been 15% since it became a default.
 - `EXAMPLES.md`, `LANDSCAPE.md`, `PAYSAGE.md` and the docstrings of
