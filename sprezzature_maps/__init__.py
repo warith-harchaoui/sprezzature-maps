@@ -29,7 +29,7 @@ from typing import Any
 # plain dataclass registry and costs nothing at import time.
 from sprezzature_maps.kinds import KINDS, MapKind, kind, kind_names
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 # In the source tree the generators live in scripts/; once installed they
 # ship (collision-free) as the sibling package sprezzature_maps_scripts/,
