@@ -46,9 +46,9 @@ coastlines.
 
 - **A journal wants a vector figure and will reject a raster.** The output is
   real SVG, exports to PDF and EPS as vector, and carries its smallest type
-  size as a checked property: the bundled Ukraine plate is 1768 units wide and
-  its smallest label is 10.8 of them, which in a 90 mm column sets at 1.6 pt,
-  a third of the floor any major publisher accepts. The package reports that
+  size as a checked property: the bundled Ukraine plate is 1364 units wide and
+  its smallest label is 10.8 of them, which in a 90 mm column sets at 2.0 pt,
+  a third of Elsevier's 6 pt minimum and under every major publisher's floor. The package reports that
   rather than letting it through, because a vector file always renders.
 - **The classification has to be defensible.** Quantiles, equal intervals,
   natural breaks (FISHER and JENKS) and head/tail breaks (JIANG, 2013) are all

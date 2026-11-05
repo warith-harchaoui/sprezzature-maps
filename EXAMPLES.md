@@ -360,15 +360,15 @@ the drawing changes: the viewBox and every path are identical, byte for byte.
 What the key is really for is the second half:
 
 ```text
-RuntimeWarning: at 90 mm this plate's smallest label is 1.6 pt (below every
+RuntimeWarning: at 90 mm this plate's smallest label is 2.0 pt (below every
 major publisher's floor; Nature and Science ask 5 to 7 pt, Elsevier 6). The
-label is 10.8 units on a 1768-unit canvas; designing the same plate at
+label is 10.8 units on a 1364-unit canvas; designing the same plate at
 canvas_width around 551 would print it at 5 pt.
 ```
 
 That is the bundled Ukraine plate. It is designed for a screen, and at a
-journal column its labels set at a third of the smallest type any publisher
-accepts — which no rendering shows you, because a vector file scales silently.
+journal column its labels set at a third of Elsevier's 6 pt minimum, and
+below the floor of every major publisher — which no rendering shows you, because a vector file scales silently.
 A warning rather than a refusal: a poster is not a journal page.
 
 `mm`, `cm`, `in` and `pt` are understood. A bare number with no unit is

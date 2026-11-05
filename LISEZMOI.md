@@ -722,8 +722,8 @@ planches a passé 2022 à les abandonner.
 perspective, zoomer pour le détail » est la règle unique de la carte de
 localisation, et une planche qui ne fait que zoomer n'en honore que la
 moitié. Une planche régionale trace donc un carton de localisation par
-défaut — la zone cartographiée en rouge sur une vue plus large, dans un
-cinquième de la largeur. Une planche déjà assez large pour se situer
+défaut — la zone cartographiée en rouge sur une vue plus large, sur
+15 % de la largeur. Une planche déjà assez large pour se situer
 elle-même n'en reçoit pas, et on peut toujours refuser :
 
 ```yaml

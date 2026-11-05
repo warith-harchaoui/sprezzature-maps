@@ -4,6 +4,16 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Docs
+
+- The locator inset was described as a fifth of the plate's width (README,
+  LISEZMOI); it has been 15% since it became a default.
+- `EXAMPLES.md`, `LANDSCAPE.md`, `PAYSAGE.md` and the docstrings of
+  `_warn_if_unprintable` and `tests/test_a_plate_knows_its_printed_size.py`
+  quoted the Ukraine plate at 1,768 units and 1.6 pt at 90 mm. The plate is
+  1,364 units wide today and the warning it prints says 2.0 pt; the text now
+  quotes what the code prints.
+
 ## [1.1.2] — 2026-11-05
 
 ### Fixed
