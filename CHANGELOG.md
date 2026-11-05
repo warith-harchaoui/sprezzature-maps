@@ -4,6 +4,8 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-11-05
+
 ### Fixed
 
 - **`no-data-hidden` reads markup, not prose.** The rule fired whenever the
