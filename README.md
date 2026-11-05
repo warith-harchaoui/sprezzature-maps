@@ -17,7 +17,7 @@ Part of the [sprezzature](https://sprezzature.ai/) suite.
 
 ## How it works
 
-![Flow diagram. At the top, a value per region, point events or a plate configuration feed two lanes. The left lane draws: it centres and projects on a real base map, classifies the values and names the method used, and draws one of three plates, returning an SVG with a scale bar in two units. The right lane audits: six static rules read the rendered plate back and ask whether it names its classification, carries its scale and credits its sources. Both meet in one outcome, a plate a reader can argue with.](https://raw.githubusercontent.com/warith-harchaoui/sprezzature-maps/main/assets/how-it-works.svg)
+![Flow diagram. At the top, a value per region, point events or a plate configuration feed two lanes. The left lane draws: it centres and projects on a real base map, classifies the values and names the method used, and draws one of three plates, returning an SVG, with a scale bar in two units on a regional plate. The right lane audits: eleven static rules read the rendered plate back and ask whether it names its classification, prints its breaks, says when it was true and can be read word by word. Both meet in one outcome, a plate a reader can argue with.](https://raw.githubusercontent.com/warith-harchaoui/sprezzature-maps/main/assets/how-it-works.svg)
 
 ## What's here
 
@@ -89,7 +89,7 @@ make-map audit moldova.svg          # clean, as written
 ```
 
 The output format follows the extension of `--out`: `.svg`, `.png`, `.jpg`,
-`.pdf` or `.eps`.
+`.pdf`, `.eps`, or `.html` (the SVG inside a minimal page).
 
 ## Five ways in
 
@@ -449,8 +449,9 @@ is importable and testable without a server.
 ## Status
 
 Published on PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
-with a green CI workflow (lint, tests, and doctests on every push and pull
-request to `main`; see `.github/workflows/ci.yml`): `pytest` passes, all
+with a green CI workflow (lint, type checks, tests and doctests on every
+push and pull request to `main`, plus an install-and-import check on Python
+3.10; see `.github/workflows/ci.yml`): `pytest` passes, all
 three kinds render from their bundled demo data, and the command line
 renders them to real SVG files. There is no FIGURES.md-style catalogue page
 (with three kinds, this README is the catalogue).

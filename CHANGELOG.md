@@ -4,6 +4,29 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Docs
+
+- **The how-it-works figure counts eleven audit rules, not six.** Its audit
+  lane also said the audit checks the scale bar and the data credits; no rule
+  does. It now names what the rules check (the method and its breaks, the
+  missing values, the date, how sure a control map is), says the two-unit scale
+  bar belongs to a regional plate, and its footer names the Studio instead of
+  an editor "to come". Spec redrawn; README and LISEZMOI alt text follow it.
+- README and LISEZMOI list `.html` among the `--out` formats, and the CI line
+  names the type checks and the Python 3.10 install job. The `--out` help of
+  `choropleth`, `density` and `situation-map` lists every format the writer
+  accepts (`density` said "SVG").
+- CODING.md: the slow marker deselects nothing, the package doctests run
+  through `pytest --doctest-modules`, and the generator template ends on
+  `render_cli` as the three generators do.
+- EXAMPLES.md: the provenance sample carries the current version, and a
+  cross-reference pointed "above" at a section below.
+
+### Added
+
+- `.dockerignore`: the build context no longer carries `.git` or the
+  gitignored `.private/` into an image layer.
+
 ## [1.1.0] — 2026-11-04: click everywhere, and the documentation says what the code does
 
 **The wheel ships the Studio.** `sprezzature_maps.studio` and its two
