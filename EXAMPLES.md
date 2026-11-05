@@ -14,7 +14,9 @@ they cannot silently drift from what the code produces — not because
 anyone promises to keep them fresh, but because
 `tests/test_demo_examples_are_current.py` re-renders each one and fails if
 the file on disk differs. Regenerate with
-`python scripts/build_demo_examples.py`.
+`python scripts/build_demo_examples.py`, which names the committed paths
+explicitly: a call without `out` writes `<kind>.svg` in the current
+directory and never touches these files.
 
 ## The three demo plates
 
@@ -93,7 +95,11 @@ is kept because it is what the skill, the README and years of notes tell
 people to type.
 
 ```bash
-# Demo data.
+# Which version is installed.
+make-map -V                  # or --version
+
+# Demo data. Without --out this writes choropleth.svg in the current directory
+# (density.svg and situation_map.svg for the other two kinds).
 make-map choropleth --out world.svg
 
 # Your own data (JSON file: a list of {"id": ..., "value": ...} rows).

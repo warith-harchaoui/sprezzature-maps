@@ -48,7 +48,8 @@ def make_choropleth(
         Rows with keys ``id`` (ISO-3166-1 numeric country code) and
         ``value`` (float). Defaults to DEMO_DATA.
     out : Path, str, or None
-        Output path (.svg). Defaults to ``assets/svg-examples/choropleth.svg``.
+        Output path (.svg). Defaults to ``choropleth.svg`` in the current
+        working directory, never the committed example.
     title : str
         Chart title.
 
@@ -89,7 +90,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _geo_colors import ...  # noqa: E402  (local sibling imports)
-from _render import render_cli, svg_example_path, write_svg  # noqa: E402
+from _render import render_cli, write_svg  # noqa: E402
 
 DEMO_DATA: list[dict[str, Any]] = [
     # minimal self-contained example data
@@ -104,12 +105,19 @@ def make_<kind>(
     **kwargs,
 ) -> Path:
     """Render the map and return the written output path."""
+    # No `out` means `<kind>.svg` in the current working directory. Never
+    # default to `assets/svg-examples/`: that is the committed example in a
+    # checkout and a file inside site-packages once installed. Only
+    # `scripts/build_demo_examples.py` (and a direct run of this script,
+    # through `render_cli`) names that path, explicitly.
+    dest = Path(out) if out else Path.cwd() / "<kind>.svg"
     ...
 
 
 def main() -> None:
     # The shared click command line: --out, --mode, --accessibility,
-    # --language. make_situation_map.py keeps its own (--config, --out,
+    # --language. Run directly, the script's --out still defaults to the
+    # committed example: that is the maintainer's regeneration path. make_situation_map.py keeps its own (--config, --out,
     # --render), also click.
     render_cli(__file__, "<kind>", build_svg, description="...")
 
