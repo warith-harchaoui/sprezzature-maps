@@ -4,6 +4,26 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`no-data-hidden` reads markup, not prose.** The rule fired whenever the
+  string "no-data" appeared anywhere in the file: in a sentence, a tooltip or
+  a comment. This package's own how-it-works figure was reported for a no-data
+  class it does not draw. It now keys on structure: a class, id or `data-*`
+  attribute naming the state (`class="no-data"`, `data-state="nodata"`), or an
+  element with an empty `data-value=""`, which is how `make_choropleth` marks
+  a country with no row. The second signal is new: until now the rule never
+  saw the choropleth's real no-data markup. Two tests: prose, a tooltip and a
+  comment are not flagged; an empty value and a `data-*` state are.
+
+### Changed
+
+- The pre-push hook also runs the package doctests
+  (`pytest --doctest-modules sprezzature_maps`), as CI does. The comments in
+  `.github/workflows/ci.yml` and `.githooks/pre-push` said CI runs the suite
+  serially; it runs `-n auto`, and they now say so, keeping the memory
+  measurements for the day a run is OOM-killed again.
+
 ### Docs
 
 - **The how-it-works figure counts eleven audit rules, not six.** Its audit

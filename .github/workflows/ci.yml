@@ -84,46 +84,28 @@ jobs:
           mypy sprezzature_maps
           mypy scripts
 
-      # Serial, and it still has to be. `-n auto` was tried here once and the
-      # runner killed the job at 27% with exit code 143 -- SIGTERM, the OOM
-      # killer.
+      # `-n auto`, the same command the pre-push hook runs, so "the hook
+      # passed" and "CI will pass" mean the same thing. CI used to run this
+      # suite serially and the local gate was three times faster for no
+      # reason: 555 tests in 160 s against 524 s, measured on both.
+      # pytest-xdist is already a declared dev dependency.
       #
-      # Re-measured on 2026-10-16 with `ru_maxrss`, per process, because the
-      # earlier figures mixed two different instruments and were not
-      # comparable:
+      # Why it was serial, kept because it is the first thing to check if a
+      # run dies with exit code 143 (SIGTERM, the OOM killer): an earlier
+      # `-n auto` attempt was killed at 27%. Measured on 2026-10-16 with
+      # `ru_maxrss`, per process:
       #
       #   whole suite, serial ............... 8.12 GB
       #   each worker under `-n 4` .......... 7.5 - 7.9 GB
       #   one himalaya render, alone ........ 3.95 GB
       #
-      # The per-worker figure is not caused by parallelism: a lone process
-      # reaches the same place. It is a floor made of two parts, resident
-      # caches (the elevation pyramid is 2.24 GB if every tier is touched,
-      # plus the geo tables) and a transient render peak of about 4 GB on top
-      # of them. A standard runner has 16 GB, so one process fits with room
-      # and *two* would ask for about 16 -- there is still no worker count
-      # between "serial" and "over the limit".
-      #
-      # What did change is the time. The plate cache in `tests/_plates.py`
-      # draws each distinct situation map once per run and shares it across
-      # workers on disk, which took the serial suite from 982 s to 540 s
-      # locally -- the same tests, with the redundant redraws removed rather
-      # than spread over more cores.
-      #
-      # Going parallel here is still blocked, and the lever is the ~8 GB
-      # floor rather than any single call: capping the resident tier cache
-      # and chunking the big render buffers would do it. Worth knowing before
-      # anyone retries this knob. The pre-push hook does pass `-n auto`,
-      # because a developer machine has the memory a runner does not; same
-      # tests either way.
-      # `-n auto`, which this repository's own pre-push hook has used since
-      # it was written. CI ran the same suite serially, so the local gate
-      # was three times faster than the remote one for no reason: 555 tests
-      # in 160s against 524s, measured on both. pytest-xdist is already a
-      # declared dev dependency -- nothing new is installed for this.
-      #
-      # The suite is parallel-safe because the hook has been proving it on
-      # every push. If that ever stops being true, it fails locally first.
+      # The floor is resident caches (the elevation pyramid is 2.24 GB if
+      # every tier is touched, plus the geo tables) and a transient render
+      # peak of about 4 GB. The plate cache in `tests/_plates.py` draws each
+      # distinct situation map once per run and shares it across workers on
+      # disk, which removed most of the redundant redraws. If the OOM comes
+      # back, the lever is that floor -- capping the resident tier cache,
+      # chunking the big render buffers -- or `-n 2`, not a serial run.
       - name: Tests
         run: python -m pytest -q -n auto
 
