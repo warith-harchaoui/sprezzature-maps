@@ -121,6 +121,44 @@ def test_absent_must_not_read_as_low() -> None:
     assert "no-data-hidden" not in {f.rule for f in audit(shown)}
 
 
+def test_a_sentence_about_no_data_is_not_a_no_data_region() -> None:
+    """
+    The rule reads markup, not prose.
+
+    It used to ask whether the string "no-data" appeared anywhere in the
+    file, and reported this package's own how-it-works diagram, whose text
+    says what the audit checks, for hiding a no-data class it does not draw.
+    A sentence, a tooltip or a comment naming the state is not the state.
+    """
+    prose = plate(
+        "Exposure",
+        "as of 2024",
+        "the no-data fill is named in the key",
+        extra=(
+            "<!-- legend strip overruns the no-data key -->"
+            '<path d="M0 0" fill="#ccc"><title>Chad: noData</title></path>'
+        ),
+    )
+    assert "no-data-hidden" not in {f.rule for f in audit(prose)}
+
+
+def test_an_empty_value_is_a_no_data_region() -> None:
+    """
+    ``data-value=""`` is how ``make_choropleth`` marks a country with no row.
+
+    That is the structure the rule is for: drawn, absent, and only explained
+    if the key says so.
+    """
+    hidden = plate("Exposure", "as of 2024", extra='<path data-value="" d="M0 0"/>')
+    assert "no-data-hidden" in {f.rule for f in audit(hidden)}
+
+    shown = plate("Exposure", "as of 2024", "No data", extra='<path data-value="" d="M0 0"/>')
+    assert "no-data-hidden" not in {f.rule for f in audit(shown)}
+
+    other = plate("Exposure", "as of 2024", extra='<g data-state="NoData"><path d="M0 0"/></g>')
+    assert "no-data-hidden" in {f.rule for f in audit(other)}
+
+
 def test_a_plate_with_no_date_and_no_disclaimer_is_reported() -> None:
     """A map with neither is read as current, forever."""
     assert "no-provenance" in {f.rule for f in audit(plate("Control of territory"))}

@@ -58,15 +58,11 @@ mypy_gate() {
 echo "[pre-push] mypy..."
 mypy_gate sprezzature_maps && mypy_gate scripts || { echo "[pre-push] mypy failed - push aborted."; exit 1; }
 
-# Same suite as CI, scheduled across cores: 15m43s became 2m32s here, and the
-# hook is what a contributor waits on before every single push. Completeness is
-# kept -- "the hook passed" and "CI will pass" still mean the same thing,
-# because it is still the same tests, only scheduled differently.
-#
-# CI itself runs this serially and must: one worker needs ~9.5 GB (see the
-# comment in .github/workflows/ci.yml) and a runner has 16 GB, so `-n auto`
-# there was OOM-killed. A laptop has the memory for it; a runner does not.
-# If this line ever OOMs on a smaller machine, drop to `-n 2` or remove it.
+# Same command as CI, which also runs `-n auto`: 15m43s serially became 2m32s
+# here, and the hook is what a contributor waits on before every single push.
+# Each worker holds several GB (the measurements are in the comment above the
+# Tests step of .github/workflows/ci.yml); if this line ever OOMs on a smaller
+# machine, drop to `-n 2`.
 echo "[pre-push] pytest (-n auto)..."
 python3 -m pytest -q -n auto || { echo "[pre-push] pytest failed - push aborted."; exit 1; }
 
@@ -84,5 +80,13 @@ for f in scripts/*.py; do
     exit 1
   fi
 done
+
+# The package's own modules, as CI's "Doctests (the package)" step runs them:
+# through pytest, because `python -m doctest sprezzature_maps/api.py` imports
+# the file as a top-level module and its relative imports fail. Until
+# 2026-11-05 this hook skipped them, so a stale worked example in
+# `sprezzature_maps/` passed here and failed on the runner.
+echo "[pre-push] doctests (the package)..."
+python3 -m pytest -q --doctest-modules sprezzature_maps || { echo "[pre-push] package doctests failed - push aborted."; exit 1; }
 
 echo "[pre-push] all green - pushing."

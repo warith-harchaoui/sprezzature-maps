@@ -156,6 +156,25 @@ _SYNTHETIC_RE = re.compile(
 #: Discrete class swatches, as the classed legend draws them.
 _SWATCH_RE = re.compile(r"<rect[^>]*\bclass=\"(?:legend-)?swatch\"")
 
+# What a drawn no-data region looks like in markup, and only in markup. Until
+# 2026-11-05 the rule asked whether the string "no-data" appeared anywhere in
+# the file, so a figure whose *sentence* mentioned "the no-data fill" was
+# reported for hiding a no-data class it does not have -- this package's own
+# how-it-works diagram was. Two structural signals, both inside a start tag:
+#
+# - a class, id or data-* attribute naming the state (`class="no-data"`,
+#   `data-state="nodata"`, `id="noData"`), the convention other tools use;
+# - an element carrying an empty `data-value=""`, which is how
+#   `make_choropleth` marks a country with no row (see `_country_data`).
+#
+# Comments (`<!--`), text content and tooltips never match: a start tag begins
+# with a letter, and the attribute value is what is read.
+_NO_DATA_MARKUP_RE = re.compile(
+    r"<[A-Za-z][^<>]*?\s(?:class|id|data-[\w-]+)=\"[^\"]*\b(?:no-?data|no_data)\b[^\"]*\"",
+    re.I,
+)
+_EMPTY_VALUE_RE = re.compile(r"<[A-Za-z][^<>]*?\sdata-value=\"\"")
+
 #: A plate that clips its geography to a region, rather than drawing the
 #: world: that clip is what makes it a *situation* plate, and the four
 #: rules below only apply to one.
@@ -294,7 +313,7 @@ def audit(svg: str) -> list[Finding]:
                 ))
 
     # ── absent is not low ───────────────────────────────────────────────
-    has_no_data_fill = "no-data" in text or "noData" in text
+    has_no_data_fill = bool(_NO_DATA_MARKUP_RE.search(text) or _EMPTY_VALUE_RE.search(text))
     says_no_data = any(
         re.search(r"\b(no data|sans donn|pas de donn)", t, re.I) for t in labels
     )
