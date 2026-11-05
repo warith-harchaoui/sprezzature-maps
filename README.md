@@ -422,7 +422,8 @@ Unicode-aware typesetter and its bibliography tool) into
 ## Why a separate repo, not a chart type in sprezzature-figures
 
 `choropleth` and `situation_map` used to sit inside `sprezzature-figures`'
-catalogue of 126 chart kinds (`density` was born here, after the split).
+catalogue, 126 chart kinds at the time (`density` was born here, after the
+split).
 Splitting them out was a deliberate product decision:
 the editor, the conversational chart editor that ships with
 `sprezzature-figures`, will not grow map support. Maps got their own,
