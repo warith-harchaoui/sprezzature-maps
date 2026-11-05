@@ -149,7 +149,7 @@ def audit_cmd(target: str, fmt: str) -> None:
     help="Bind a role (id, value) to a column when your file names them differently, "
     "e.g. --map id=CountryCode --map value=Score (repeatable). Only used with --data.",
 )
-@click.option("--out", default=None, help="Output path (.svg/.png/.pdf/.jpg).")
+@click.option("--out", default=None, help="Output path (.svg/.png/.jpg/.pdf/.eps/.html).")
 @click.option("--title", default=None, help="Chart title.")
 @click.option(
     "--diverging/--no-diverging",
@@ -255,7 +255,7 @@ def choropleth_cmd(
     type=click.Path(exists=True, dir_okay=False),
     help="JSON file of [[lon, lat], ...] event positions; defaults to demo points.",
 )
-@click.option("--out", default=None, help="Output SVG path.")
+@click.option("--out", default=None, help="Output path (.svg/.png/.jpg/.pdf/.eps/.html).")
 @click.option("--title", default=None)
 @click.option(
     "--bins",
@@ -324,8 +324,7 @@ def density_cmd(
     "--rounds",
     type=int,
     default=None,
-    help="Lower the ceiling on rounds. It cannot be raised: every round renders "
-         "and reads a map.",
+    help="Lower the ceiling on rounds. It cannot be raised: every round renders and reads a map.",
 )
 def improve_cmd(
     kind_name: str,
@@ -359,7 +358,9 @@ def improve_cmd(
         "points": ("--points", points_path),
     }
     wanted_flag, wanted_value = supplied[kind.data_shape]
-    wrong = [flag for shape, (flag, value) in supplied.items() if value and shape != kind.data_shape]
+    wrong = [
+        flag for shape, (flag, value) in supplied.items() if value and shape != kind.data_shape
+    ]
     if wrong:
         raise click.ClickException(
             f"a {kind.name} consumes {kind.data_shape}, so it takes {wanted_flag}, "
@@ -486,7 +487,7 @@ def situation_new_cmd(
     type=click.Path(exists=True, dir_okay=False),
     help="YAML region config. Omit for the bundled Europe demo.",
 )
-@click.option("--out", default=None, help="Output path (.svg/.png/.pdf/.jpg).")
+@click.option("--out", default=None, help="Output path (.svg/.png/.jpg/.pdf/.eps/.html).")
 @click.option("--title", default=None, help="Overrides the config's own title if set.")
 def situation_map_cmd(config_path: str | None, out: str | None, title: str | None) -> None:
     """Render a layered areas-of-control situation map."""

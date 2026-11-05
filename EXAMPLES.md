@@ -93,7 +93,7 @@ is kept because it is what the skill, the README and years of notes tell
 people to type.
 
 ```bash
-# Demo data, default output path.
+# Demo data.
 make-map choropleth --out world.svg
 
 # Your own data (JSON file: a list of {"id": ..., "value": ...} rows).
@@ -409,7 +409,7 @@ which comes out blank — so it proves it can fail before it claims to pass.
 Two things to know about the page you get. Text comes out as outlines rather
 than as selectable text, which is what most journals ask for anyway. And the
 file is not byte-reproducible — the converter stamps a creation date, which
-the plate itself deliberately does not (see `provenance` above) — so two
+the plate itself deliberately does not (see `provenance` below) — so two
 exports of one plate differ even though the drawing does not.
 
 ## Who can read the plate
@@ -583,7 +583,7 @@ make_situation_map(config=cfg, out="sudan.svg")
 
 ```xml
 <metadata id="provenance" data-generator="sprezzature-maps"
-          data-version="1.0.0" data-config-sha256="9a1f…">
+          data-version="1.1.0" data-config-sha256="9a1f…">
   <provenance-input data-name="sudan-2024.csv" data-sha256="3f2a…" data-bytes="4812051"/>
 </metadata>
 ```
@@ -605,7 +605,7 @@ Reading it back is the other half:
 from sprezzature_maps import plate_provenance, replay_report
 
 plate_provenance(svg)
-# {"generator": "sprezzature-maps", "version": "1.0.0",
+# {"generator": "sprezzature-maps", "version": "1.1.0",
 #  "config_sha256": "9a1f…", "inputs": [{"name": "sudan-2024.csv", ...}]}
 
 report = replay_report(svg, cfg, ["sudan-2024.csv"])

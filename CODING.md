@@ -16,8 +16,9 @@ Python 3.10+. Full type annotations on all public functions and classes.
 - `ruff check` with zero warnings. `ruff format` applied.
 - Line length: 100 characters (`[tool.ruff]` in `pyproject.toml`).
 - Imports: standard library, then third-party packages, then local modules,
-  each group separated by a blank line. `scripts/` is not an installed
-  Python package, so its generators cannot simply `import` their sibling
+  each group separated by a blank line. `scripts/` ships in the wheel as
+  `sprezzature_maps_scripts`, but its modules are loaded by file path
+  (`_load_script`), so its generators cannot simply `import` their sibling
   helper modules the normal way; each one first runs
   `sys.path.insert(0, str(Path(__file__).resolve().parent))` (adding its own
   folder to Python's list of places to search for a module) and only then
@@ -66,8 +67,8 @@ code already says by itself. No commented-out code left lying around.
 
 ## Script structure for make_*.py
 
-Each generator (`scripts/make_choropleth.py`, `scripts/make_situation_map.py`)
-follows this structure:
+Each generator (`scripts/make_choropleth.py`, `scripts/make_situation_map.py`,
+`scripts/make_density.py`) follows this structure:
 
 ```python
 #!/usr/bin/env python3
@@ -88,6 +89,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _geo_colors import ...  # noqa: E402  (local sibling imports)
+from _render import render_cli, svg_example_path, write_svg  # noqa: E402
 
 DEMO_DATA: list[dict[str, Any]] = [
     # minimal self-contained example data
@@ -105,11 +107,18 @@ def make_<kind>(
     ...
 
 
+def main() -> None:
+    # The shared click command line: --out, --mode, --accessibility,
+    # --language. make_situation_map.py keeps its own (--config, --out,
+    # --render), also click.
+    render_cli(__file__, "<kind>", build_svg, description="...")
+
+
 if __name__ == "__main__":
-    print(make_<kind>())
+    main()
 ```
 
-Primitives shared by both generators, and rendered identically wherever
+Primitives shared by the generators, and rendered identically wherever
 they're reused (SVG scaffolding, colour scales, relief/terrain shading,
 TopoJSON decoding, the write-to-disk helpers), live in the private `_*.py`
 modules next to them, never copy-pasted inline into a generator. See each
@@ -118,9 +127,9 @@ its own module.
 
 ## Testing
 
-- Every test in `tests/` must pass with `pytest -q`. `pyproject.toml`
-  excludes tests marked `@pytest.mark.slow` (ones that hit the network or do
-  heavy rasterization) from that default run.
+- Every test in `tests/` must pass with `pytest -q`. Nothing is deselected
+  by default: tests marked `@pytest.mark.slow` (ones that hit the network or
+  do heavy rasterization) run too, and `pytest -m slow` selects only them.
 - Every public function in `scripts/_relief.py` and `scripts/_geo_colors.py`
   carries a doctest: an example call and its expected output, written right
   in the docstring, that Python can execute as a test. Run one file's
@@ -129,7 +138,8 @@ its own module.
   written relative to the package, `from .foo import bar` rather than
   `import foo`), which only work once the package is actually imported, so
   their doctests need to run through an import instead of a bare file path:
-  `python3 -c "import doctest, sprezzature_maps.api as m; doctest.testmod(m)"`.
+  `python -m pytest -q --doctest-modules sprezzature_maps`, which is what CI
+  runs.
 - No mocking of file I/O or rendering. Test the real dispatcher (the
   function that actually writes the SVG), not a stand-in for it.
 - A visual or relief change also needs a render-and-look pass: render the

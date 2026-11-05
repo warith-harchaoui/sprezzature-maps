@@ -19,7 +19,7 @@ Fait partie de la suite [sprezzature](https://sprezzature.ai/).
 
 ## Comment ça marche
 
-![Schéma de flux. En haut, une valeur par territoire, des événements ponctuels ou une configuration de planche alimentent deux voies. La voie de gauche dessine : elle centre et projette sur un vrai fond de carte, classe les valeurs et nomme la méthode employée, et trace l'une des trois planches, puis rend un SVG avec une échelle en deux unités. La voie de droite contrôle : six règles statiques relisent la planche rendue et demandent si elle nomme sa classification, porte son échelle et crédite ses sources. Les deux se rejoignent en un seul résultat, une planche avec laquelle un lecteur peut discuter.](https://raw.githubusercontent.com/warith-harchaoui/sprezzature-maps/main/assets/comment-ca-marche.svg)
+![Schéma de flux. En haut, une valeur par territoire, des événements ponctuels ou une configuration de planche alimentent deux voies. La voie de gauche dessine : elle centre et projette sur un vrai fond de carte, classe les valeurs et nomme la méthode employée, et trace l'une des trois planches, puis rend un SVG, avec une échelle en deux unités sur une planche régionale. La voie de droite contrôle : onze règles statiques relisent la planche rendue et demandent si elle nomme sa classification, imprime ses seuils, dit quand elle était vraie et se lit mot à mot. Les deux se rejoignent en un seul résultat, une planche avec laquelle un lecteur peut discuter.](https://raw.githubusercontent.com/warith-harchaoui/sprezzature-maps/main/assets/comment-ca-marche.svg)
 
 ## Ce qu'on trouve ici
 
@@ -93,7 +93,7 @@ make-map audit moldova.svg          # propre, telle quelle
 ```
 
 Le format de sortie suit l'extension de `--out` : `.svg`, `.png`, `.jpg`,
-`.pdf` ou `.eps`.
+`.pdf`, `.eps`, ou `.html` (le SVG dans une page minimale).
 
 ## Cinq façons d'y accéder
 
@@ -477,8 +477,10 @@ testable sans serveur.
 ## État du projet
 
 Publié sur PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
-avec une CI au vert (lint, tests et doctests à chaque push et pull
-request vers `main` ; voir `.github/workflows/ci.yml`) : `pytest` passe,
+avec une CI au vert (lint, vérification des types, tests et doctests à
+chaque push et pull request vers `main`, plus une vérification
+d'installation et d'import sous Python 3.10 ; voir
+`.github/workflows/ci.yml`) : `pytest` passe,
 les trois types de carte se rendent depuis leurs données de
 démonstration intégrées, et la ligne de commande produit de vrais fichiers
 SVG. Il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
