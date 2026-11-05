@@ -675,7 +675,7 @@ abandoning them.
 **It says where on Earth it is, without being asked.** *"Zoom out for
 perspective, zoom in for detail"* is the locator map's one rule, and a plate
 that only ever zooms in answers half of it. So a regional plate draws a
-locator by default — the mapped area in red on a wider view, in a fifth of
+locator by default — the mapped area in red on a wider view, in 15% of
 the plate's width. A plate already wide enough to place itself gets none,
 and a caller can always decline:
 

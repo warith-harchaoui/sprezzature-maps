@@ -49,11 +49,11 @@ non des côtes.
 - **Une revue veut une figure vectorielle et refusera une image matricielle.**
   La sortie est du vrai SVG, s'exporte en PDF et en EPS en vectoriel, et
   porte sa plus petite taille de caractère comme une propriété vérifiée : la
-  planche Ukraine embarquée fait 1768 unités de large et sa plus petite
-  étiquette en mesure 10,8, ce qui, dans une colonne de 90 mm, donne 1,6 pt,
-  le tiers du plancher accepté par n'importe quel grand éditeur. Le paquet le
-  signale au lieu de laisser passer, parce qu'un fichier vectoriel, lui, se
-  rend toujours.
+  planche Ukraine embarquée fait 1364 unités de large et sa plus petite
+  étiquette en mesure 10,8, ce qui, dans une colonne de 90 mm, donne 2,0 pt,
+  le tiers du minimum de 6 pt d'Elsevier, sous le plancher de tous les
+  grands éditeurs. Le paquet le signale au lieu de laisser passer, parce
+  qu'un fichier vectoriel, lui, se rend toujours.
 - **La classification doit être défendable.** Quantiles, intervalles égaux,
   seuils naturels (FISHER et JENKS) et seuils tête-queue (JIANG, 2013) sont
   tous disponibles, aucun n'est choisi en silence, la légende nomme celui qui

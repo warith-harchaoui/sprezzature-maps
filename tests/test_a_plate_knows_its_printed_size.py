@@ -10,9 +10,9 @@ print at, rather than scaling it afterwards.
 
 That advice is unfollowable here without a number, because a plate's type is
 measured in the same arbitrary user units as its coastline. Measured: the
-bundled Ukraine plate is 1,768 units wide and its smallest label is 10.8 of
-them. Dropped into a 90 mm column that label sets at **1.6 pt** -- a third of
-the floor any major publisher accepts -- and it renders without complaint,
+bundled Ukraine plate is 1,364 units wide and its smallest label is 10.8 of
+them. Dropped into a 90 mm column that label sets at **2.0 pt** -- a third of
+Elsevier's 6 pt minimum, under every major publisher's floor -- and it renders without complaint,
 because a vector file always does.
 
 So ``print_width`` does two things. The root carries the physical width, so

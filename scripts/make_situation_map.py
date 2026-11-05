@@ -2893,9 +2893,9 @@ def _warn_if_unprintable(svg: str, print_width_mm: float, canvas_width: float) -
     """Say, in points, how small this plate's smallest label will actually print.
 
     A plate is designed in user units and printed in millimetres, and nothing
-    on screen connects the two. The bundled Ukraine plate is 1\u202f768 units
+    on screen connects the two. The bundled Ukraine plate is 1\u202f364 units
     wide with 10.8-unit labels: dropped into a journal's 90 mm single column
-    that is **1.6 pt**, a third of the floor any major publisher accepts, and
+    that is **2.0 pt**, a third of Elsevier's 6 pt minimum, and
     it renders without complaint because a vector file always does.
 
     This is a warning and not a refusal: the caller may be printing a poster,
