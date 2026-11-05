@@ -4,6 +4,8 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-11-05
+
 ### Fixed
 
 - **A render without `--out` stays in the working directory.**
