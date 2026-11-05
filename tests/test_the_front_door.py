@@ -165,3 +165,17 @@ def test_no_second_parser_grows_back() -> None:
     pkg = Path(__file__).resolve().parent.parent / "sprezzature_maps"
     assert not (pkg / "cli_click.py").exists()
     assert "import argparse" not in (pkg / "cli.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("flag", ["-V", "--version"])
+def test_the_front_door_says_which_version_is_installed(flag: str) -> None:
+    """``-V`` and ``--version`` print the installed distribution's version.
+
+    Read from the metadata pip wrote, not from a constant in the source, so a
+    stale editable install answers with what is actually installed.
+    """
+    from importlib.metadata import version
+
+    result = runner.invoke(main, [flag], prog_name="make-map")
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == f"make-map, version {version('sprezzature-maps')}"

@@ -93,7 +93,11 @@ make-map audit moldova.svg          # propre, telle quelle
 ```
 
 Le format de sortie suit l'extension de `--out` : `.svg`, `.png`, `.jpg`,
-`.pdf`, `.eps`, ou `.html` (le SVG dans une page minimale).
+`.pdf`, `.eps`, ou `.html` (le SVG dans une page minimale). Sans `--out` (ou
+`out=` en Python), `choropleth`, `density` et `situation-map` écrivent
+`choropleth.svg`, `density.svg` ou `situation_map.svg` dans le répertoire
+courant ; ils n'écrasent jamais les exemples du paquet.
+`make-map -V` (ou `--version`) affiche la version installée.
 
 ## Cinq façons d'y accéder
 

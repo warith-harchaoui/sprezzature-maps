@@ -83,7 +83,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _render import render_cli, svg_example_path, write_svg  # noqa: E402
+from _render import render_cli, write_svg  # noqa: E402
 from _sidecar import provenance_metadata  # noqa: E402
 from sprezzature_figures.fonts import MONO_STACK, SANS_STACK  # noqa: E402
 
@@ -690,7 +690,8 @@ def make_density(
     points : sequence of (lon, lat), optional
         Event positions in degrees. Defaults to the synthetic demo set.
     out : Path, str, or None
-        Output path (.svg). Defaults to the bundled example location.
+        Output path (.svg). Defaults to ``density.svg`` in the current
+        working directory, never the committed example.
     bbox : (west, south, east, north)
         Geographic extent to bin over, in degrees.
     bins : int
@@ -722,7 +723,12 @@ def make_density(
         per_area=per_area,
         provenance=provenance,
     )
-    dest = Path(out) if out else svg_example_path(__file__, "density")
+    # No ``out`` means ``density.svg`` in the working directory. This used to
+    # fall back to ``svg_example_path``: the committed example in a checkout,
+    # a file under ``site-packages/`` once installed, so a bare call edited
+    # the shop window or the interpreter. ``build_demo_examples.py`` and a
+    # direct run of this script pass that path explicitly instead.
+    dest = Path(out) if out else Path.cwd() / "density.svg"
     return write_svg(dest, svg, faces=_EMBED_FACES)
 
 

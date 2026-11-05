@@ -91,7 +91,11 @@ def _load_script(name: str) -> Any:
 
 
 def make_choropleth(*args: Any, **kwargs: Any) -> Path:
-    """Render a world choropleth map. See ``scripts/make_choropleth.py`` for the full signature."""
+    """Render a world choropleth map. See ``scripts/make_choropleth.py`` for the full signature.
+
+    Without ``out`` the plate is written to ``choropleth.svg`` in the current
+    working directory, never over the committed example.
+    """
     return _load_script("make_choropleth").make_choropleth(*args, **kwargs)
 
 
@@ -116,12 +120,20 @@ def classification_methods() -> tuple[str, ...]:
 
 
 def make_situation_map(*args: Any, **kwargs: Any) -> Path:
-    """Render a layered areas-of-control situation map. See ``scripts/make_situation_map.py`` for the full signature."""
+    """Render a layered areas-of-control situation map. See ``scripts/make_situation_map.py``.
+
+    Without ``out`` the plate is written to ``situation_map.svg`` in the
+    current working directory, never over the committed example.
+    """
     return _load_script("make_situation_map").make_situation_map(*args, **kwargs)
 
 
 def make_density(*args: Any, **kwargs: Any) -> Path:
-    """Render an accumulation map, where the events draw the geography. See ``scripts/make_density.py``."""
+    """Render an accumulation map, where the events draw the geography. See ``scripts/make_density.py``.
+
+    Without ``out`` the plate is written to ``density.svg`` in the current
+    working directory, never over the committed example.
+    """
     return _load_script("make_density").make_density(*args, **kwargs)
 
 

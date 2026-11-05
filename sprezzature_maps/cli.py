@@ -90,7 +90,11 @@ def _load_choropleth_rows(data_path: str, mapping: dict[str, str]) -> list[dict[
         raise click.ClickException(str(exc)) from exc
 
 
+# `-V` / `--version` read the installed distribution's metadata rather than a
+# constant, so the answer is the version pip resolved, whichever of the two
+# names was typed.
 @click.group()
+@click.version_option(None, "-V", "--version", package_name="sprezzature-maps")
 def main() -> None:
     """sprezzature-maps: render hand-authored SVG world maps."""
 
@@ -149,7 +153,12 @@ def audit_cmd(target: str, fmt: str) -> None:
     help="Bind a role (id, value) to a column when your file names them differently, "
     "e.g. --map id=CountryCode --map value=Score (repeatable). Only used with --data.",
 )
-@click.option("--out", default=None, help="Output path (.svg/.png/.jpg/.pdf/.eps/.html).")
+@click.option(
+    "--out",
+    default=None,
+    help="Output path (.svg/.png/.jpg/.pdf/.eps/.html). Default: choropleth.svg in the "
+    "current directory.",
+)
 @click.option("--title", default=None, help="Chart title.")
 @click.option(
     "--diverging/--no-diverging",
@@ -255,7 +264,12 @@ def choropleth_cmd(
     type=click.Path(exists=True, dir_okay=False),
     help="JSON file of [[lon, lat], ...] event positions; defaults to demo points.",
 )
-@click.option("--out", default=None, help="Output path (.svg/.png/.jpg/.pdf/.eps/.html).")
+@click.option(
+    "--out",
+    default=None,
+    help="Output path (.svg/.png/.jpg/.pdf/.eps/.html). Default: density.svg in the "
+    "current directory.",
+)
 @click.option("--title", default=None)
 @click.option(
     "--bins",
@@ -487,7 +501,12 @@ def situation_new_cmd(
     type=click.Path(exists=True, dir_okay=False),
     help="YAML region config. Omit for the bundled Europe demo.",
 )
-@click.option("--out", default=None, help="Output path (.svg/.png/.jpg/.pdf/.eps/.html).")
+@click.option(
+    "--out",
+    default=None,
+    help="Output path (.svg/.png/.jpg/.pdf/.eps/.html). Default: situation_map.svg in the "
+    "current directory.",
+)
 @click.option("--title", default=None, help="Overrides the config's own title if set.")
 def situation_map_cmd(config_path: str | None, out: str | None, title: str | None) -> None:
     """Render a layered areas-of-control situation map."""

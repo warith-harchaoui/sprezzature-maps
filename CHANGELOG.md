@@ -4,6 +4,29 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A render without `--out` stays in the working directory.**
+  `make-map choropleth`, `density` and `situation-map`, and the library calls
+  behind them (`make_choropleth()`, `make_density()`, `make_situation_map()`),
+  fell back to `assets/svg-examples/<kind>.svg` beside `scripts/`: the
+  committed example in a checkout, a file inside `site-packages/` once
+  installed. A bare `make-map density` rewrote the shop window, or the
+  interpreter. They now write `choropleth.svg`, `density.svg` or
+  `situation_map.svg` in the current directory.
+  `scripts/build_demo_examples.py` names the committed paths explicitly, and
+  a direct run of a generator script keeps its explicit default there. The
+  `make_choropleth` doctest writes to a temporary folder rather than to the
+  example it used to refresh as a side effect. Tests in a temporary working
+  directory for each kind, by the library and by the CLI, with a fixture that
+  fails if any committed example changes. Same fix as sprezzature-figures
+  2.9.0.
+
+### Added
+
+- `make-map -V` / `--version` (and the same on `sprezzature-maps`) print the
+  installed version, read from the distribution's metadata.
+
 ## [1.1.1] — 2026-11-05
 
 ### Fixed

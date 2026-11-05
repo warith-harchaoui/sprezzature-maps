@@ -70,7 +70,7 @@ from _relief import (  # noqa: E402
     sample_terrain_shade,
     terrain_shade_for_bbox,
 )
-from _render import render_cli, svg_example_path, write_svg  # noqa: E402
+from _render import render_cli, write_svg  # noqa: E402
 from _sidecar import provenance_metadata  # noqa: E402
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen  # noqa: E402
 from _svg import svg_open, xml_escape  # noqa: E402
@@ -1464,7 +1464,8 @@ def make_choropleth(
         ``value`` (float). Defaults to DEMO_DATA (a synthetic global
         exposure index).
     out : Path, str, or None
-        Output path (.svg). Defaults to ``assets/svg-examples/choropleth.svg``.
+        Output path (.svg). Defaults to ``choropleth.svg`` in the current
+        working directory, never the committed example.
     title : str
         Chart title.
     subtitle : str or None, optional
@@ -1482,8 +1483,10 @@ def make_choropleth(
 
     Examples
     --------
-    >>> p = make_choropleth()  # doctest: +ELLIPSIS
-    wrote .../choropleth.svg
+    >>> import tempfile
+    >>> tmp = Path(tempfile.mkdtemp())
+    >>> p = make_choropleth(out=tmp / "world.svg")  # doctest: +ELLIPSIS
+    wrote .../world.svg
     >>> p.exists()
     True
     """
@@ -1506,7 +1509,12 @@ def make_choropleth(
         provenance=provenance,
         antarctica=antarctica,
     )
-    dest = Path(out) if out else svg_example_path(__file__, "choropleth")
+    # No ``out`` means ``choropleth.svg`` in the working directory. This used to
+    # fall back to ``svg_example_path``: the committed example in a checkout,
+    # a file under ``site-packages/`` once installed, so a bare call edited
+    # the shop window or the interpreter. ``build_demo_examples.py`` and a
+    # direct run of this script pass that path explicitly instead.
+    dest = Path(out) if out else Path.cwd() / "choropleth.svg"
     return write_svg(dest, svg)
 
 

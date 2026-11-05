@@ -332,7 +332,7 @@ from _relief import (
     terrain_relief_for_bbox,
     terrain_shade_for_bbox,
 )
-from _render import svg_example_path, write_svg
+from _render import write_svg
 from _sidecar import provenance_metadata
 from _simplify import DEFAULT_TOLERANCE, simplify_ring, simplify_screen
 from _textbox import box_inside, boxes_overlap, mono_wrap, text_box, text_width
@@ -9293,7 +9293,9 @@ def make_situation_map(
     reference basemap, no invented thematic layers); pass a config dict -- the
     same schema the ``--config`` YAML uses -- to build a real analysis map.
     ``data`` is accepted for dispatcher parity and unused (this generator is
-    config-driven, not row-driven).
+    config-driven, not row-driven). Without ``out`` the plate is written to
+    ``situation_map.svg`` in the current working directory, never over the
+    committed example.
     """
     cfg = dict(config) if config else dict(_DEMO_CONFIG)
     # `build_map` resolves any relative feature files against this (see
@@ -9311,7 +9313,12 @@ def make_situation_map(
         cfg["title"] = title
     validate_config(cfg)
     svg = build_map(cfg)
-    dest = Path(out) if out else svg_example_path(__file__, "situation_map")
+    # No ``out`` means ``situation_map.svg`` in the working directory. This used to
+    # fall back to ``svg_example_path``: the committed example in a checkout,
+    # a file under ``site-packages/`` once installed, so a bare call edited
+    # the shop window or the interpreter. ``build_demo_examples.py`` and a
+    # direct run of this script pass that path explicitly instead.
+    dest = Path(out) if out else Path.cwd() / "situation_map.svg"
     return write_svg(dest, svg)
 
 

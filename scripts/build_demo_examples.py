@@ -52,9 +52,14 @@ def _build_one(module_name: str, stem: str) -> Path:
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
-    # Every generator exposes ``make_<stem>()``; calling it with no arguments
-    # is both the documented quick start and what the embedded image must be.
-    return getattr(module, module_name)()
+    # Every generator exposes ``make_<stem>()``; calling it with no data
+    # arguments is both the documented quick start and what the embedded
+    # image must be. The destination is passed explicitly: a call without
+    # ``out`` writes ``<stem>.svg`` in the working directory, so the committed
+    # example is reached only by naming it.
+    from _render import svg_example_path
+
+    return getattr(module, module_name)(out=svg_example_path(str(module.__file__), stem))
 
 
 def main() -> int:
