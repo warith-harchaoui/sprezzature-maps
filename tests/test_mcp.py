@@ -75,3 +75,12 @@ def test_every_tool_says_when_to_call_it() -> None:
             f"{route.operation_id}: description is {len(description)} chars. Say when "
             f"to call it, not just what it is."
         )
+
+
+def test_the_mcp_server_announces_its_version_as_a_version() -> None:
+    """fastapi-mcp passes the description into the version slot."""
+    from sprezzature_maps import __version__
+
+    options = mcp.server.create_initialization_options()
+    assert options.server_version == __version__
+    assert options.instructions == mcp.description

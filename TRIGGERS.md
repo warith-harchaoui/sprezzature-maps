@@ -29,7 +29,8 @@ caller can hold is a plate that already exists.
 | positions of events, `[lon, lat]` | `points` | `density` | `render_density` |
 | an ACLED or UCDP GED export | events with precision codes | `situation_map` | `acled_events` / `ucdp_events`, then `render_situation_map` |
 | the same ground at several moments | a config with dated marks | `situation_map` | `small_multiples` in the config, then `render_situation_map` |
-| a finished plate (an SVG) | none | none | `make-map audit`, `make-map improve`, `article_sidecar`, `replay_report` (see below) |
+| a finished plate (an SVG) | none | none | `make-map audit`, `article_sidecar`, `replay_report` (see below) |
+| the data behind a map that reads badly | `rows`, `config` or `points` | the map's own kind | `make-map improve`, which renders the map again from that data (see below) |
 | place-shaped data where the shape of the land does not matter | none | none | **sprezzature-figures** (hex maps, dot density, spike maps, binned grids) |
 
 Phrasings confirm a route; they do not decide it. "Map this by country",

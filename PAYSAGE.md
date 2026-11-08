@@ -13,7 +13,7 @@ qu'on regarde plutôt qu'une carte qu'on pilote.
 ```
 suite sprezzature
 ├── sprezzature-maps          ← ce paquet (des nombres attachés à de vrais lieux)
-├── sprezzature-figures       (167 types de graphiques ; tout ce qui n'est pas géographique)
+├── sprezzature-figures       (168 types de graphiques ; tout ce qui n'est pas géographique)
 ├── sprezzature-colors        (palettes accessibles, OKLCH)
 ├── sprezzature-accessibility (contrôle statique du HTML, textes alternatifs)
 ├── sprezzature-publish       (un dossier de Markdown devient un site trouvable)

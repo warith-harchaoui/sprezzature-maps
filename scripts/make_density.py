@@ -345,6 +345,7 @@ _DEMO_REGION = "Contiguous United States"
 #: option now; this is the other half, the one that makes the answer yes.
 CHROME: dict[str, dict[str, str]] = {
     "en": {
+        "events_title": "Where the events fell",
         "title": "Where the lightning fell",
         "subtitle": "Every flash of a synthetic year, accumulated one day at a time",
         "caption": "SYNTHETIC DEMONSTRATION DATA \u00b7 NOT AN OBSERVATIONAL RECORD",
@@ -354,6 +355,7 @@ CHROME: dict[str, dict[str, str]] = {
         "peak": "peak",
     },
     "fr": {
+        "events_title": "O\u00f9 les \u00e9v\u00e9nements sont tomb\u00e9s",
         "title": "O\u00f9 la foudre est tomb\u00e9e",
         "subtitle": "Chaque \u00e9clair d'une ann\u00e9e synth\u00e9tique, "
                     "accumul\u00e9 jour apr\u00e8s jour",
@@ -440,9 +442,19 @@ def build_svg(
             f"{', '.join(sorted(CHROME))}"
         )
     words = CHROME[language]
-    title = words["title"] if title is None else title
-    subtitle = words["subtitle"] if subtitle is None else subtitle
-    caption = words["caption"] if caption is None else caption
+    # The lightning and "synthetic demonstration data" words describe the demo
+    # set and nothing else. They used to be the defaults for any call, so a
+    # caller's real events came out labelled SYNTHETIC, which also satisfied
+    # the audit's provenance rule with a sentence that was false. Real points
+    # with no caption now say nothing, and the audit says that nothing was said.
+    if points is None:
+        title = words["title"] if title is None else title
+        subtitle = words["subtitle"] if subtitle is None else subtitle
+        caption = words["caption"] if caption is None else caption
+    else:
+        title = words["events_title"] if title is None else title
+        subtitle = "" if subtitle is None else subtitle
+        caption = "" if caption is None else caption
 
     unit = words["cell"]
     peak_value = float(peak)
@@ -499,7 +511,7 @@ def build_svg(
         f'viewBox="0 0 {width} {plate_h}" role="img" aria-labelledby="dens-title dens-desc" '
         f'shape-rendering="crispEdges">',
         f'<title id="dens-title">{_esc(title)}</title>',
-        f'<desc id="dens-desc">{_esc(subtitle)} — {len(pts):,} points binned to '
+        f'<desc id="dens-desc">{_esc(subtitle) + " — " if subtitle else ""}{len(pts):,} points binned to '
         f'{nx} by {ny} cells. {_esc(extent_sentence(bbox))}'
         f'{" " + _esc(str(region)) + " is the mapped area." if region else ""}</desc>',
         *([stamp] if stamp else []),
@@ -519,7 +531,7 @@ def build_svg(
         f'<text x="26" y="44" font-family="{_TITLE_FONT}" '
         f'font-size="30" fill="{INK}">{_esc(title)}</text>'
     )
-    strap = f"{subtitle} · {region}" if region else subtitle
+    strap = " · ".join(part for part in (subtitle, region) if part)
     out.append(
         f'<text x="26" y="70" font-family="{_TITLE_FONT}" '
         f'font-size="14" font-style="italic" fill="{SUBTLE}">{_esc(strap)}</text>'
@@ -532,10 +544,11 @@ def build_svg(
                             peak_word=words["peak"]))
     out.append("</g>")
     out.append('<g id="caption">')
-    out.append(
-        f'<text x="26" y="{plate_h - 22:.0f}" font-family="{_MONO_FONT}" '
-        f'font-size="9" fill="{SUBTLE}" letter-spacing="0.6">{_esc(caption)}</text>'
-    )
+    if caption:
+        out.append(
+            f'<text x="26" y="{plate_h - 22:.0f}" font-family="{_MONO_FONT}" '
+            f'font-size="9" fill="{SUBTLE}" letter-spacing="0.6">{_esc(caption)}</text>'
+        )
     out.append("</g>")
     out.append("</svg>")
     return "\n".join(out)
@@ -666,9 +679,9 @@ def make_density(
     bbox: tuple[float, float, float, float] = _DEMO_BBOX,
     bins: int = DEFAULT_BINS,
     width: int = 1000,
-    title: str = "Where the lightning fell",
-    subtitle: str = "Every flash of a synthetic year, accumulated one day at a time",
-    caption: str = "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD",
+    title: str | None = None,
+    subtitle: str | None = None,
+    caption: str | None = None,
     region: str | None = None,
     per_area: bool = False,
     provenance: bool = False,
@@ -702,7 +715,8 @@ def make_density(
     title, subtitle, caption : str
         Chart chrome. The caption is where provenance goes, and the demo's
         says its data is synthetic *on the plate* — this form is persuasive
-        enough to be believed otherwise.
+        enough to be believed otherwise. Those words belong to the demo:
+        with your own ``points`` and no caption, the plate has none.
     region, per_area, provenance
         Forwarded to :func:`build_svg`.
 

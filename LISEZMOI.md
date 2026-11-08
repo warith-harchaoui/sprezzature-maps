@@ -143,7 +143,13 @@ imprime pour qu'une personne décide.
 
 La bibliothèque et l'API HTTP prennent des options que la ligne de commande
 n'expose pas, comme `breaks`, `cities`, `rivers`, `width` et `height` pour un
-choroplèthe, ou `bbox`, `width` et `caption` pour une carte de densité.
+choroplèthe, ou `bbox`, `width` et `caption` pour une carte de densité. Sans
+`bbox`, la bibliothèque et la route HTTP découpent sur la fenêtre de la
+démonstration, les États-Unis contigus, et écartent ce qui tombe dehors ;
+`make-map density --points` et l'éditeur cadrent sur les points reçus. Le titre
+sur la foudre et la légende « synthétique » appartiennent à la démonstration :
+vos propres points n'y ont pas droit, donc une planche ne dit d'où viennent ses
+événements que si vous passez `caption`, et `make-map audit` le signale sinon.
 
 ### 3. L'API HTTP, avec Docker et compose
 
@@ -629,8 +635,8 @@ plusieurs réglages par défaut.
 
 **Elle doit tenir dans la colonne.** Un graphique sur une colonne fait 595
 pixels de large à The Economist, Datawrapper publie à 600 par défaut, et une
-colonne de téléphone fait environ 375. La carte de légende fait 262 pixels
-fixes : acceptable à 1000, elle recouvre la carte à 375. `legend_position`
+colonne de téléphone fait environ 375. La carte de légende fait au moins 262
+unités de large : acceptable à 1000, elle recouvre la carte à 375. `legend_position`
 accepte donc `below` (une bande pleine largeur sous la carte) et `auto`, qui
 choisit d'après la largeur de la planche :
 

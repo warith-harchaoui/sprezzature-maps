@@ -90,6 +90,20 @@ def _load_choropleth_rows(data_path: str, mapping: dict[str, str]) -> list[dict[
         raise click.ClickException(str(exc)) from exc
 
 
+def _render(generator: Any, **kwargs: Any) -> Any:
+    """Call a generator, in Click's vocabulary.
+
+    The generators refuse bad input with a :class:`ValueError` whose message is
+    written for a reader: a mistyped config key, an empty window, a table that
+    matches no territory. Left alone it reached the terminal under a traceback
+    of the drawing code.
+    """
+    try:
+        return generator(**kwargs)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
 # `-V` / `--version` read the installed distribution's metadata rather than a
 # constant, so the answer is the version pip resolved, whichever of the two
 # names was typed.
@@ -252,7 +266,7 @@ def choropleth_cmd(
         kwargs["title"] = title
     if out:
         kwargs["out"] = out
-    result = make_choropleth(**kwargs)
+    result = _render(make_choropleth, **kwargs)
     click.echo(result)
 
 
@@ -286,14 +300,24 @@ def density_cmd(
     """Accumulation map: point events binned to a luminous field, no coastline."""
     kwargs: dict[str, Any] = {}
     if points_path:
+        from sprezzature_maps.editor.render import infer_bbox
+
         kwargs["points"] = [tuple(point) for point in json.loads(Path(points_path).read_text())]
+        # Framed on the events, as the editor does: this command has no
+        # --bbox, and the generator's own default window is the contiguous
+        # United States, so events anywhere else ended in "no point fell
+        # inside the bbox" and events partly outside were cropped unsaid.
+        try:
+            kwargs["bbox"] = infer_bbox(kwargs["points"])
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
     if title:
         kwargs["title"] = title
     if out:
         kwargs["out"] = out
     if bins:
         kwargs["bins"] = bins
-    click.echo(str(make_density(**kwargs)))
+    click.echo(str(_render(make_density, **kwargs)))
 
 
 @main.command("improve")
@@ -519,7 +543,7 @@ def situation_map_cmd(config_path: str | None, out: str | None, title: str | Non
         kwargs["title"] = title
     if out:
         kwargs["out"] = out
-    result = make_situation_map(**kwargs)
+    result = _render(make_situation_map, **kwargs)
     click.echo(result)
 
 

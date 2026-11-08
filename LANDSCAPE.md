@@ -13,7 +13,7 @@ at rather than a map a reader drives.
 ```
 sprezzature suite
 ├── sprezzature-maps          ← this package (numbers attached to real places)
-├── sprezzature-figures       (167 chart types; everything that is not geography)
+├── sprezzature-figures       (168 chart types; everything that is not geography)
 ├── sprezzature-colors        (accessible palettes, OKLCH)
 ├── sprezzature-accessibility (static HTML lint, alt text)
 ├── sprezzature-publish       (a folder of Markdown into a findable site)

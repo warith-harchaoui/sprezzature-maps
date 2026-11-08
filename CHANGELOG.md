@@ -4,6 +4,37 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.1.4] — 2026-11-08
+
+### Fixed
+
+- **Your own events are no longer captioned as invented.** `make_density`
+  and `POST /v1/density`, given real points and no caption, drew the demo's
+  title, the subtitle "Every flash of a synthetic year" and the caption
+  "SYNTHETIC DEMONSTRATION DATA · NOT AN OBSERVATIONAL RECORD", and
+  `make-map audit` accepted that sentence as provenance. Those words now
+  belong to the demo set alone: real points get a neutral title and no
+  caption, and the audit reports `no-provenance` until one is passed.
+- **`make-map density --points` works outside the United States.** The
+  command has no `--bbox` and binned over the demo's window, so events
+  elsewhere ended in `no point fell inside the bbox` and events partly
+  outside were cropped without a word. It now frames the points, as the
+  Editor already did. The library and the HTTP route keep their default and
+  can state a `bbox`.
+- `make-map choropleth`, `density` and `situation-map` report a refused input
+  as `Error: ...` and exit 1, instead of a traceback of the drawing code.
+- The MCP server announced a sentence as its version: fastapi-mcp 0.4 passes
+  the description into the version slot of `Server`. `serverInfo.version` is
+  now the package version, and the description is in `instructions`.
+
+### Docs
+
+- `LANDSCAPE.md`, `PAYSAGE.md`: `sprezzature-figures` draws 168 chart types.
+- `TRIGGERS.md`: `make-map improve` takes the data behind a map, not a
+  finished SVG; it had its row under "a finished plate".
+- README, LISEZMOI: the legend card is at least 262 units wide, it grows to
+  fit its rows. The density paragraph says what the default window does.
+
 ## [1.1.3] — 2026-11-05
 
 ### Docs

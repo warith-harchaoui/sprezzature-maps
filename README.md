@@ -139,7 +139,13 @@ a person to decide.
 
 The library and the HTTP API take options the command line does not
 expose, such as `breaks`, `cities`, `rivers`, `width` and `height` for a
-choropleth, or `bbox`, `width` and `caption` for a density map.
+choropleth, or `bbox`, `width` and `caption` for a density map. Without a
+`bbox`, the library and the HTTP route bin over the demo's window, the
+contiguous United States, and drop what falls outside it; `make-map density
+--points` and the editor frame the points they are given. The lightning title
+and the "synthetic" caption belong to the demo: your own points get neither,
+so a plate from them says where its events came from only if you pass
+`caption`, and `make-map audit` reports it otherwise.
 
 ### 3. The HTTP API, with Docker and compose
 
@@ -586,7 +592,7 @@ a few defaults.
 
 **It has to fit the column.** A one-column chart at The Economist is 595
 pixels wide, Datawrapper defaults to 600, and a phone column is about 375.
-The legend card is a fixed 262 pixels, which is fine at 1000 and covers the
+The legend card is at least 262 units wide, which is fine at 1000 and covers the
 map at 375, so `legend_position` takes `below` (a full-width band under the
 map) and `auto`, which chooses from the plate's own width:
 
