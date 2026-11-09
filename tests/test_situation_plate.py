@@ -792,7 +792,9 @@ def _band_row_tops(svg: str) -> list[float]:
     """
     import re
 
-    legend = svg[svg.index('<g id="legend"') :].split("</g>")[0]
+    # Up to the next layer, not the first ``</g>``: each class row is now its
+    # own button group, so the first close tag ended the first row.
+    legend = svg[svg.index('<g id="legend"') : svg.index('<g id="value-legend"')]
     ys = re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*font-size="12.0"', legend)
     return sorted({float(y) for y in ys})
 
