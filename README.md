@@ -203,6 +203,36 @@ from the editor is explained [below](#why-a-separate-repo-not-a-chart-type-in-sp
 
 ## Recipes
 
+### A plate set the way a newsroom sets one
+
+`style: editorial` is the register of a newspaper's conflict map rather than
+an atlas plate. It only fills in what the config left unset:
+
+```yaml
+style: editorial
+title: "Russia holds nearly a fifth of Ukraine"   # the finding, not the subject
+legend_position: below                            # key under the map, sources under the key
+areas_of_control:
+  baseline: "Ukrainian government control"        # the status quo: paper, not keyed
+  palette: {"Russian-occupied (approx.)": "#e07a6c"}
+labels:
+  territories:                                    # the zone named on the zone
+    - {lon: 39.05, lat: 49.3, text: "Russian-controlled", color: "#8e3328",
+       weight: "700", halo: "none"}
+```
+
+The status quo is drawn as paper and the neighbours as grey ground, so the
+one saturated colour on the plate is the ground that changed hands. The
+plate is flat, has no north arrow, and sets its source line in the text
+face, under the key.
+
+In a browser the plate also tells its story when it opens: the changed
+ground fades in, the front draws itself, the flashpoints land, in two and a
+half seconds (`animate`). It is CSS, so `prefers-reduced-motion` stops it,
+an `<img>` embed included, and every keyframe only leads into the drawn
+state. A rasteriser never runs it: the PNG is the finished map, measured
+within 1/255 of the same plate with `animate: false`.
+
 ### What moved between two dates
 
 The question a researcher actually brings, and the one a single frame

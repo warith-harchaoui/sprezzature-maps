@@ -208,6 +208,37 @@ de figures est expliquée [plus bas](#pourquoi-un-dépôt-séparé-plutôt-quun-
 
 ## Recettes
 
+### Une planche composée comme dans un journal
+
+`style: editorial` donne le registre de la carte de conflit d'un quotidien
+plutôt que d'une planche d'atlas. Il ne remplit que ce que la config a
+laissé vide :
+
+```yaml
+style: editorial
+title: "Russia holds nearly a fifth of Ukraine"   # la trouvaille, pas le sujet
+legend_position: below                            # la clé sous la carte, les sources sous la clé
+areas_of_control:
+  baseline: "Ukrainian government control"        # le statu quo : du papier, hors légende
+  palette: {"Russian-occupied (approx.)": "#e07a6c"}
+labels:
+  territories:                                    # la zone nommée sur la zone
+    - {lon: 39.05, lat: 49.3, text: "Russian-controlled", color: "#8e3328",
+       weight: "700", halo: "none"}
+```
+
+Le statu quo est dessiné en papier et les voisins en sol gris : la seule
+couleur saturée de la planche est le terrain qui a changé de main. La planche
+est plate, sans flèche du nord, et sa ligne de sources passe dans la police
+du texte, sous la clé.
+
+Dans un navigateur, la planche raconte aussi son histoire à l'ouverture : le
+terrain changé apparaît, le front se trace, les points chauds tombent, en
+deux secondes et demie (`animate`). C'est du CSS : `prefers-reduced-motion`
+l'arrête, dans un `<img>` compris, et chaque image-clé ne fait que mener à
+l'état dessiné. Un rasteriseur ne la joue jamais : le PNG est la carte
+finie, à 1/255 près de la même planche avec `animate: false`.
+
 ### Ce qui a bougé entre deux dates
 
 La question qu'un chercheur apporte vraiment, et celle à laquelle une

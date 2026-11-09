@@ -103,6 +103,24 @@ The plate itself
     EPSG code.
 ``frame``
     ``{page_color, radius, margin}`` for the card the plate sits on.
+``style``
+    ``"atlas"`` (default) or ``"editorial"``. Editorial is the newsroom
+    register: a flat plate with no card, quiet neutral ground, a lighter
+    relief, control fills laid flat over it, no north arrow and a
+    sans-serif source line. It only fills in what the config left unset,
+    so any key written out still wins. See :data:`_EDITORIAL`.
+``animate``
+    Let the plate tell its story in two seconds when it opens: the changed
+    ground fades in over the status quo, the front draws itself, the
+    flashpoints land. CSS, not SMIL, so ``prefers-reduced-motion`` stops it
+    everywhere, an ``<img>`` embed included; and every keyframe only *leads
+    into* the drawn state, so a rasteriser, a print and a reader who asked
+    for no motion all see the finished map. Default ``true`` under
+    ``style: editorial`` unless ``interactivity`` is ``"static"``, else
+    ``false``.
+``north_arrow``
+    ``false`` drops the north arrow. Default ``true``, except under
+    ``style: editorial``, where a regional plate's north is never in doubt.
 ``simplify``
     Vertex-thinning tolerance in output units, applied after projection.
     ``0`` keeps every vertex. See ``_simplify``.
@@ -159,8 +177,11 @@ The assessment
 ``areas_of_control``
     The thematic layer: ``{source, category_field, confidence_field,
     palette, contested, fill_opacity, casing_width, blend, over_water,
-    hatch_color}``. ``over_water: true`` keeps a zone's own shape instead of
+    hatch_color, baseline}``. ``over_water: true`` keeps a zone's own shape instead of
     clipping it to land, for a claim that really is maritime.
+    ``baseline`` names the class that is the status quo -- the ground nobody
+    took. It is drawn as paper (white unless ``palette`` says otherwise) and
+    left out of the legend, so the one colour on the plate is the change.
     ``hatch_color`` sets the diagonal rule a contested zone is struck with.
 ``values``
     A number per administrative unit, the regional choropleth:
@@ -243,7 +264,10 @@ The assessment
 ``labels``
     Hand-placed names: ``{places, waters, water, territories}``.
     ``water`` is the singular alias, appended to ``waters`` when both are
-    given.
+    given. A ``territories`` entry is ``{lon, lat, text, size, tracking,
+    color, upper, rotate, weight, halo}``; it is how an editorial plate
+    names a zone on the zone instead of in a key. ``halo: "none"`` drops
+    the white ring, which on a coloured fill reads as a sticker.
 
 Chrome and provenance
 ~~~~~~~~~~~~~~~~~~~~~
@@ -2286,16 +2310,22 @@ def tracked_text(
     anchor: str = "middle",
     upper: bool = True,
     font: str = _DEFAULT_FONT,
+    halo: str = "#ffffff",
 ) -> str:
     """Return a ``<text>`` with letter-spacing: the cartographer's tracked label."""
     label = text.upper() if upper else text
+    head = (
+        f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" '
+        f'font-family="{font}" font-size="{size:.1f}" font-weight="{weight}" '
+        f'letter-spacing="{tracking:.2f}" fill="{fill}"'
+    )
+    if halo == "none":
+        return f"{head}>{_esc(label)}</text>"
     # Paint-order halo: a white stroke drawn *under* the fill so the label stays
     # legible over land, sea or any zone colour, standard cartographic practice.
     return (
-        f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" '
-        f'font-family="{font}" font-size="{size:.1f}" font-weight="{weight}" '
-        f'letter-spacing="{tracking:.2f}" fill="{fill}" '
-        f'paint-order="stroke" stroke="#ffffff" stroke-width="{max(2.0, size * 0.28):.1f}" '
+        f'{head} '
+        f'paint-order="stroke" stroke="{halo}" stroke-width="{max(2.0, size * 0.28):.1f}" '
         f'stroke-opacity="0.85" stroke-linejoin="round">{_esc(label)}</text>'
     )
 
@@ -3048,6 +3078,109 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
     return title, " ".join(sentences)
 
 
+#: The newsroom register, as defaults. Every value here was chosen by
+#: rendering the Ukraine plate both ways and looking (ASSESSMENT, round 1):
+#: the atlas plate paints every square centimetre, so the eye has nowhere to
+#: go; this one leaves the status quo as paper, greys the neighbours, and
+#: keeps one saturated colour for what changed hands. The relief stays, at a
+#: strength where it reads as ground rather than as texture over the claim.
+_EDITORIAL: dict[str, Any] = {
+    "frame": {"margin": 0, "radius": 0},
+    "north_arrow": False,
+    "basemap": {
+        "relief_strength": 0.5,
+        "land_color": "#e4e2dc",
+        "sea_color": "#d3dde5",
+        "coast_color": "#9fb0bd",
+    },
+    # Flat, not multiplied: a multiply cannot lighten, so a paper-white
+    # baseline vanished into the relief and the focus country read exactly
+    # like its neighbours.
+    "areas_of_control": {"blend": "normal", "fill_opacity": 0.72},
+}
+
+_STYLES = ("atlas", "editorial")
+
+
+def _apply_style(cfg: dict[str, Any]) -> None:
+    """Fill in the defaults of ``cfg["style"]`` without overriding a set key.
+
+    In place, because ``build_map`` already threads private keys through the
+    same dict. Nested sections are merged one level deep, so writing
+    ``basemap: {sea_color: ...}`` keeps the editorial relief and land.
+    """
+    style = str(cfg.get("style", "atlas"))
+    if style not in _STYLES:
+        raise ValueError(f"unknown style {style!r}; known: {', '.join(_STYLES)}")
+    if style != "editorial":
+        return
+    for key, value in _EDITORIAL.items():
+        if isinstance(value, dict):
+            section = cfg.get(key)
+            if section is None:
+                section = cfg[key] = {}
+            if isinstance(section, dict):
+                for sub, sub_value in value.items():
+                    section.setdefault(sub, sub_value)
+        else:
+            cfg.setdefault(key, value)
+
+
+def _is_editorial(cfg: dict[str, Any]) -> bool:
+    return str(cfg.get("style", "atlas")) == "editorial"
+
+
+def _wants_animation(cfg: dict[str, Any]) -> bool:
+    """Whether the plate carries its opening sequence. See ``animate``."""
+    default = _is_editorial(cfg) and str(cfg.get("interactivity", "self-contained")) != "static"
+    return bool(cfg.get("animate", default))
+
+
+#: The opening sequence, in seconds: (delay, duration). Ground first, then the
+#: line that divides it, then the places where the line is being fought over
+#: -- the order a reporter would tell it in. Two and a half seconds in all:
+#: long enough to be read as a sequence, short enough that nobody waits.
+_ANIMATION: dict[str, tuple[float, float]] = {
+    "zones": (0.25, 0.9),
+    "front": (0.9, 1.4),
+    "marks": (2.1, 0.45),
+}
+
+
+def _animation_css(cfg: dict[str, Any]) -> str:
+    """The keyframes and rules of the opening sequence, or nothing.
+
+    Every animation is ``backwards``-filled and none is ``forwards``-filled:
+    the keyframes describe how the plate *arrives* at its drawn state, never
+    a state of their own. So when the sequence ends, or never runs -- a
+    rasteriser, a print, ``prefers-reduced-motion`` -- what remains is the
+    plain plate, byte for byte the drawing the PNG shows.
+    """
+    if not _wants_animation(cfg):
+        return ""
+    baseline = str((cfg.get("areas_of_control") or {}).get("baseline", ""))
+    base = baseline.replace("\\", "\\\\").replace('"', '\\"')
+    zd, zt = _ANIMATION["zones"]
+    fd, ft = _ANIMATION["front"]
+    md, mt = _ANIMATION["marks"]
+    zones = (
+        f'#areas-of-control .hit:not([data-category="{base}"]),'
+        '#areas-of-control path[fill^="url(#hatch"]'
+    )
+    return (
+        "@keyframes sz-fade{from{opacity:0}}"
+        "@keyframes sz-draw{from{stroke-dasharray:1 1;stroke-dashoffset:1}"
+        "to{stroke-dasharray:1 1;stroke-dashoffset:0}}"
+        "@keyframes sz-pop{from{transform:scale(0)}}"
+        f"{zones}{{animation:sz-fade {zt}s ease-out {zd}s backwards;}}"
+        f"#front-reveal path{{animation:sz-draw {ft}s ease-in-out {fd}s backwards;}}"
+        "#events .hit,#forces .hit{transform-box:fill-box;transform-origin:center;"
+        f"animation:sz-pop {mt}s cubic-bezier(.3,1.6,.5,1) {md}s backwards;}}"
+        "@media (prefers-reduced-motion: reduce){"
+        f"{zones},#front-reveal path,#events .hit,#forces .hit{{animation:none;}}}}"
+    )
+
+
 def build_map(cfg: dict[str, Any]) -> str:
     """Assemble the full layered situation-map SVG from a config dict.
 
@@ -3067,6 +3200,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     # the MCP tool -- rather than through a second generator they would
     # each have to learn about. The recursion terminates because the panel
     # configs are built without this key.
+    _apply_style(cfg)
     if cfg.get("small_multiples"):
         return build_small_multiples(cfg)
     bbox = validate_region(cfg.get("region"))
@@ -3085,6 +3219,8 @@ def build_map(cfg: dict[str, Any]) -> str:
     # private key is how a small-multiples panel inherits it: a panel drops
     # ``print_width`` itself, because the sheet is what has a page size.
     vp["print"] = bool(cfg.get("print_width") or cfg.get("_print"))
+    # A newsroom plate is flat: nothing on it floats, so nothing casts a shadow.
+    vp["flat"] = _is_editorial(cfg)
     W, H = vp["width"], vp["height"]
 
     # The plate's own control panel is furniture too, and it was the one
@@ -3531,6 +3667,11 @@ def build_map(cfg: dict[str, Any]) -> str:
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {outer_w:.1f} {outer_h:.1f}" '
         f'{size} '
+        # The face every unstyled <text> inherits. Tooltips, the control
+        # panel and the automatic city names each set none, so a browser
+        # and rsvg alike fell back to Times: a serif "Brest" beside a sans
+        # "KYIV", and a "SHOW / Terrain" panel in a third voice.
+        f'font-family="{_DEFAULT_FONT}" '
         f'role="{role}" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
@@ -3549,6 +3690,7 @@ def build_map(cfg: dict[str, Any]) -> str:
         ".hit{cursor:crosshair;}"
         ".hit:focus-visible{outline:2px solid #1b2733;outline-offset:1px;}"
         "@media (prefers-reduced-motion: reduce){.tip{transition:none;}}"
+        f"{_animation_css(cfg)}"
         "</style>"
         f'<rect width="{outer_w:.1f}" height="{outer_h:.1f}" fill="{page_color}"/>'
         f'<g transform="translate({margin:.1f},{margin:.1f})">'
@@ -4028,7 +4170,7 @@ def _areas_of_control_layer(
             f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{casing_w}" '
             f'stroke-linejoin="round"/>'
         )
-        color = palette.get(cat, "#dddddd")
+        color = palette.get(cat, "#ffffff" if cat == aoc.get("baseline") else "#dddddd")
         is_contested = cat in contested
         # A claimed zone gets no solid fill and a dashed edge: painting it the
         # same colour as ground a force is assessed to hold would assert
@@ -5645,6 +5787,22 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
             f'paint-order="stroke" stroke="#ffffff" stroke-width="{3.2 * ts:.1f}" '
             f'stroke-opacity="0.9" stroke-linejoin="round">{_esc(label.upper())}</text>'
         )
+    if _wants_animation(cfg):
+        # The line draws itself through a mask, because the line is dashed
+        # and a dash pattern is exactly what a stroke-dashoffset reveal
+        # would have to overwrite. The mask's own stroke is solid and wide;
+        # only the animation gives it a dash, so with no animation -- a
+        # rasteriser, reduced motion -- the mask is a plain band and the
+        # whole front shows.
+        mask = (
+            f'<defs><mask id="front-reveal" maskUnits="userSpaceOnUse">'
+            f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{40 * ts:.1f}" '
+            f'stroke-linejoin="round" stroke-linecap="round" pathLength="1"/></mask></defs>'
+        )
+        # Only the two strokes go under the mask; a label set beside the line
+        # is wider than the band and would be cut.
+        lines, rest = "".join(parts[:2]), "".join(parts[2:])
+        return f'<g id="front-line">{mask}<g mask="url(#front-reveal)">{lines}</g>{rest}</g>'
     return f'<g id="front-line">{"".join(parts)}</g>'
 
 
@@ -6283,7 +6441,8 @@ def _cities_layer(
             f'fill="#2B2B2E" fill-opacity="0.8"/>'
         )
         out.append(
-            f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="{size:.1f}" '
+            f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{size:.1f}" '
             f'fill="#2B2B2E" paint-order="stroke" stroke="#FFFFFF" '
             f'stroke-width="{_CITY_HALO * ts:.1f}" stroke-linejoin="round">'
             f"{_esc(city.name)}</text>"
@@ -6422,9 +6581,10 @@ def _labels_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
             # stop on a mountain range.
             fill=region.get("color", "#8a8070"),
             tracking=region.get("tracking", 4),
-            weight="500",
+            weight=str(region.get("weight", "500")),
             upper=region.get("upper", True),
             anchor="middle",
+            halo=str(region.get("halo", "#ffffff")),
         )
         angle = region.get("rotate", 0)
         if angle:
@@ -6846,6 +7006,14 @@ def _callout_badge(
 #: becomes a dot.
 _INSET_ZOOM = 6.0
 
+#: The least a derived inset shows either side of its centre, in degrees.
+#: Six times a small region is still a small region: eastern DRC is four
+#: degrees wide, so its inset was 24 degrees of unbroken central Africa --
+#: a grey box with a rectangle in it, no coast, nothing to recognise
+#: (ASSESSMENT, round 5). Eighteen reaches both of Africa's coasts from the
+#: Kivus, and is already exceeded by every regional plate that worked.
+_INSET_MIN_HALF_SPAN = 18.0
+
 #: The inset's width as a fraction of the plate's. Small enough to read
 #: as furniture, large enough that a country outline in it is still a
 #: country.
@@ -7041,8 +7209,12 @@ def _hand_labels_in_corner(cfg: dict[str, Any], corner: str) -> int:
     )
 
 
-def _inset_context_bbox(bbox: list[float], zoom: float = _INSET_ZOOM) -> list[float]:
+def _inset_context_bbox(
+    bbox: list[float], zoom: float = _INSET_ZOOM, floor: float = 1.0
+) -> list[float]:
     """Return the wider extent an inset shows, centred on ``bbox``.
+
+    ``floor`` is the smallest half-span, in degrees, either side may have.
 
     Clamped to the usable world: past about 84 degrees the vendored basemap
     has nothing to draw and a conic projection stops behaving.
@@ -7059,8 +7231,8 @@ def _inset_context_bbox(bbox: list[float], zoom: float = _INSET_ZOOM) -> list[fl
     """
     west, south, east, north = (float(v) for v in bbox)
     cx, cy = (west + east) / 2.0, (south + north) / 2.0
-    half_w = max((east - west) * zoom / 2.0, 1.0)
-    half_h = max((north - south) * zoom / 2.0, 1.0)
+    half_w = max((east - west) * zoom / 2.0, floor)
+    half_h = max((north - south) * zoom / 2.0, floor)
     return [
         max(-180.0, cx - half_w),
         max(-84.0, cy - half_h),
@@ -7211,7 +7383,7 @@ def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, f
     ts, W, H = vp["ts"], vp["width"], vp["height"]
     region_bbox = [float(v) for v in cfg["region"]["bbox"]]
     context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
-        region_bbox, float(inset.get("zoom", _INSET_ZOOM))
+        region_bbox, float(inset.get("zoom", _INSET_ZOOM)), _INSET_MIN_HALF_SPAN
     )
     margin = 22 * ts
     # A legend set as its own column widens the plate beyond the map, and
@@ -7284,7 +7456,7 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     ts = vp["ts"]
     region_bbox = [float(v) for v in cfg["region"]["bbox"]]
     context = [float(v) for v in inset["bbox"]] if inset.get("bbox") else _inset_context_bbox(
-        region_bbox, float(inset.get("zoom", _INSET_ZOOM))
+        region_bbox, float(inset.get("zoom", _INSET_ZOOM)), _INSET_MIN_HALF_SPAN
     )
 
     placed = _inset_box(cfg, vp)
@@ -7299,18 +7471,40 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     # A viewport of its own, with no padding: the inset's frame is its bound.
     sub = make_viewport(proj, context, box_w, 0.0, vp.get("simplify", DEFAULT_TOLERANCE))
 
-    land = load_land(context)
+    # Clipped in the projected plane, to the rectangle the reader sees. The
+    # earlier clip was a longitude/latitude box, which a conic projection
+    # bends into a fan: on the Ukraine and Sudan plates the inset showed a
+    # pale trapezoid of land floating in sea that is not there. Land is
+    # loaded from a wider extent so the rectangle is filled to its edges.
     # A malformed clip must not cost the plate its inset: the unclipped land
     # still draws correctly, it is only wider than the frame and the frame
     # clips it anyway.
+    # Wider by four tenths, not doubled: doubled, a continental context
+    # reached 168 degrees, the conic folded the land over itself, the clip
+    # below raised on the invalid result and was swallowed, and the inset
+    # drew land far outside its own frame.
+    wide = _inset_context_bbox(context, 1.4)
+    land = load_land(wide)
     with contextlib.suppress(Exception):
-        land = land.intersection(box(*context))
-    land_d = projected_geom_to_path(_project_geom(land, proj), sub)
+        land = land.intersection(box(*wide))
+    land_p = make_valid(_project_geom(land, proj))
+    x0w, y0w = sub["to_world"](0.0, box_h)
+    x1w, y1w = sub["to_world"](box_w, 0.0)
+    with contextlib.suppress(Exception):
+        land_p = land_p.intersection(
+            box(min(x0w, x1w), min(y0w, y1w), max(x0w, x1w), max(y0w, y1w))
+        )
+    land_d = projected_geom_to_path(land_p, sub)
 
     # The region rectangle, projected through the same transform, so it sits
     # exactly where the main map's extent really falls in the context.
     region_d = projected_geom_to_path(_project_geom(box(*region_bbox), proj), sub)
 
+    # The editorial plate's own ground, so the locator reads as the same map
+    # zoomed out rather than as a sticker from another atlas.
+    ground = (cfg.get("basemap") or {}) if _is_editorial(cfg) else {}
+    inset_land = ground.get("land_color", palette["land"])
+    inset_sea = ground.get("sea_color", palette["sea"])
     clip_id = "inset-clip"
     radius = 3 * ts
     # The locator is a *card*, the same object the legend is, and for the
@@ -7328,9 +7522,9 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         f'rx="{radius:.1f}" fill="{palette["panel"]}"'
         f'{_drop_shadow(vp, "panel-shadow")}/>'
         f'<g clip-path="url(#{clip_id})">'
-        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" fill="{palette["sea"]}" '
+        f'<rect x="0" y="0" width="{box_w:.1f}" height="{box_h:.1f}" fill="{inset_sea}" '
         f'fill-opacity="0.45"/>'
-        f'<path d="{land_d}" fill="{palette["land"]}" stroke="{palette["coast"]}" '
+        f'<path d="{land_d}" fill="{inset_land}" stroke="{palette["coast"]}" '
         f'stroke-width="0.5" stroke-opacity="0.7"/>'
         # The mapped area in red, which is what the guidelines ask for and
         # what the eye finds first. In the plate's own ink it was a small
@@ -7478,10 +7672,27 @@ def _caption_lines(cfg: dict[str, Any], width: float = 0.0, ts: float = 1.0) -> 
     if not width:
         return [str(line) for line in lines]
     available = width - 2 * _CAPTION_INSET * ts
+    wrap = _sans_wrap if _is_editorial(cfg) else mono_wrap
     wrapped: list[str] = []
     for line in lines:
-        wrapped.extend(mono_wrap(str(line), _CAPTION_SIZE * ts, available))
+        wrapped.extend(wrap(str(line), _CAPTION_SIZE * ts, available))
     return wrapped
+
+
+def _sans_wrap(text: str, size: float, available: float) -> list[str]:
+    """Greedy word wrap measured in the proportional face the editorial footer uses."""
+    lines: list[str] = []
+    current = ""
+    for word in text.split(" "):
+        trial = f"{current} {word}" if current else word
+        if current and text_width(trial, size) > available:
+            lines.append(current)
+            current = word
+        else:
+            current = trial
+    if current:
+        lines.append(current)
+    return lines or [""]
 
 
 def _caption_mode(cfg: dict[str, Any]) -> str:
@@ -7499,6 +7710,22 @@ def _caption_mode(cfg: dict[str, Any]) -> str:
     return mode
 
 
+def _caption_in_band(cfg: dict[str, Any], ts: float, width: float) -> bool:
+    """Whether the source line moves under the key instead of over the map's foot.
+
+    A newsroom page reads map, key, then sources. With the key in a band below
+    the map and the footer inside the map, the editorial plate printed them
+    the wrong way round: the provenance sat between the map and the key that
+    explains it (ASSESSMENT, round 2).
+    """
+    return (
+        _is_editorial(cfg)
+        and _caption_mode(cfg) == "full"
+        and _resolve_legend_position(cfg, ts, width) == "below"
+        and bool(_legend_rows(cfg, ts))
+    )
+
+
 def _caption_height(cfg: dict[str, Any], ts: float, width: float = 0.0) -> float:
     """
     Vertical space the caption occupies, or 0 when it is off.
@@ -7507,7 +7734,7 @@ def _caption_height(cfg: dict[str, Any], ts: float, width: float = 0.0) -> float
     bottom-left corner, and the two landed on top of each other the first
     time — legible text over a legible bar, both unreadable.
     """
-    if _caption_mode(cfg) != "full":
+    if _caption_mode(cfg) != "full" or _caption_in_band(cfg, ts, width):
         return 0.0
     return len(_caption_lines(cfg, width, ts)) * 11.5 * ts + 17 * ts
 
@@ -7547,6 +7774,9 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
 
     palette = _pal(cfg)
     ts, W, H = vp["ts"], vp["width"], vp["height"]
+    if _caption_in_band(cfg, ts, W):
+        # Drawn by :func:`_legend_band`, under the key.
+        return ""
     lines = _caption_lines(cfg, W, ts)
     if not lines:
         # Refusing beats printing an empty rule: a caption that says nothing
@@ -7572,11 +7802,14 @@ def _caption_block(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         f'<line x1="{26 * ts:.1f}" y1="{band_top:.1f}" x2="{W - 26 * ts:.1f}" '
         f'y2="{band_top:.1f}" stroke="{palette["panel_edge"]}" stroke-width="1"/>',
     ]
+    # Monospace is the atlas footer's voice, borrowed from mapped.earth. A
+    # newsroom sets its source line in the text face, small and grey.
+    face, spacing = (_DEFAULT_FONT, "0") if _is_editorial(cfg) else (_MONO_FONT, "0.4")
     for i, line in enumerate(lines):
         out.append(
             f'<text x="{_CAPTION_INSET * ts:.1f}" y="{top + i * leading:.1f}" '
-            f'font-family="{_MONO_FONT}" font-size="{size:.1f}" '
-            f'fill="{palette["chrome_faint"]}" letter-spacing="0.4">{_esc(line)}</text>'
+            f'font-family="{face}" font-size="{size:.1f}" '
+            f'fill="{palette["chrome_faint"]}" letter-spacing="{spacing}">{_esc(line)}</text>'
         )
     out.append("</g>")
     return "".join(out)
@@ -7611,7 +7844,9 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     inset_box = _inset_box(cfg, vp)
     if inset_box is not None and inset_box[0] > W / 2:
         arrow_x = min(arrow_x, inset_box[0] - 22 * ts)
-    out: list[str] = [north_arrow(arrow_x, 34 * ts, ts)]
+    out: list[str] = (
+        [north_arrow(arrow_x, 34 * ts, ts)] if cfg.get("north_arrow", True) else []
+    )
     title = cfg.get("title")
     if title:
         out.append(
@@ -7767,6 +8002,9 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
          "color": _as_rendered(color, cfg, fill_op),
          "contested": name in contested, "fill": 1.0}
         for name, color in palette.items()
+        # The status quo is the paper the plate is printed on; keying it
+        # sends a reader looking for a white swatch on a white map.
+        if name != aoc.get("baseline")
     ]
     # The difference classes, in the order the layer drew them and only
     # the ones it actually drew: a key for a colour nothing used sends a
@@ -8008,7 +8246,7 @@ def _drop_shadow(vp: dict[str, Any], which: str) -> str:
     it is what turns them off. A plate that never said so is untouched, down
     to the byte.
     """
-    return "" if vp.get("print") else f' filter="url(#{which})"'
+    return "" if vp.get("print") or vp.get("flat") else f' filter="url(#{which})"'
 
 
 def _legend_band_pack(
@@ -8080,6 +8318,18 @@ def _legend_band_dims(
     if not rows:
         return 0.0, 0, [], 0.0
     pad = 15 * ts
+    if _is_editorial(cfg):
+        # No heading and no footer: the stamp under the title already dates
+        # the plate, and a key whose rows are this short needs no title.
+        # What sits under it is the source line, moved here from the map.
+        row_h = 20 * ts
+        columns, offsets = _legend_band_pack(rows, ts, map_w - 2 * pad)
+        band_rows = -(-len(rows) // columns)
+        caption = (
+            len(_caption_lines(cfg, map_w, ts)) * 11.5 * ts + 8 * ts
+            if _caption_in_band(cfg, ts, map_w) else 0.0
+        )
+        return pad + band_rows * row_h + caption + pad, columns, offsets, row_h
     row_h = 23 * ts
     columns, offsets = _legend_band_pack(rows, ts, map_w - 2 * pad)
     band_rows = -(-len(rows) // columns)
@@ -8181,13 +8431,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         # A class row is a button, and a button names what pressing it does.
         # ``role="button"`` on a <g> does not compute a name from the text
         # inside it the way a real <button> would, so the name is explicit.
-        handle = (
-            f' data-legend-category="{_esc(str(row["label"]))}" role="button" tabindex="0"'
-            f' aria-label="Show only {_esc(str(row["label"]))}"'
-            if row["kind"] == "class"
-            else ""
-        )
-        parts.append(f"<g{handle}>" if handle else "<g>")
+        parts.append(f"<g{_legend_button(row)}>")
         parts.append(_legend_mark(row, px + pad, ry, sw, ts))
         parts.append(
             f'<text x="{tx:.1f}" y="{ry + 4 * ts:.1f}" '
@@ -8334,6 +8578,8 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
     pad = 15 * ts
     sw = 15 * ts
     row_fs = 12.0 * ts
+    if _is_editorial(cfg):
+        return _legend_band_editorial(cfg, vp, rows, band_h, columns, col_x, row_h)
     parts: list[str] = [
         f'<line x1="0" y1="{H:.1f}" x2="{W:.1f}" y2="{H:.1f}" '
         f'stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
@@ -8345,12 +8591,14 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
     for i, row in enumerate(rows):
         cx = pad + col_x[i % columns]
         ry = top + (i // columns) * row_h + row_h / 2
+        parts.append(f"<g{_legend_button(row)}>")
         parts.append(_legend_mark(row, cx, ry, sw, ts))
         parts.append(
             f'<text x="{cx + sw + 10 * ts:.1f}" y="{ry + 4 * ts:.1f}" '
             f'font-family="{_DEFAULT_FONT}" font-size="{row_fs:.1f}" '
             f'fill="{_pal(cfg)["legend_ink"]}">{_esc(row["label"])}</text>'
         )
+        parts.append("</g>")
     footer = cfg.get("legend_footer")
     if footer:
         parts.append(
@@ -8367,6 +8615,65 @@ def _legend_band(cfg: dict[str, Any], vp: dict[str, Any], rows: list[dict[str, A
 
 
 #: The windows a sheet can be cut into, finest first.
+def _legend_button(row: dict[str, Any]) -> str:
+    """The attributes that make a class row the control isolating that class.
+
+    A class row is a button, and a button names what pressing it does:
+    ``role="button"`` on a <g> does not compute a name from the text inside
+    it the way a real <button> would, so the name is explicit. Shared by the
+    card and both bands -- the bands used to draw their rows without it, so
+    a plate with its key below the map had no clickable key at all.
+    """
+    if row["kind"] != "class":
+        return ""
+    label = _esc(str(row["label"]))
+    return (
+        f' data-legend-category="{label}" role="button" tabindex="0"'
+        f' aria-label="Show only {label}"'
+    )
+
+
+def _legend_band_editorial(
+    cfg: dict[str, Any],
+    vp: dict[str, Any],
+    rows: list[dict[str, Any]],
+    band_h: float,
+    columns: int,
+    col_x: list[float],
+    row_h: float,
+) -> str:
+    """The key as a newsroom prints it: one quiet strip, then the sources."""
+    W, H = vp["width"], vp["height"]
+    ts = vp["ts"]
+    pal = _pal(cfg)
+    pad = 15 * ts
+    sw = 13 * ts
+    parts: list[str] = [
+        f'<rect x="0" y="{H:.1f}" width="{W:.1f}" height="{band_h:.1f}" fill="{pal["plate"]}"/>'
+    ]
+    for i, row in enumerate(rows):
+        cx = pad + col_x[i % columns]
+        ry = H + pad + (i // columns) * row_h + row_h / 2
+        parts.append(f"<g{_legend_button(row)}>")
+        parts.append(_legend_mark(row, cx, ry, sw, ts))
+        parts.append(
+            f'<text x="{cx + sw + 8 * ts:.1f}" y="{ry + 4 * ts:.1f}" '
+            f'font-family="{_DEFAULT_FONT}" font-size="{11.5 * ts:.1f}" '
+            f'fill="{pal["legend_ink"]}">{_esc(row["label"])}</text>'
+        )
+        parts.append("</g>")
+    if _caption_in_band(cfg, ts, W):
+        lines = _caption_lines(cfg, W, ts)
+        top = H + band_h - pad - (len(lines) - 1) * 11.5 * ts
+        for i, line in enumerate(lines):
+            parts.append(
+                f'<text x="{pad:.1f}" y="{top + i * 11.5 * ts:.1f}" '
+                f'font-family="{_DEFAULT_FONT}" font-size="{_CAPTION_SIZE * ts:.1f}" '
+                f'fill="{pal["chrome_faint"]}">{_esc(line)}</text>'
+            )
+    return f'<g id="legend">{"".join(parts)}</g>'
+
+
 _SM_STEPS: tuple[str, ...] = ("day", "week", "month", "quarter", "year")
 
 #: Three-letter month names, so a label does not depend on the host's locale.
@@ -8792,7 +9099,8 @@ def _sm_sheet(
     # The arrow is drawn whether or not the sheet is titled, and the header
     # band keeps a floor, so a bare sheet does not put north through the
     # first row's window headings.
-    chrome.append(north_arrow(width - margin - 14 * ts, margin + 24 * ts, ts))
+    if cfg.get("north_arrow", True):
+        chrome.append(north_arrow(width - margin - 14 * ts, margin + 24 * ts, ts))
     grid_top = max(cursor_y + 10 * ts, margin + 40 * ts)
 
     cells: list[str] = []
@@ -8892,7 +9200,8 @@ def _sm_sheet(
     hatch = (cfg.get("areas_of_control") or {}).get("hatch_color", "#b03a3a")
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.1f} {height:.1f}" '
-        f'{size} role="graphics-document" aria-labelledby="sm-title sm-desc">'
+        f'{size} font-family="{_DEFAULT_FONT}" '
+        'role="graphics-document" aria-labelledby="sm-title sm-desc">'
         f'<title id="sm-title">{_esc(a11y_title)}</title>'
         f'<desc id="sm-desc">{_esc(a11y_desc)}</desc>'
         # The sheet's stamp, from the sheet's own config -- the one that
@@ -8927,7 +9236,7 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
     "legend_title", "print_width", "small_multiples", "provenance", "values",
-    "change", "detail_area",
+    "change", "detail_area", "style", "north_arrow", "animate",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.
@@ -9075,6 +9384,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     "areas_of_control": frozenset({
         "source", "category_field", "confidence_field", "palette", "contested",
         "fill_opacity", "casing_width", "blend", "over_water", "hatch_color",
+        "baseline",
     }),
     "basemap": frozenset({
         "relief", "relief_strength", "hypsometric", "plate", "sea_color",

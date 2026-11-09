@@ -182,6 +182,17 @@ def _contested_band(line_pts: list, country: Any, km: float) -> Any:
 
 # Approximate 2024 contact line north->south, hugging the reported flashpoints
 # (Kupiansk, Bakhmut, Avdiivka, Vuhledar, Robotyne) down to the Dnipro / Kherson.
+#: The editorial plates' one saturated colour, for ground that changed hands,
+#: and the sand a contested band is struck in. Tuned on the Ukraine plate
+#: under the flat editorial blend (ASSESSMENT, round 1).
+OCCUPIED_RED = "#e07a6c"
+#: The same red, deep enough to set a zone's name in on the zone.
+OCCUPIED_INK = "#8e3328"
+#: Sudan's two camps, named in deeper shades of their own fills.
+RSF_INK = "#97461f"
+ARMY_INK = "#46566b"
+CONTESTED_SAND = "#f3c9a8"
+
 FRONT = [
     (37.55, 49.75),
     (38.00, 49.00),
@@ -216,10 +227,11 @@ def build_ukraine() -> dict[str, Any]:
     # Slightly deeper, more saturated pastels so the three classes separate
     # cleanly at fill_opacity ~0.78 (Ukrainian cool blue / occupied warm red /
     # contested ochre) while staying inside the paper-and-ink house palette.
+    # One colour for what changed hands. Government-held ground is the
+    # baseline -- paper -- so the eye goes straight to the occupation.
     palette = {
-        "Ukrainian government control": "#bcd4ec",
-        "Russian-occupied (approx.)": "#e0a89e",
-        "Contested (approx. front line)": "#e4cf9c",
+        "Russian-occupied (approx.)": OCCUPIED_RED,
+        "Contested (approx. front line)": CONTESTED_SAND,
     }
     features = [
         _feat("Ukrainian government control", government),
@@ -229,7 +241,10 @@ def build_ukraine() -> dict[str, Any]:
     b = ukr.bounds
     bbox = [b[0] - 0.6, b[1] - 1.2, b[2] + 0.6, b[3] + 0.6]
     return {
-        "title": "Ukraine: Areas of Control",
+        # The newsroom register: see make_situation_map._EDITORIAL.
+        "style": "editorial",
+        # A newsroom title states the finding; the subtitle dates and hedges it.
+        "title": "Russia holds nearly a fifth of Ukraine",
         # Short enough to clear the legend, which floats top-right over the
         # quiet side of the plate. The long form ran under the card and was
         # cut mid-word; the footer below the map still carries the full
@@ -240,13 +255,12 @@ def build_ukraine() -> dict[str, Any]:
         "canvas_width": 1320,
         "padding": 30,
         "basemap": {
-            "sea_color": "#a8bccb",
-            "land_color": "#f6f1df",
-            "coast_color": "#7993a6",
             "bathymetry": {"rings": 7, "color": "#ffffff", "opacity": 0.4},
         },
         "frontiers": {"focus": "Ukraine"},
-        "legend_position": "top-right",
+        # Under the map: the occupied zone is named on the map itself, so the
+        # key only has to explain what cannot be named there.
+        "legend_position": "below",
         "rivers": {"always_label": ["Dnieper"], "color": "#5d86a6", "label_color": "#3f6a8c"},
         # Natural Earth still carries the Kakhovka Reservoir at its full
         # ~2 150 km2 extent. It drained within two weeks of the dam breach of
@@ -279,9 +293,9 @@ def build_ukraine() -> dict[str, Any]:
         "as_of": "Positions as of ~2024 · illustrative, not operational intelligence",
         "areas_of_control": {
             "category_field": "actor",
+            "baseline": "Ukrainian government control",
             "palette": palette,
             "contested": ["Contested (approx. front line)"],
-            "fill_opacity": 0.78,
             "hatch_color": "#b34a3a",
             "source": {"type": "FeatureCollection", "features": features},
         },
@@ -351,6 +365,20 @@ def build_ukraine() -> dict[str, Any]:
                 {"lon": 37.30, "lat": 48.98, "text": "Kramatorsk", "size": 11, "anchor": "above"},
                 {"lon": 34.90, "lat": 46.70, "text": "Melitopol", "size": 11, "anchor": "above"},
             ],
+            # The zone named on the zone, in its own darker red and without a
+            # halo, which on a coloured fill reads as a sticker. Set in the
+            # quiet north of Luhansk oblast, clear of every town name.
+            "territories": [
+                {"lon": 39.05, "lat": 49.42, "text": "Russian-", "size": 11.5,
+                 "tracking": 1.6, "color": OCCUPIED_INK, "weight": "700", "halo": "none"},
+                {"lon": 39.05, "lat": 49.17, "text": "controlled", "size": 11.5,
+                 "tracking": 1.6, "color": OCCUPIED_INK, "weight": "700", "halo": "none"},
+                {"lon": 34.25, "lat": 45.33, "text": "Crimea", "size": 10.5,
+                 "tracking": 1.6, "color": OCCUPIED_INK, "weight": "700", "halo": "none"},
+                {"lon": 34.25, "lat": 45.12, "text": "annexed 2014", "size": 9.5,
+                 "tracking": 0.4, "color": OCCUPIED_INK, "weight": "400", "halo": "none",
+                 "upper": False},
+            ],
         },
     }
 
@@ -395,11 +423,10 @@ def build_dnieper() -> dict[str, Any]:
         ]
     )
     government = ukr.difference(occupied)
-    palette = {
-        "Ukrainian government control": "#bcd4ec",
-        "Russian-occupied (approx.)": "#e0a89e",
-    }
+    palette = {"Russian-occupied (approx.)": OCCUPIED_RED}
     return {
+        # The newsroom register: see make_situation_map._EDITORIAL.
+        "style": "editorial",
         "title": "The Dnieper Line",
         "subtitle": "Where a river became the front, and what sits on each bank",
         "region": {"bbox": [30.2, 44.1, 38.4, 48.7]},
@@ -407,9 +434,6 @@ def build_dnieper() -> dict[str, Any]:
         "canvas_width": 1320,
         "padding": 30,
         "basemap": {
-            "sea_color": "#a8bccb",
-            "land_color": "#f6f1df",
-            "coast_color": "#7993a6",
         },
         # Neighbour names off. The extent crops Russia to a corner, so the
         # automatic placer put "RUSSIA" at the centroid of what is visible of
@@ -432,8 +456,8 @@ def build_dnieper() -> dict[str, Any]:
         },
         "areas_of_control": {
             "category_field": "actor",
+            "baseline": "Ukrainian government control",
             "palette": palette,
-            "fill_opacity": 0.78,
             "source": {
                 "type": "FeatureCollection",
                 "features": [
@@ -559,7 +583,9 @@ def build_syria() -> dict[str, Any]:
     b = syr.bounds
     bbox = [b[0] - 0.6, b[1] - 0.6, b[2] + 0.6, b[3] + 0.6]
     return {
-        "title": "Syria: Areas of Control",
+        # The newsroom register: see make_situation_map._EDITORIAL.
+        "style": "editorial",
+        "title": "Syria in 2018: one country, four forces",
         "subtitle": (
             "Schematic / approximate, per open-source geopolitical literature · "
             "illustrative ~2018 snapshot, not an operational assessment"
@@ -568,8 +594,6 @@ def build_syria() -> dict[str, Any]:
         "projection": "auto",
         "canvas_width": 1180,
         "basemap": {
-            "sea_color": "#9fb2c0",
-            "land_color": "#f4efdd",
             "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.45},
         },
         "frontiers": {"focus": "Syria"},
@@ -692,7 +716,9 @@ def build_libya() -> dict[str, Any]:
     b = lby.bounds
     bbox = [b[0] - 0.6, b[1] - 0.6, b[2] + 0.6, b[3] + 1.0]
     return {
-        "title": "Libya: Areas of Control",
+        # The newsroom register: see make_situation_map._EDITORIAL.
+        "style": "editorial",
+        "title": "Libya in spring 2011: the east had broken away",
         "subtitle": (
             "Schematic · approximate, First Libyan Civil War ~spring 2011 "
             "(after UNSCR 1973) · open-source reporting, not operational intelligence"
@@ -701,8 +727,6 @@ def build_libya() -> dict[str, Any]:
         "projection": "auto",
         "canvas_width": 1180,
         "basemap": {
-            "sea_color": "#9fb2c0",
-            "land_color": "#f4efdd",
             "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.45},
         },
         "frontiers": {"focus": "Libya"},
@@ -869,11 +893,13 @@ def build_sudan() -> dict[str, Any]:
     contested = unary_union([contested, zaghawa])
 
     palette = {
-        "Sudanese Armed Forces": "#bcd4ec",
-        "Rapid Support Forces": "#e0a89e",
-        "SPLM-N (al-Hilu)": "#cdddb0",
-        "SLM-AW (Jebel Marra)": "#cfc0d8",
-        "Contested (approx.)": "#e4cf9c",
+        # Two belligerents of comparable weight: the army a quiet slate, the
+        # RSF the accent, the two smaller movements muted below both.
+        "Sudanese Armed Forces": "#c3cdd9",
+        "Rapid Support Forces": "#e8956b",
+        "SPLM-N (al-Hilu)": "#cbd3b4",
+        "SLM-AW (Jebel Marra)": "#d6cde0",
+        "Contested (approx.)": CONTESTED_SAND,
     }
     features = [
         _feat("Sudanese Armed Forces", saf),
@@ -885,7 +911,9 @@ def build_sudan() -> dict[str, Any]:
     b = sdn.bounds
     bbox = [b[0] - 0.8, b[1] - 0.8, b[2] + 0.8, b[3] + 0.8]
     return {
-        "title": "Sudan: Areas of Control",
+        # The newsroom register: see make_situation_map._EDITORIAL.
+        "style": "editorial",
+        "title": "Sudan's war has split the country in two",
         "subtitle": (
             "Schematic · the war's east-west partition, with the fighting in Kordofan"
         ),
@@ -901,9 +929,6 @@ def build_sudan() -> dict[str, Any]:
         "canvas_width": 1320,
         "padding": 30,
         "basemap": {
-            "sea_color": "#a8bccb",
-            "land_color": "#f4efdd",
-            "coast_color": "#7993a6",
             "bathymetry": {"rings": 6, "color": "#ffffff", "opacity": 0.4},
         },
         "frontiers": {"focus": "Sudan"},
@@ -942,7 +967,6 @@ def build_sudan() -> dict[str, Any]:
             "category_field": "actor",
             "palette": palette,
             "contested": ["Contested (approx.)"],
-            "fill_opacity": 0.78,
             "hatch_color": "#b34a3a",
             "source": {"type": "FeatureCollection", "features": features},
         },
@@ -992,6 +1016,19 @@ def build_sudan() -> dict[str, Any]:
                 {"lon": 29.656, "lat": 12.053, "text": "Dilling", "size": 11, "anchor": "end"},
                 {"lon": 31.208, "lat": 12.904, "text": "Umm Ruwaba", "size": 11},
                 {"lon": 26.688, "lat": 13.596, "text": "Umm Keddada", "size": 11},
+            ],
+            # Each camp named on its own ground, in a deeper shade of its own
+            # fill, where no town is: the empty north of Darfur, and the desert
+            # east of the Nile above Atbara.
+            "territories": [
+                {"lon": 25.0, "lat": 17.4, "text": "Held by", "size": 10, "tracking": 1.4,
+                 "color": RSF_INK, "weight": "700", "halo": "none"},
+                {"lon": 25.0, "lat": 16.95, "text": "the RSF", "size": 12, "tracking": 1.6,
+                 "color": RSF_INK, "weight": "700", "halo": "none"},
+                {"lon": 35.0, "lat": 20.6, "text": "Held by", "size": 10, "tracking": 1.4,
+                 "color": ARMY_INK, "weight": "700", "halo": "none"},
+                {"lon": 35.0, "lat": 20.15, "text": "the army", "size": 12, "tracking": 1.6,
+                 "color": ARMY_INK, "weight": "700", "halo": "none"},
             ],
         },
     }
@@ -1069,23 +1106,19 @@ def build_drc() -> dict[str, Any]:
     m23 = m23.difference(contested)
     government = land.difference(unary_union([m23, contested]))
 
-    # Government is *not* blue on this plate. Every other map in this gallery
-    # is a country with a coast, so a pale blue government fill reads as
-    # government; here the DRC fills the frame and the same blue read as
-    # ocean -- two thirds of the plate looked like water. A sage green is the
-    # nearest house pastel that can never be mistaken for the sea.
-    palette = {
-        "Government (FARDC)": "#c3d6b4",
-        "M23 / AFC": "#e0a89e",
-        "Contested (approx.)": "#e4cf9c",
-    }
+    # Government-held ground is the baseline, drawn as paper. It used to be
+    # a sage green, chosen because the DRC fills the frame and a pale blue
+    # government read as ocean; with no fill at all the question is gone.
+    palette = {"M23 / AFC": OCCUPIED_RED, "Contested (approx.)": CONTESTED_SAND}
     features = [
         _feat("Government (FARDC)", government),
         _feat("M23 / AFC", m23),
         _feat("Contested (approx.)", contested),
     ]
     return {
-        "title": "Eastern DRC: Areas of Control",
+        # The newsroom register: see make_situation_map._EDITORIAL.
+        "style": "editorial",
+        "title": "M23 holds both ends of Lake Kivu",
         "subtitle": "Schematic · North and South Kivu, along the Albertine Rift",
         "method": (
             "Schematic polygons drawn by hand from the sources below, not a "
@@ -1099,9 +1132,6 @@ def build_drc() -> dict[str, Any]:
         "canvas_width": 900,
         "padding": 26,
         "basemap": {
-            "sea_color": "#a8bccb",
-            "land_color": "#f4efdd",
-            "coast_color": "#7993a6",
         },
         "frontiers": {"focus": "Dem. Rep. Congo"},
         "legend_position": "bottom-left",
@@ -1110,9 +1140,9 @@ def build_drc() -> dict[str, Any]:
         "rivers": {"width": "ranked", "always_label": ["Congo"]},
         "areas_of_control": {
             "category_field": "actor",
+            "baseline": "Government (FARDC)",
             "palette": palette,
             "contested": ["Contested (approx.)"],
-            "fill_opacity": 0.78,
             "hatch_color": "#b34a3a",
             "source": {"type": "FeatureCollection", "features": features},
         },
@@ -1843,6 +1873,10 @@ def _render_png(svg: Path, png: Path, *, width: int = PNG_WIDTH) -> bool:
 #: out of 255 and a mean of one or two -- invisible in a side-by-side crop
 #: of the bathymetry rings, which is the smoothest gradient these maps draw.
 _PALETTE_COLORS = 256
+#: Palette entries kept back for the colours the ground pass renders worst,
+#: and how far off (out of 255, on any channel) a pixel must be to count.
+_INK_COLORS = 32
+_INK_ERROR = 24
 
 
 def _shrink_png(png: Path) -> None:
@@ -1854,21 +1888,43 @@ def _shrink_png(png: Path) -> None:
     new tool: the Congo plate falls from 1 755 KB to 266 KB, the Iberia one
     from 1 008 to 208, and the world choropleth from 226 to 48.
 
-    Octree rather than median cut, which measured three times larger here,
-    and with Floyd-Steinberg dithering so the relief's gradients break up
-    into noise rather than into bands.
+    A median-cut palette applied without dithering. The octree quantiser
+    this used before is smaller (173 KB against 261 on the Ukraine plate),
+    but it spends almost no entries near white: once the editorial plates
+    laid the status quo as paper over the relief, every highlight in that
+    paper came out as a white fleck, and western Ukraine read as snow
+    (ASSESSMENT, round 5). Pillow's octree ignores ``dither`` altogether, so
+    the flecks were the palette, not the dithering. Median cut finds the
+    near-white tones, and without dithering the paper stays paper.
+
+    Two passes, because a palette built from how often a colour occurs has no
+    room for a colour that occurs rarely -- and the rarest colours on a plate
+    are its words. The Sudan plate's "HELD BY THE RSF", set in a deep rust,
+    came out grey-brown. So the first pass keeps 224 entries for the ground,
+    and the last 32 go to the pixels that pass rendered worst: the inks.
+    Measured on Sudan, the same 177 KB and no pixel off by more than 36.
     """
     try:
+        import numpy as np
         from PIL import Image
     except ImportError:  # pragma: no cover - Pillow is a declared dependency
         return
+    ground = _PALETTE_COLORS - _INK_COLORS
     with Image.open(png) as raster:
-        flat = raster.convert("RGB").quantize(
-            colors=_PALETTE_COLORS,
-            method=Image.Quantize.FASTOCTREE,
-            dither=Image.Dither.FLOYDSTEINBERG,
-        )
-    flat.save(png, optimize=True)
+        rgb = raster.convert("RGB")
+    first = rgb.quantize(colors=ground, method=Image.Quantize.MEDIANCUT)
+    pixels = np.asarray(rgb).astype(int)
+    error = np.abs(np.asarray(first.convert("RGB")).astype(int) - pixels).max(axis=2)
+    colors = list(first.getpalette() or [])[: ground * 3]
+    worst = pixels[error > _INK_ERROR].astype("uint8")
+    if len(worst):
+        strip = Image.fromarray(worst.reshape(1, -1, 3))
+        inks = strip.quantize(colors=_INK_COLORS, method=Image.Quantize.MEDIANCUT)
+        colors += list(inks.getpalette() or [])[: _INK_COLORS * 3]
+    colors += [0] * (3 * 256 - len(colors))
+    palette = Image.new("P", (1, 1))
+    palette.putpalette(colors)
+    rgb.quantize(palette=palette, dither=Image.Dither.NONE).save(png, optimize=True)
 
 
 # Every named layer the generator emits, bottom -> top.

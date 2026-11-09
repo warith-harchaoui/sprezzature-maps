@@ -4,6 +4,42 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-09
+
+### Added
+
+- **`style: editorial`, the newsroom register for a situation plate.** The
+  status quo is paper (`areas_of_control.baseline`, left out of the key),
+  the neighbours grey ground, one saturated colour for the ground that
+  changed hands; a flat plate with no shadows and no north arrow
+  (`north_arrow`), a lighter relief, and the source line in the text face,
+  printed under the key when the key sits below the map. It fills in only
+  what a config left unset. The six bundled conflict plates use it, with
+  titles that state the finding and zones named on the zones.
+- **`animate`: the plate opens with its story.** The changed ground fades
+  in, the front draws itself, the flashpoints land. CSS keyframes, so
+  `prefers-reduced-motion` stops them in an `<img>` too, and all of them
+  `backwards`-filled, so a rasteriser and a print get the finished map. On
+  by default under `style: editorial` unless `interactivity` is `static`.
+- `labels.territories` entries take `weight` and `halo` (`"none"`).
+
+### Fixed
+
+- **Town names, tooltips and the control panel were set in Times.** None of
+  them named a face, so rsvg and every browser fell back to a serif: a
+  serif "Brest" beside a sans "KYIV", and a "SHOW / Terrain" panel in a
+  third voice. The plate's root now carries the face they inherit.
+- **The locator inset drew land that is not there.** It clipped the land to
+  a longitude/latitude box, which the conic projection bends into a fan: a
+  pale trapezoid floating in an empty sea on the Ukraine and Sudan plates.
+  It now clips in the projected plane, to the rectangle drawn.
+- **A key printed below the map could not be clicked.** The card's class
+  rows isolate their class; the band's rows were drawn without the button,
+  so a plate with `legend_position: below` had no clickable key at all.
+- **The inset of a small inland region showed nothing to recognise.** Six
+  times eastern DRC is still central Africa, so its inset was a grey box. A
+  derived inset now spans at least 36 degrees each way.
+
 ## [1.1.4] — 2026-11-08
 
 ### Fixed
