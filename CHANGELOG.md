@@ -22,6 +22,16 @@ All notable changes to sprezzature-maps are documented here.
   `backwards`-filled, so a rasteriser and a print get the finished map. On
   by default under `style: editorial` unless `interactivity` is `static`.
 - `labels.territories` entries take `weight` and `halo` (`"none"`).
+- **Roboto from Google Fonts for a reader who does not have it.** The plate
+  imports Roboto and Roboto Mono before falling back to Helvetica Neue,
+  Arial and the system sans. A browser fetches it when the SVG is the
+  document; inside an `<img>`, in rsvg and offline the stack is unchanged.
+  The import sits in a `<style>` of its own: resvg stops parsing a sheet at
+  the semicolons in that URL, and sharing one printed every tooltip on the
+  PNG.
+- **The editorial key card is the rows and nothing else**: no heading,
+  square corners, as wide as its widest line, the footer one hairline under
+  the last row. The atlas card had a row's worth of paper under one class.
 
 ### Fixed
 
@@ -39,6 +49,16 @@ All notable changes to sprezzature-maps are documented here.
 - **The inset of a small inland region showed nothing to recognise.** Six
   times eastern DRC is still central Africa, so its inset was a grey box. A
   derived inset now spans at least 36 degrees each way.
+- **The Ukraine and Dnieper plates drew the left bank of the Dnieper as
+  Ukrainian.** The occupied edge cut straight from Robotyne to Kherson, so
+  Enerhodar and the Zaporizhzhia nuclear plant, which the Dnieper plate's
+  own note 3 says is occupied, sat on the Ukrainian side. The edge now
+  follows the river, through the drained reservoir and down the estuary;
+  the contested band covers the land front only.
+- **A note placed `auto` could run across the detail rectangle's edge.**
+  The rectangle's four sides now go in the ink ledger; the Dnieper plate's
+  rectangle widens to the ground its notes are about, Kherson to the
+  nuclear plant.
 
 ## [1.1.4] — 2026-11-08
 

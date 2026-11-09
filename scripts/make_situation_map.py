@@ -2018,6 +2018,19 @@ def projected_geom_to_path(geom: Any, vp: dict[str, Any], close: bool = True) ->
 # Cartographic sans; falls back gracefully. Honors the three-Roboto rule of the
 # stack when no font is pinned in the config.
 _DEFAULT_FONT = "Roboto, 'Helvetica Neue', Arial, sans-serif"
+#: The first step of that stack for a reader who does not own Roboto: fetch
+#: it from Google Fonts, and only then fall back to Helvetica Neue, Arial and
+#: the system sans. A browser fetches it only when the SVG is the document
+#: (opened directly, inline, ``<object>``); inside an ``<img>`` external
+#: requests are blocked, and rsvg never asks, so the stack is still what
+#: those see. Offline, the request fails in silence and the stack carries on.
+#: ``&amp;``, not ``&``: an SVG is XML, and a bare ampersand is a parse error
+#: that blanks the whole plate.
+_GOOGLE_FONTS_IMPORT = (
+    "@import url('https://fonts.googleapis.com/css2?"
+    "family=Roboto:ital,wght@0,100..900;1,100..900&amp;"
+    "family=Roboto+Mono:ital,wght@0,100..700;1,100..700&amp;display=swap');"
+)
 #: Monospace for the provenance footer: a method note is metadata, and
 #: setting it in the same face as the title invites it to be read as
 #: part of the argument rather than as its receipt.
@@ -3684,6 +3697,11 @@ def build_map(cfg: dict[str, Any]) -> str:
         # Hover-info bubbles for areas-of-control zones and forces/events
         # markers: same .hit/.tip convention as case-studies/financial-markets
         # and make_choropleth.py.
+        # A sheet of its own, not the top of the next one. resvg, which
+        # rasterises every shipped PNG, stops parsing a stylesheet at the
+        # semicolons inside this URL, and the rule it then never reads is
+        # ``.tip{opacity:0}``: every tooltip printed on the PNG at once.
+        f"<style>{_GOOGLE_FONTS_IMPORT}</style>"
         "<style>"
         ".tip{opacity:0;pointer-events:none;transition:opacity .12s ease;}"
         ".hit:hover~.tip,.hit:focus~.tip{opacity:1;}"
@@ -5758,6 +5776,16 @@ def _front_line_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]
     d = projected_geom_to_path(geom, vp, close=False)
     if not d:
         return '<g id="front-line"></g>'
+    # The stroke itself goes in the ledger, as a chain of small squares: the
+    # layers that name water are drawn under it, and "Kakhovka Reservoir
+    # (former)" was set running into the line, which cut its last word.
+    reach = 2.7 * ts + 1.0 * ts
+    for part in getattr(geom, "geoms", [geom]):
+        svg_pts = [vp["to_svg"](*c) for c in part.coords]
+        for (ax, ay), (bx, by) in zip(svg_pts, svg_pts[1:], strict=False):
+            steps = max(1, int(math.hypot(bx - ax, by - ay) / reach))
+            for k in range(steps + 1):
+                _ink_mark(ax + (bx - ax) * k / steps, ay + (by - ay) * k / steps, reach, vp)
     parts = [
         # White casing so the front lifts off the pastel zones.
         f'<path d="{d}" fill="none" stroke="#ffffff" stroke-width="{5.4 * ts:.1f}" '
@@ -7338,6 +7366,17 @@ def _detail_area_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
         f'height="{y1 - y0:.1f}" rx="{_DETAIL_RADIUS * ts:.1f}" fill="none" '
         f'stroke="{color}" stroke-width="{1.8 * ts:.1f}" stroke-opacity="0.85"/>'
     ]
+    # The four edges go in the ledger, not the area: the inside is the ground
+    # the piece is about and its notes may sit there, but a sentence struck
+    # through by the rectangle's own stroke reads as two marks fighting.
+    # Before the label, so the label sees them too.
+    edge = 1.8 * ts + 2.0 * ts
+    vp.setdefault("ink", []).extend([
+        (x0 - edge, y0 - edge, x1 + edge, y0 + edge),
+        (x0 - edge, y1 - edge, x1 + edge, y1 + edge),
+        (x0 - edge, y0 - edge, x0 + edge, y1 + edge),
+        (x1 - edge, y0 - edge, x1 + edge, y1 + edge),
+    ])
     label = str(spec.get("label", _DETAIL_LABEL))
     if label:
         size = 10.5 * ts
@@ -8218,6 +8257,9 @@ def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, fl
     # it (``row_fs`` in :func:`_legend_layer` is 12.5 * ts), which is the same
     # discipline :func:`_legend_band_dims` already applies to its columns.
     widest = max(text_width(r["label"], 12.5 * ts) for r in rows)
+    if _is_editorial(cfg):
+        card = _editorial_card(cfg, ts, rows)
+        return card["w"], card["h"], 22 * ts
     panel_w = max(262 * ts, pad + sw + 10 * ts + widest + pad)
     foot_h = 30 * ts if cfg.get("legend_footer") else 0
     # Count only rows actually drawn below: the marker section's hairline
@@ -8225,6 +8267,43 @@ def _legend_panel_dims(cfg: dict[str, Any], ts: float) -> tuple[float, float, fl
     # here left a blank row's worth of dead space above the footer).
     panel_h = pad * 2 + 24 * ts + row_h * len(rows) + foot_h
     return panel_w, panel_h, 22 * ts
+
+
+def _editorial_card(
+    cfg: dict[str, Any], ts: float, rows: list[dict[str, Any]]
+) -> dict[str, float]:
+    """Measure the floating key of an editorial plate.
+
+    The atlas card is a fixed 262 units wide, opens on a heading, and keeps
+    a row's worth of paper between its last row and its footer: on a plate
+    keying one class, a third of the card was empty. A newsroom key is the
+    rows and nothing else, so this one has no heading (the rows say what they
+    are), hugs its widest line, and puts the footer one hairline under the
+    last row.
+
+    Returns
+    -------
+    dict
+        ``w`` and ``h`` of the card; ``first``, the offset of the first row
+        from the card's top; ``row_h``; ``rule`` and ``foot``, the offsets of
+        the footer's hairline and baseline (both 0 without a footer).
+    """
+    pad = 11 * ts
+    sw = 15 * ts
+    row_h = 22 * ts
+    first = pad + sw / 2
+    widest = max(text_width(r["label"], 12.5 * ts) for r in rows)
+    w = pad + sw + 10 * ts + widest + pad
+    bottom = first + (len(rows) - 1) * row_h + sw / 2
+    rule = foot = 0.0
+    footer = cfg.get("legend_footer")
+    if footer:
+        w = max(w, pad + text_width(str(footer), 9 * ts) + pad)
+        rule = bottom + 8 * ts
+        foot = rule + 13 * ts
+        bottom = foot + 2 * ts
+    return {"w": w, "h": bottom + pad, "first": first, "row_h": row_h,
+            "rule": rule, "foot": foot, "pad": pad}
 
 
 def _drop_shadow(vp: dict[str, Any], which: str) -> str:
@@ -8404,20 +8483,28 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
             if position in ("top-left", "top-right")
             else H - panel_h - corner_margin - _caption_height(cfg, ts, W)
         )
+    editorial = _is_editorial(cfg)
+    card = _editorial_card(cfg, ts, rows) if editorial else None
+    if card:
+        pad, row_h = card["pad"], card["row_h"]
     tx = px + pad + sw + 10 * ts  # label x
+    radius = 0 if editorial else 9 * ts
     parts: list[str] = [
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
-        f'rx="{9 * ts:.1f}" fill="{_pal(cfg)["panel"]}" fill-opacity="0.96"'
+        f'rx="{radius:.1f}" fill="{_pal(cfg)["panel"]}" fill-opacity="0.96"'
         f'{_drop_shadow(vp, "panel-shadow")}/>',
         f'<rect x="{px:.1f}" y="{py:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
-        f'rx="{9 * ts:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
-        f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
-        f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" letter-spacing="1.2">'
-        f"{_legend_heading(cfg, rows)}</text>",
+        f'rx="{radius:.1f}" fill="none" stroke="{_pal(cfg)["panel_edge"]}" stroke-width="1"/>',
     ]
+    if not editorial:
+        parts.append(
+            f'<text x="{px + pad:.1f}" y="{py + pad + 10 * ts:.1f}" font-family="{_DEFAULT_FONT}" '
+            f'font-size="{header_fs:.1f}" font-weight="700" fill="{_pal(cfg)["chrome_ink"]}" letter-spacing="1.2">'
+            f"{_legend_heading(cfg, rows)}</text>"
+        )
     seen_marker = False
     for i, row in enumerate(rows):
-        ry = py + pad + 26 * ts + i * row_h
+        ry = py + (card["first"] if card else pad + 26 * ts) + i * row_h
         if row["kind"] == "marker" and not seen_marker:
             seen_marker = True
             dv = ry - row_h + 6 * ts
@@ -8440,7 +8527,7 @@ def _legend_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
         )
         parts.append("</g>")
     if footer:
-        fy = py + panel_h - 11 * ts
+        fy = py + card["foot"] if card else py + panel_h - 11 * ts
         parts.append(
             f'<line x1="{px + pad:.1f}" y1="{fy - 13 * ts:.1f}" x2="{px + panel_w - pad:.1f}" '
             f'y2="{fy - 13 * ts:.1f}" stroke="#e2e6ea" stroke-width="1"/>'

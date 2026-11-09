@@ -692,7 +692,7 @@ is usually happening in a tenth of it:
 
 ```yaml
 detail_area:
-  bbox: [32.1, 46.3, 34.2, 47.4]
+  bbox: [32.3, 46.15, 35.0, 47.75]
   label: "Lower Dnieper"
 ```
 

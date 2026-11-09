@@ -135,6 +135,30 @@ def test_every_text_has_a_sans_face_to_inherit(style: str) -> None:
     assert root and "font-family=" in root.group(0) and "Roboto" in root.group(0)
 
 
+@pytest.mark.parametrize("style", ["atlas", "editorial"])
+def test_a_reader_without_roboto_is_sent_to_fetch_it(style: str) -> None:
+    """
+    Roboto first, from Google Fonts when the machine lacks it; only then the
+    rest of the stack. Three ways to get that wrong, each seen or measured:
+    an import below other rules is dropped by CSS; a bare ampersand is an
+    XML error, and the browser shows no plate at all; and an import sharing
+    a sheet with the plate's own rules takes them down with it in resvg,
+    whose parser stops at the semicolons in the URL -- the PNG then printed
+    every tooltip at once.
+    """
+    import xml.etree.ElementTree as ET
+
+    svg = plate(_cfg(style=style))
+    sheets = re.findall(r"<style>(.*?)</style>", svg, flags=re.S)
+    imports = [s for s in sheets if "@import" in s]
+    assert len(imports) == 1, "no Google Fonts import, or more than one"
+    assert imports[0].startswith("@import url('https://fonts.googleapis.com/css2?family=Roboto")
+    assert imports[0].rstrip().endswith(";"), "the import sheet carries more than the import"
+    assert imports[0].count("@import") == 1 and "{" not in imports[0]
+    assert any(".tip{opacity:0" in s for s in sheets if s not in imports)
+    ET.fromstring(svg)
+
+
 def test_the_editorial_source_line_is_not_monospace() -> None:
     svg = _editorial()
     line = re.search(r"<text[^>]*>Test source</text>", svg)
@@ -156,7 +180,7 @@ def test_the_source_line_sits_under_the_key_not_between_it_and_the_map() -> None
 
 def test_the_editorial_plate_opens_with_its_sequence() -> None:
     svg = _editorial()
-    style = svg[svg.index("<style>"): svg.index("</style>")]
+    style = "".join(re.findall(r"<style>(.*?)</style>", svg, flags=re.S))
     for name in ("sz-fade", "sz-draw", "sz-pop"):
         assert f"@keyframes {name}" in style
     assert 'mask="url(#front-reveal)"' in svg

@@ -180,8 +180,6 @@ def _contested_band(line_pts: list, country: Any, km: float) -> Any:
 # Ukraine: schematic, per open-source literature                              #
 # --------------------------------------------------------------------------- #
 
-# Approximate 2024 contact line north->south, hugging the reported flashpoints
-# (Kupiansk, Bakhmut, Avdiivka, Vuhledar, Robotyne) down to the Dnipro / Kherson.
 #: The editorial plates' one saturated colour, for ground that changed hands,
 #: and the sand a contested band is struck in. Tuned on the Ukraine plate
 #: under the flat editorial blend (ASSESSMENT, round 1).
@@ -193,6 +191,10 @@ RSF_INK = "#97461f"
 ARMY_INK = "#46566b"
 CONTESTED_SAND = "#f3c9a8"
 
+# Approximate 2024 contact line north->south, hugging the reported flashpoints
+# (Kupiansk, Bakhmut, Avdiivka, Vuhledar, Robotyne) to where it meets the
+# Dnieper above Vasylivka. Only the land front: below that the river is the
+# line, and the river is already on the plate.
 FRONT = [
     (37.55, 49.75),
     (38.00, 49.00),
@@ -200,12 +202,40 @@ FRONT = [
     (37.75, 48.15),
     (37.20, 47.90),
     (36.40, 47.60),
-    (35.85, 47.44),
-    (34.70, 47.05),
-    (33.00, 46.72),
-    (32.55, 46.50),
+    (35.85, 47.40),  # just south of Robotyne, which the 2023 offensive kept
+    (35.35, 47.55),
+    (35.14, 47.57),
 ]
-ENVELOPE = FRONT + [(32.55, 43.8), (41.5, 43.8), (41.5, 50.6), (37.55, 49.75)]
+# The left bank is the occupied one, so the occupied edge follows the river
+# downstream: the Natural Earth centreline through the drained Kakhovka
+# Reservoir, past the dam and Kherson, then down the estuary between the
+# Kinburn spit and Ochakiv. The straight cut from Robotyne to Kherson this
+# replaces handed Enerhodar, and the nuclear plant the Dnieper plate's note 3
+# says is occupied, to the Ukrainian side.
+DNIEPER_FRONT = [
+    (35.09, 47.53),
+    (34.95, 47.52),
+    (34.71, 47.55),
+    (34.45, 47.54),
+    (34.16, 47.49),
+    (34.00, 47.41),
+    (33.98, 47.31),
+    (33.86, 47.15),
+    (33.74, 47.05),
+    (33.66, 46.96),
+    (33.61, 46.87),
+    (33.54, 46.83),
+    (33.36, 46.79),
+    (33.07, 46.76),
+    (32.93, 46.72),
+    (32.65, 46.65),
+    (32.58, 46.62),
+    (32.35, 46.54),
+    (32.05, 46.53),
+    (31.75, 46.57),
+    (31.52, 46.575),
+]
+ENVELOPE = FRONT + DNIEPER_FRONT + [(31.45, 43.8), (41.5, 43.8), (41.5, 50.6), (37.55, 49.75)]
 CRIMEA_BBOX = [32.4, 44.28, 36.75, 46.25]
 # Shallow NE Kharkiv-oblast salient reached in the May 2024 cross-border push.
 VOVCHANSK_BBOX = [36.8, 50.15, 37.7, 50.62]
@@ -470,7 +500,7 @@ def build_dnieper() -> dict[str, Any]:
         # place itself -- that is what the locator argues -- and says in one
         # mark that the story is happening in a tenth of it.
         "detail_area": {
-            "bbox": [32.1, 46.3, 34.2, 47.4],
+            "bbox": [32.3, 46.15, 35.0, 47.75],
             "label": "Lower Dnieper",
         },
         # The map's half of a numbered reference. The article's half is a
