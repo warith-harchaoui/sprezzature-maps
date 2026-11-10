@@ -38,7 +38,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 from build_choropleth_examples import BUILDERS as CHOROPLETH_BUILDERS  # noqa: E402
 from build_situation_examples import BUILDERS as PLATE_BUILDERS  # noqa: E402
-from build_situation_examples import _render_png  # noqa: E402
+from build_situation_examples import _render_png, _shrink_png  # noqa: E402
 from make_situation_map import build_map, validate_config  # noqa: E402
 
 #: Raster width for a situation plate, in pixels. Matches the five plates
@@ -53,6 +53,10 @@ CHOROPLETH_PNG_WIDTH = 900
 
 #: Where the gallery lives when both repositories are checked out side by
 #: side, which is the normal arrangement.
+#: The site's ceiling for a raster drawn as a thumbnail, with a margin
+#: (``test_the_site_does_not_ship_a_megabyte_to_show_a_thumbnail`` in the hub).
+PNG_BUDGET_BYTES = 390 * 1024
+
 DEFAULT_TARGET = REPO.parent / "sprezzature" / "web" / "img" / "maps"
 
 
@@ -87,6 +91,14 @@ def main(argv: list[str]) -> int:
         png_path = target / f"{stem}.png"
         if not _render_png(svg_path, png_path, width=width):
             raise SystemExit(f"could not rasterise {stem}; the gallery needs both files")
+        # The site refuses a thumbnail over its ceiling: a reader downloads
+        # all of it to see it small. The 1:10m rivers took the Serbian and
+        # South China Sea plates past it, so the terrain's share of the
+        # palette narrows until the file fits; the inks keep theirs.
+        for ground in (192, 160, 128, 96):
+            if png_path.stat().st_size <= PNG_BUDGET_BYTES:
+                break
+            _shrink_png(png_path, ground=ground)
         written.append(stem)
         print(f"  {stem:28s} {svg_path.stat().st_size // 1024:5d} KB svg  "
               f"{png_path.stat().st_size // 1024:5d} KB png")

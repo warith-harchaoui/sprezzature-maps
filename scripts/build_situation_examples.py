@@ -2117,7 +2117,7 @@ _INK_COLORS = 32
 _INK_ERROR = 24
 
 
-def _shrink_png(png: Path) -> None:
+def _shrink_png(png: Path, ground: int | None = None) -> None:
     """Re-encode a rendered raster as a 256-colour PNG, in place.
 
     The gallery's nine situation plates went out at 0.75 to 1.75 MB each,
@@ -2147,7 +2147,9 @@ def _shrink_png(png: Path) -> None:
         from PIL import Image
     except ImportError:  # pragma: no cover - Pillow is a declared dependency
         return
-    ground = _PALETTE_COLORS - _INK_COLORS
+    # ``ground`` narrows only the terrain's share; the 32 entries for the
+    # inks are never given up, so a smaller file never costs a word its hue.
+    ground = ground or _PALETTE_COLORS - _INK_COLORS
     with Image.open(png) as raster:
         rgb = raster.convert("RGB")
     first = rgb.quantize(colors=ground, method=Image.Quantize.MEDIANCUT)
