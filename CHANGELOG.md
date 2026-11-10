@@ -4,6 +4,8 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-11-10
+
 ### Added
 
 - **Change plates from two dated records, not a record and a memory.**
