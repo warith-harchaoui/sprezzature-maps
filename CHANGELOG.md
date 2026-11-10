@@ -25,8 +25,26 @@ All notable changes to sprezzature-maps are documented here.
 - The accessible description of a change plate states the interval and
   the share of each class.
 
+- **The two change plates are lettered by the frontiers of their own
+  year**, taken from the same source (`frontiers.source` with the
+  OpenHistoricalMap extents of every neighbour), with the mountain ranges
+  named and three numbered notes each.
+- `frontiers.fields` reads a validity window written as one ISO date
+  (OpenHistoricalMap's `start_date` / `end_date`), not only CShapes' year,
+  month and day.
+- `basemap.relief_over_fills` (default 0.85).
+
 ### Fixed
 
+- **The terrain shows through a flat fill.** The editorial register fills
+  flat, and a flat fill averaged the hillshade under it away: every zone
+  read as a sheet of colour with the relief stopping at its edge. The same
+  hillshade is laid back over the flat fills in soft-light, which leaves
+  paper white and lets slopes and ridges through any colour; one `<use>`
+  of the image already embedded, clipped to the fills.
+- **Two notes no longer read as one paragraph.** Each placed note keeps a
+  margin of most of a line in the ink ledger; on the Serbian plate one
+  note ended a baseline above where the next began.
 - **A hairline between two tracings of one border is no longer a
   change.** `change.sliver_km` (default 1.5) drops any piece of taken or
   lost ground narrower than twice that width, whole. Without it the Munich

@@ -1862,6 +1862,23 @@ def _ohm(relation_id: int) -> dict[str, Any]:
     return json.loads((HISTORICAL_DATA / f"ohm-{relation_id}.geojson").read_text())
 
 
+def _ohm_states(*relation_ids: int) -> dict[str, Any]:
+    """Several OpenHistoricalMap extents as one historical frontier source."""
+    return {
+        "type": "FeatureCollection",
+        "features": [f for rid in relation_ids for f in _ohm(rid)["features"]],
+    }
+
+
+#: How the frontier layer reads an OpenHistoricalMap extent: the name under
+#: ``actor`` and ISO validity dates rather than CShapes' year/month/day.
+_OHM_FIELDS = {"name": "actor", "start": ["start_date"], "end": ["end_date"]}
+#: Mountain names, set the way the reference plates set terrain.
+_RANGE = {"size": 9.5, "tracking": 2.6, "color": "#7d7468"}
+#: Numbered notes on the change plates.
+_NOTE = "#3a4149"
+
+
 #: The two change plates' ink, the editorial accent's deep shade.
 CHANGE_INK = "#8e3328"
 _OHM_METHOD = (
@@ -1900,10 +1917,17 @@ def build_munich() -> dict[str, Any]:
         "canvas_width": 1320,
         "padding": 30,
         "basemap": {},
-        # A present-day frontier on a plate of 1938 is a different claim:
-        # it would draw the Czech-Slovak line of 1993 through the middle of
-        # the state the plate is about. The neighbours are lettered by hand.
-        "frontiers": {"show": False},
+        # The frontiers of 15 October 1938, from the same source as the two
+        # extents. A present-day frontier would be a different claim: it
+        # would draw the Czech-Slovak line of 1993 through the middle of the
+        # state the plate is about, and no line at all where the Reich
+        # had swallowed Austria.
+        "frontiers": {
+            "source": _ohm_states(2747874, 2704712, 2692205, 2695633, 2693259),
+            "as_of": "1938-10-15",
+            "fields": _OHM_FIELDS,
+            "focus": "Czechoslovakia",
+        },
         # Off for the same reason: the automatic names are today's, and the
         # plate would print Wrocław where the map's own year says Breslau.
         "cities": {"show": False},
@@ -1915,6 +1939,14 @@ def build_munich() -> dict[str, Any]:
             "from": "September 1938",
             "to": "October 1938",
         },
+        "annotations": [
+            {"at": [13.25, 50.2], "number": 1, "place": "auto", "color": _NOTE,
+             "text": "The Sudetenland and its border forts, occupied by Germany, 1–10 October."},
+            {"at": [18.2, 47.95], "number": 2, "place": "auto", "color": _NOTE,
+             "text": "Still Czechoslovak here: the Vienna Award gave southern Slovakia to Hungary on 2 November."},
+            {"at": [15.2, 49.6], "number": 3, "place": "auto", "color": _NOTE,
+             "text": "What was left of Bohemia and Moravia was occupied in March 1939."},
+        ],
         "legend_footer": "Czechoslovakia, before and after Munich",
         "caption": "full",
         "method": _OHM_METHOD,
@@ -1924,12 +1956,11 @@ def build_munich() -> dict[str, Any]:
             "territories": [
                 {"lon": 13.6, "lat": 50.95, "text": "SUDETENLAND", "size": 11,
                  "tracking": 3, "color": CHANGE_INK, "weight": "700", "halo": "none"},
-                {"lon": 12.4, "lat": 49.0, "text": "GERMANY", "size": 13, "tracking": 4},
-                {"lon": 19.5, "lat": 51.3, "text": "POLAND", "size": 13, "tracking": 4},
-                {"lon": 20.3, "lat": 47.85, "text": "HUNGARY", "size": 13, "tracking": 4},
-                {"lon": 23.6, "lat": 47.55, "text": "ROMANIA", "size": 11, "tracking": 3},
-                {"lon": 15.3, "lat": 47.6, "text": "(Austria, annexed March 1938)",
-                 "size": 9.5, "tracking": 0.6},
+                {"lon": 13.05, "lat": 50.42, "text": "ORE MOUNTAINS", **_RANGE},
+                {"lon": 16.1, "lat": 50.45, "text": "SUDETES", **_RANGE},
+                {"lon": 13.25, "lat": 49.0, "text": "BOHEMIAN FOREST", **_RANGE},
+                {"lon": 20.1, "lat": 49.35, "text": "TATRA", **_RANGE},
+                {"lon": 23.4, "lat": 48.55, "text": "CARPATHIANS", **_RANGE},
             ],
             "places": [
                 {"lon": 14.4208, "lat": 50.0880, "text": "Prague"},
@@ -1963,7 +1994,16 @@ def build_serbia_1913() -> dict[str, Any]:
         "canvas_width": 1320,
         "padding": 30,
         "basemap": {},
-        "frontiers": {"show": False},
+        # The frontiers of 1 September 1913, after Bucharest, from the same
+        # source as the two extents.
+        "frontiers": {
+            "source": _ohm_states(
+                2746681, 2692361, 2692585, 2693260, 2739656, 2746680, 2807008
+            ),
+            "as_of": "1913-09-01",
+            "fields": _OHM_FIELDS,
+            "focus": "Kingdom of Serbia",
+        },
         "cities": {"show": False},
         "legend_position": "top-right",
         "change": {
@@ -1973,6 +2013,14 @@ def build_serbia_1913() -> dict[str, Any]:
             "from": "1912",
             "to": "August 1913",
         },
+        "annotations": [
+            {"at": [20.62, 42.38], "number": 1, "place": "auto", "color": _NOTE,
+             "text": "Kosovo, taken from the Ottoman Empire in the First Balkan War, autumn 1912."},
+            {"at": [22.3, 41.7], "number": 2, "place": "auto", "color": _NOTE,
+             "text": "Vardar Macedonia: Bulgaria claimed it, and lost it in the Second Balkan War, summer 1913."},
+            {"at": [20.0, 43.15], "number": 3, "place": "auto", "color": _NOTE,
+             "text": "The Sandžak of Novi Pazar, split with Montenegro: the two Serb kingdoms now share a border."},
+        ],
         "legend_footer": "Serbia, before and after the Treaty of Bucharest",
         "caption": "full",
         "method": _OHM_METHOD,
@@ -1984,12 +2032,10 @@ def build_serbia_1913() -> dict[str, Any]:
                  "tracking": 3, "color": CHANGE_INK, "weight": "700", "halo": "none"},
                 {"lon": 21.7, "lat": 41.55, "text": "VARDAR MACEDONIA", "size": 10.5,
                  "tracking": 2.5, "color": CHANGE_INK, "weight": "700", "halo": "none"},
-                {"lon": 18.4, "lat": 44.6, "text": "AUSTRIA-HUNGARY", "size": 12, "tracking": 3},
-                {"lon": 23.6, "lat": 43.2, "text": "BULGARIA", "size": 12, "tracking": 3.5},
-                {"lon": 19.3, "lat": 42.3, "text": "MONTENEGRO", "size": 10, "tracking": 2},
-                {"lon": 19.9, "lat": 40.9, "text": "ALBANIA", "size": 11, "tracking": 3},
-                {"lon": 22.9, "lat": 40.75, "text": "GREECE", "size": 12, "tracking": 3.5},
-                {"lon": 22.9, "lat": 45.2, "text": "ROMANIA", "size": 12, "tracking": 3.5},
+                {"lon": 20.95, "lat": 41.93, "text": "ŠAR MOUNTAINS", **_RANGE},
+                {"lon": 18.5, "lat": 43.75, "text": "DINARIC ALPS", **_RANGE},
+                {"lon": 23.9, "lat": 42.95, "text": "BALKAN MOUNTAINS", **_RANGE},
+                {"lon": 22.75, "lat": 44.75, "text": "CARPATHIANS", **_RANGE},
             ],
             "places": [
                 {"lon": 20.4573, "lat": 44.7866, "text": "Belgrade", "anchor": "end"},

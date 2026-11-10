@@ -134,19 +134,25 @@ The plate itself
 Basemap layers
 ~~~~~~~~~~~~~~
 ``basemap``
-    ``{relief, relief_strength, hypsometric, plate, sea_color, land_color,
-    coast_color, bathymetry}`` -- the physical ground. ``plate`` is ``"day"`` or
+    ``{relief, relief_strength, relief_over_fills, hypsometric, plate,
+    sea_color, land_color, coast_color, bathymetry}`` -- the physical ground. ``plate`` is ``"day"`` or
     ``"night"`` and outranks the individual colours. ``relief: false``
     removes the terrain cost. ``relief_strength`` (0--1) overrides how hard
     the hillshade blends; left unset it follows the visual hierarchy, full
     strength on a plate with no thematic layer and held back under one.
     ``hypsometric`` colours the ground by elevation as well as by light,
-    and follows the same hierarchy by default.
+    and follows the same hierarchy by default. ``relief_over_fills``
+    (0--1, default 0.85) lays the same hillshade back over every flat
+    thematic fill, in soft-light, so a range still reads inside a zone
+    painted over it; 0 turns it off. A multiplied fill needs none.
 ``frontiers``
     International borders: ``{show, color, label_neighbours, focus,
     label_min_area_frac}``, plus ``{source, as_of, fields}`` to draw the
     borders of a past year from a caller-supplied historical GeoJSON
-    instead of the present-day basemap.
+    instead of the present-day basemap. ``fields`` names the properties
+    holding the name and the validity window; a window may be CShapes'
+    year, month and day, or one ISO date such as OpenHistoricalMap's
+    ``start_date`` / ``end_date``.
 ``internal_borders``
     First-level administrative boundaries where a vendored source covers
     the region: ``{show, color, label_names, label_min_area_frac}``.
@@ -989,10 +995,31 @@ def parse_as_of(raw: Any) -> date:
 
 
 def _window(props: dict[str, Any], keys: Sequence[str], fallback: date) -> date:
-    """Return the date in ``props`` under ``keys`` (year, month, day), or ``fallback``."""
+    """Return the date in ``props`` under ``keys`` (year, month, day), or ``fallback``.
+
+    One key holding an ISO date (``1938-09-30``, or ``1921`` alone) is read
+    too: OpenHistoricalMap writes its ``start_date`` and ``end_date`` that
+    way, and a partial date keeps its window widest, as CShapes' missing
+    month and day do.
+
+    Examples
+    --------
+    >>> _window({"start_date": "1938-09-30"}, ("start_date",), date(1, 1, 1))
+    datetime.date(1938, 9, 30)
+    >>> _window({"start_date": "1921"}, ("start_date",), date(1, 1, 1))
+    datetime.date(1921, 1, 1)
+    """
+    if isinstance(keys, str):
+        keys = (keys,)
     year = props.get(keys[0])
     if year is None or year == "":
         return fallback
+    iso = re.fullmatch(r"(-?\d{1,4})(?:-(\d{2}))?(?:-(\d{2}))?", str(year).strip())
+    if iso and (len(keys) == 1 or iso.group(2)):
+        try:
+            return date(int(iso.group(1)), int(iso.group(2) or 1), int(iso.group(3) or 1))
+        except ValueError:
+            return fallback
     try:
         # Month and day default to 1: CShapes carries all three, but a source
         # that dates its polygons only to the year is still a dated source,
@@ -2692,6 +2719,38 @@ def _relief_strength(cfg: dict[str, Any], palette: dict[str, Any]) -> float:
     return float(palette["relief_opacity"]) if thematic else 1.0
 
 
+#: How strongly the terrain shows through a flat thematic fill. Tuned by eye
+#: on the Serbian and Munich change plates and the Ukraine plate: enough
+#: for a range to read inside a zone, not so much that the zone's colour
+#: stops being one colour.
+_RELIEF_OVER_FILLS = 0.85
+
+
+def _relief_over_fills(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
+    """Lay the plate's own hillshade over its flat fills, in soft-light.
+
+    Reuses the relief already embedded (``<use href="#relief">``), so the
+    terrain costs no second copy of the image, and clips it to exactly the
+    shapes that were filled flat, so ground outside them keeps the single
+    pass of relief it always had. Empty when the plate has no relief or no
+    flat fill -- a multiplied fill already takes its luminance from the
+    terrain and needs nothing.
+    """
+    shapes = vp.pop("flat_fills", [])
+    if not shapes or not cfg.get("basemap", {}).get("relief", True):
+        return ""
+    strength = float(cfg.get("basemap", {}).get("relief_over_fills", _RELIEF_OVER_FILLS))
+    if strength <= 0:
+        return ""
+    paths = "".join(f'<path d="{d}"/>' for d in shapes)
+    return (
+        f'<defs><clipPath id="relief-over-clip">{paths}</clipPath></defs>'
+        '<g id="relief-over" data-layer-id="relief" clip-path="url(#relief-over-clip)" '
+        f'style="mix-blend-mode:soft-light" opacity="{strength:.2f}" pointer-events="none">'
+        '<use href="#relief"/></g>'
+    )
+
+
 def _relief_layer(
     vp: dict[str, Any],
     proj: Transformer,
@@ -3542,6 +3601,16 @@ def build_map(cfg: dict[str, Any]) -> str:
     # 4. areas-of-control --------------------------------------------------- #
     layers.append(_areas_of_control_layer(cfg, proj, vp, region_box, land))
 
+    # 4-. the terrain again, over the flat fills only. A flat fill -- the
+    #     editorial register's, chosen because a multiply cannot keep paper
+    #     white -- averaged the hillshade under it away: the Šar range under
+    #     Serbia's 1913 gains, the Ore Mountains under the Sudetenland, read
+    #     as a sheet of red with the relief stopping at its edge. The same
+    #     shading is laid back over those shapes in soft-light, which is
+    #     neutral where the ground is flat: paper stays paper, a slope
+    #     darkens, a ridge lifts, whatever the colour beneath.
+    layers.append(_relief_over_fills(cfg, vp))
+
     # 4a. frontiers (international borders + neighbour labels), drawn over the
     #     control fills for the same reason the coastline below is: a national
     #     border is base geography, and on a map *about* who holds what, which
@@ -4263,6 +4332,8 @@ def _areas_of_control_layer(
         # Graphics Module's role for "a graphic with meaning", which is what
         # a claim polygon is.
         label = _esc(zone_label(str(cat), conf, geom.area / total_area))
+        if not fill_style:
+            vp.setdefault("flat_fills", []).append(d)
         fills.append(
             f'<path class="hit" tabindex="0" role="graphics-symbol" '
             f'aria-label="{label}" d="{d}" fill="{color}" fill-opacity="{zone_op:.2f}" '
@@ -4993,6 +5064,8 @@ def _change_layer(
                 f'fill="{color}" fill-opacity="{fill_op:.2f}" stroke="#ffffff" '
                 f'stroke-width="{0.9 * ts:.1f}"{fill_style}'
             )
+            if not fill_style:
+                vp.setdefault("flat_fills", []).append(d)
         story = _change_story(cfg, key)
         who = f" by {actor}" if actor else ""
         rp = geom.representative_point()
@@ -7142,6 +7215,19 @@ def _annotations_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any
                 f'stroke="{paper}" stroke-width="{3.2 * ts:.1f}" paint-order="stroke" '
                 f'stroke-linejoin="round">{_esc(line)}</text>'
             )
+        # A margin of most of a line around the whole note. Each line is in
+        # the ledger already, but flush: on the Serbian plate note 3 ended
+        # one baseline above where note 1 began, and the two sentences read
+        # as one paragraph about two different places.
+        boxes = [
+            text_box(geo["x"], baseline, line, size=size, anchor=geo["anchor"])
+            for line, baseline in zip(lines, geo["baselines"], strict=True)
+        ]
+        margin = 0.8 * size
+        vp.setdefault("ink", []).append((
+            min(b[0] for b in boxes) - margin, min(b[1] for b in boxes) - margin,
+            max(b[2] for b in boxes) + margin, max(b[3] for b in boxes) + margin,
+        ))
     return f'<g id="annotations">{"".join(out)}</g>'
 
 
@@ -9692,8 +9778,8 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
         "baseline",
     }),
     "basemap": frozenset({
-        "relief", "relief_strength", "hypsometric", "plate", "sea_color",
-        "land_color", "coast_color", "bathymetry",
+        "relief", "relief_strength", "relief_over_fills", "hypsometric", "plate",
+        "sea_color", "land_color", "coast_color", "bathymetry",
     }),
     "cities": frozenset({"show", "size", "limit", "max_rank", "hand_placed_clearance"}),
     "frame": frozenset({"margin", "page_color", "radius"}),

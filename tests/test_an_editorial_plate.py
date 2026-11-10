@@ -228,3 +228,51 @@ def test_without_its_animation_the_front_mask_hides_nothing() -> None:
     mask = svg[svg.index('<mask id="front-reveal"'): svg.index("</mask>")]
     assert "stroke-dasharray" not in mask
     assert "stroke-dashoffset" not in mask
+
+
+# ── the ground under the colour ───────────────────────────────────────────
+
+
+def test_the_terrain_shows_through_a_flat_fill() -> None:
+    """
+    A flat fill averaged the hillshade under it away: Serbia's 1913 gains
+    and the occupied south of Ukraine read as a sheet of red with the relief
+    stopping at its edge. The same shading is laid back over them.
+    """
+    cfg = _cfg(style="editorial", basemap={"relief": True})
+    svg = plate(cfg)
+    assert 'id="relief"' in svg
+    over = re.search(r'<g id="relief-over"[^>]*>(.*?)</g>', svg, flags=re.S)
+    assert over, "no terrain over the flat fills"
+    assert "soft-light" in over.group(0), "only soft-light leaves paper as paper"
+    assert '<use href="#relief"/>' in over.group(1), "a second copy of the image"
+    clip = svg[svg.index('<clipPath id="relief-over-clip">'):]
+    clip = clip[: clip.index("</clipPath>")]
+    assert clip.count("<path") >= 2, "the terrain is not clipped to the fills"
+
+
+def test_a_multiplied_fill_gets_no_second_pass() -> None:
+    svg = plate(_cfg(basemap={"relief": True}))
+    assert 'id="relief-over"' not in svg
+
+
+def test_no_relief_no_second_pass() -> None:
+    assert 'id="relief-over"' not in _editorial()
+
+
+def test_a_note_keeps_a_margin_around_itself() -> None:
+    """Flush, two notes stacked read as one paragraph about two places."""
+    cfg = _cfg(
+        style="editorial",
+        annotations=[{"at": [-6.0, 40.0], "text": "A note.", "place": "right"}],
+    )
+    msm._apply_style(cfg)
+    bbox = cfg["region"]["bbox"]
+    proj = msm.build_projection(bbox, "auto")
+    vp = msm.make_viewport(proj, bbox, 520.0, 30.0)
+    vp["ink"] = []
+    msm._annotations_layer(cfg, proj, vp)
+    text_boxes = [b for b in vp["ink"] if b[2] - b[0] > 20]
+    widest = max(text_boxes, key=lambda b: b[2] - b[0])
+    line = min(text_boxes, key=lambda b: b[3] - b[1])
+    assert widest[0] < line[0] - 5 and widest[3] > line[3] + 5, "no margin around the note"
