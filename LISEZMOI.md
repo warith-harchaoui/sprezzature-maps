@@ -900,7 +900,8 @@ sources en demandent un :
   sous licence Ouverte / Etalab 2.0 (la licence française officielle
   d'ouverture des données).
 - Les limites administratives de premier niveau de la Suisse, de
-  l'Allemagne et de l'Italie (régions, cantons, Länder) : ©
+  l'Allemagne et de l'Italie (régions, cantons, Länder), et le Vardar
+  (que Natural Earth range sous le nom de son affluent) : ©
   [OpenStreetMap](https://www.openstreetmap.org/copyright)
   contributeurs, sous licence ODbL 1.0 (Open Database Licence).
 

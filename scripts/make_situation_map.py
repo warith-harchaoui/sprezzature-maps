@@ -435,7 +435,6 @@ try:
     from shapely import make_valid
     from shapely import transform as shp_transform
     from shapely.geometry import (
-        MultiPolygon,
         Point,
         Polygon,
         box,
@@ -461,6 +460,10 @@ _LAND_TOPOJSON = _ASSETS / "countries-50m.json"
 # read visibly facetted/over-smoothed at zoom.
 _LAND_TOPOJSON_10M = _ASSETS / "countries-10m.json"
 _RIVERS_GEOJSON = _ASSETS / "rivers-50m.geojson"
+#: Natural Earth 1:10m centerlines and the European supplement, with the
+#: Vardar from OpenStreetMap: built by ``scripts/build_rivers_10m.py``. The
+#: 1:50m set holds a continent's trunks and no Vltava, Morava or Vardar.
+_RIVERS_GEOJSON_10M = _ASSETS / "rivers-10m.geojson"
 _LAKES_GEOJSON = _ASSETS / "lakes-50m.geojson"
 
 #: The two plates. ``day`` reproduces the values that were hard-coded here,
@@ -811,6 +814,79 @@ def _land_topojson_for_bbox(bbox: Iterable[float] | None) -> Path:
     return _LAND_TOPOJSON_10M if span_degrees < _TEN_M_BBOX_DEGREES_THRESHOLD else _LAND_TOPOJSON
 
 
+def _unwrap_ring(ring: list[tuple[float, float]], near: float | None = None) -> list[tuple[float, float]]:
+    """Make a ring continuous across the antimeridian, possibly past +-180.
+
+    A ring stored in lon/lat jumps from +179.9 to -179.9 where it crosses the
+    date line; read as written, that jump is a straight edge back across the
+    whole world. Each step is taken modulo 360 instead, so the ring runs on
+    to 180.1, 185 ... and stays the shape it is. ``near`` shifts the whole
+    ring by a multiple of 360 to start close to that longitude, so a hole is
+    unwrapped onto the same side as its shell.
+
+    Examples
+    --------
+    >>> _unwrap_ring([(179.0, 0.0), (-179.0, 0.0), (-179.0, 1.0), (179.0, 0.0)])
+    [(179.0, 0.0), (181.0, 0.0), (181.0, 1.0), (179.0, 0.0)]
+    """
+    if not ring:
+        return ring
+    x0, y0 = ring[0]
+    if near is not None:
+        x0 += 360.0 * round((near - x0) / 360.0)
+    out = [(x0, y0)]
+    for x, y in ring[1:]:
+        px = out[-1][0]
+        x += 360.0 * round((px - x) / 360.0)
+        out.append((x, y))
+    return out
+
+
+def _polygon_across_the_date_line(rings: list[list[tuple[float, float]]]) -> Any:
+    """Build a polygon from lon/lat rings, cut at +-180 if it crosses there.
+
+    Russia's outline in the vendored atlas crosses the date line, and read
+    as written its Chukotka rings closed back to Europe along a parallel:
+    bands of "land" 200 degrees wide and up to four degrees tall at 65, 69,
+    71 and 71.5 N, which :func:`_drop_antimeridian_seams` -- written for
+    Fiji's hairline, half a degree at most -- could not recognise. Every
+    plate whose context reached the Arctic drew them, the locator of the
+    Andes plate included. Unwrapped and cut, the bands do not exist.
+    """
+    shell = _unwrap_ring(rings[0])
+    if not shell:
+        return Polygon()
+    near = shell[0][0]
+    holes = [_unwrap_ring(r, near) for r in rings[1:] if r]
+    poly = Polygon(shell, holes)
+    west, _s, east, _n = poly.bounds
+    if west >= -180.0 and east <= 180.0:
+        return poly
+    poly = make_valid(poly)
+    pieces = []
+    for shift in (-360.0, 0.0, 360.0):
+        window = box(-180.0 - shift, -90.0, 180.0 - shift, 90.0)
+        part = poly.intersection(window)
+        if not part.is_empty:
+            pieces.append(shp_transform(part, lambda c, s=shift: c + np.array([s, 0.0])))
+    return unary_union(pieces) if pieces else poly
+
+
+def _topojson_geometry(geom: dict[str, Any], stitch: Any) -> Any:
+    """One TopoJSON polygon or multipolygon, as a valid lon/lat geometry.
+
+    The one place rings become polygons, for the four decoders that used to
+    each do it themselves -- which is how the date-line repair reached the
+    land and not the countries drawn on it.
+    """
+    if geom["type"] == "Polygon":
+        return make_valid(_polygon_across_the_date_line([stitch(p) for p in geom["arcs"]]))
+    return make_valid(unary_union([
+        make_valid(_polygon_across_the_date_line([stitch(r) for r in part]))
+        for part in geom["arcs"]
+    ]))
+
+
 def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
     """Decode one object of a TopoJSON topology into a shapely geometry (lon/lat).
 
@@ -837,20 +913,20 @@ def _decode_topojson_object(topo: dict[str, Any], name: str) -> Any:
     geoms = []
     obj = topo["objects"][name]
     for geom in obj["geometries"]:
-        gtype = geom["type"]
-        if gtype == "Polygon":
-            rings = [stitch(part) for part in geom["arcs"]]
-            geoms.append(Polygon(rings[0], rings[1:]))
-        elif gtype == "MultiPolygon":
-            polys = []
-            for poly in geom["arcs"]:
-                rings = [stitch(part) for part in poly]
-                polys.append(Polygon(rings[0], rings[1:]))
-            geoms.append(MultiPolygon(polys))
+        if geom["type"] in ("Polygon", "MultiPolygon"):
+            geoms.append(_topojson_geometry(geom, stitch))
     # Natural Earth polygons can be individually invalid (self-touching rings);
     # repair each rather than a fragile world-wide union: the caller clips to a
     # bounding box, so a MultiPolygon of validated pieces is sufficient.
-    fixed = [make_valid(g) for g in geoms]
+    #
+    # The wrap seams are dropped here, per geometry and before the union:
+    # merged into a continent by the union, a seam is no longer a part
+    # anything can recognise. The docstring of :func:`_drop_antimeridian_seams`
+    # said it ran in both decoders; this one -- the decoder of the world
+    # *land* the sea and the coastline are cut from -- never called it, so
+    # the Andes plate drew Fiji's seam at 16.5 degrees south as two straight
+    # lines of coast through Lake Titicaca, out to both edges of the plate.
+    fixed = [_drop_antimeridian_seams(make_valid(g)) for g in geoms]
     return unary_union(fixed)
 
 
@@ -876,8 +952,17 @@ def load_land(bbox: Iterable[float] | None = None) -> Any:
     # atlas only carries "countries" (dissolving 258 country polygons here
     # gives the identical silhouette a dedicated "land" object would, so
     # there is no need to vendor a second, redundant object for it).
-    object_name = "land" if "land" in topo["objects"] else "countries"
-    return _decode_topojson_object(topo, object_name)
+    #
+    # Always the countries, now, never the pre-dissolved "land". The 50m
+    # "land" object has Fiji's wrap seam already dissolved into the
+    # continents: a strip 0.05 degrees tall at 16.5 S, cut into pieces each
+    # under 300 degrees wide and fused to the Americas and to Africa, so no
+    # guard can tell it from coast. The Andes plate drew it as two straight
+    # lines of coastline through Lake Titicaca to both edges of the plate,
+    # and the Arctic carries four more at 65 to 71.5 N. Per country, the
+    # seam is still a part of its own and :func:`_drop_antimeridian_seams`
+    # removes it before anything is unioned.
+    return _decode_topojson_object(topo, "countries")
 
 
 def load_country(name: str, bbox: Iterable[float] | None = None) -> Any:
@@ -933,14 +1018,7 @@ def load_country(name: str, bbox: Iterable[float] | None = None) -> Any:
     for geom in topo["objects"]["countries"]["geometries"]:
         if geom.get("properties", {}).get("name") != name:
             continue
-        if geom["type"] == "Polygon":
-            rings = [stitch(part) for part in geom["arcs"]]
-            return make_valid(Polygon(rings[0], rings[1:]))
-        polys = []
-        for poly in geom["arcs"]:
-            rings = [stitch(part) for part in poly]
-            polys.append(Polygon(rings[0], rings[1:]))
-        return make_valid(MultiPolygon(polys))
+        return _drop_antimeridian_seams(_topojson_geometry(geom, stitch))
     raise KeyError(f"country not found in basemap: {name!r}")
 
 
@@ -1210,15 +1288,7 @@ def load_countries(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]
     for geom in topo["objects"]["countries"]["geometries"]:
         name = geom.get("properties", {}).get("name", "")
         try:
-            if geom["type"] == "Polygon":
-                rings = [stitch(part) for part in geom["arcs"]]
-                poly = make_valid(Polygon(rings[0], rings[1:]))
-            else:
-                polys = []
-                for part in geom["arcs"]:
-                    rings = [stitch(r) for r in part]
-                    polys.append(Polygon(rings[0], rings[1:]))
-                poly = make_valid(MultiPolygon(polys))
+            poly = _topojson_geometry(geom, stitch)
         except Exception:  # skip a malformed geometry rather than fail the plate
             continue
         out.append((name, _drop_antimeridian_seams(poly)))
@@ -1295,15 +1365,7 @@ def _named_polygons_from_topojson(topo: dict[str, Any], object_name: str) -> lis
     for geom in topo["objects"][object_name]["geometries"]:
         name = geom.get("properties", {}).get("name", "")
         try:
-            if geom["type"] == "Polygon":
-                rings = [stitch(part) for part in geom["arcs"]]
-                poly = make_valid(Polygon(rings[0], rings[1:]))
-            else:
-                polys = []
-                for part in geom["arcs"]:
-                    rings = [stitch(r) for r in part]
-                    polys.append(Polygon(rings[0], rings[1:]))
-                poly = make_valid(MultiPolygon(polys))
+            poly = _topojson_geometry(geom, stitch)
         except Exception:  # skip a malformed geometry rather than fail the plate
             continue
         out.append((name, _drop_antimeridian_seams(poly)))
@@ -1527,13 +1589,55 @@ def load_admin2(bbox: Iterable[float] | None = None) -> list[tuple[str, Any]]:
     return out
 
 
-def load_rivers() -> list[tuple[Any, str, int]]:
+def _rivers_path_for_bbox(bbox: Iterable[float] | None) -> Path:
+    """The 1:10m centerlines for a regional plate, the 1:50m ones otherwise.
+
+    The same threshold the land tier uses, so a plate never draws 10m
+    rivers on a 50m coastline or the reverse.
+
+    Examples
+    --------
+    >>> _rivers_path_for_bbox((17.6, 40.2, 24.4, 45.6)).name
+    'rivers-10m.geojson'
+    >>> _rivers_path_for_bbox((-11.0, 35.0, 30.0, 60.0)).name
+    'rivers-50m.geojson'
+    >>> _rivers_path_for_bbox(None).name
+    'rivers-50m.geojson'
+    """
+    if bbox is None:
+        return _RIVERS_GEOJSON
+    west, south, east, north = bbox
+    regional = max(east - west, north - south) < _TEN_M_BBOX_DEGREES_THRESHOLD
+    return _RIVERS_GEOJSON_10M if regional and _RIVERS_GEOJSON_10M.is_file() else _RIVERS_GEOJSON
+
+
+def osm_rivers_in_view(bbox: Iterable[float] | None) -> bool:
+    """Whether a river drawn from OpenStreetMap falls inside ``bbox``.
+
+    ODbL asks for a credit on any produced work that uses the data, so the
+    attribution line asks this, the way it asks about the OSM admin-1 tier.
+    """
+    path = _rivers_path_for_bbox(bbox)
+    if bbox is None or path != _RIVERS_GEOJSON_10M:
+        return False
+    region = box(*bbox)
+    return any(
+        feat.get("properties", {}).get("source") == "osm"
+        and shape(feat["geometry"]).intersects(region)
+        for feat in json.loads(path.read_text()).get("features", [])
+    )
+
+
+def load_rivers(bbox: Iterable[float] | None = None) -> list[tuple[Any, str, int]]:
     """Return ``(geometry, name, scalerank)`` for the vendored river centerlines.
 
-    Natural Earth 50m rivers + lake centerlines, trimmed to named features. Lower
-    ``scalerank`` means a more prominent river (used to decide what gets labelled).
+    Natural Earth rivers + lake centerlines, trimmed to named features: the
+    1:10m set for a regional ``bbox`` (see :func:`_rivers_path_for_bbox`),
+    the 1:50m set otherwise. Lower ``scalerank`` means a more prominent
+    river (used to decide what gets labelled).
     """
-    if not _RIVERS_GEOJSON.is_file():
+    path = _rivers_path_for_bbox(bbox)
+    if not path.is_file():
         # Returning [] here is what let a map ship with no rivers at all and
         # no complaint: the plate rendered, the exit code was 0, and the
         # Dnieper was simply absent from a map of Ukraine. A missing vendored
@@ -1541,14 +1645,14 @@ def load_rivers() -> list[tuple[Any, str, int]]:
         # rivers", so it is now audible. Still not fatal — a caller who never
         # asked for rivers should not be stopped by them.
         warnings.warn(
-            f"river centerlines missing at {_RIVERS_GEOJSON}: the map will be "
+            f"river centerlines missing at {path}: the map will be "
             "drawn without rivers. This is a packaging fault, not a property "
             "of the region.",
             RuntimeWarning,
             stacklevel=2,
         )
         return []
-    data = json.loads(_RIVERS_GEOJSON.read_text())
+    data = json.loads(path.read_text())
     out: list[tuple[Any, str, int]] = []
     for feat in data.get("features", []):
         try:
@@ -5973,7 +6077,7 @@ def _rivers_layer(
     lines: list[str] = []
     labels: list[str] = []
     labeled: set[str] = set()  # one label per named river
-    for geom, name, rank in sorted(load_rivers(), key=lambda r: -r[2]):
+    for geom, name, rank in sorted(load_rivers(region_box.bounds), key=lambda r: -r[2]):
         try:
             clipped = geom.intersection(region_box)
         except Exception:  # skip a malformed river geometry rather than fail the plate
@@ -7817,6 +7921,13 @@ def _inset_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     # below raised on the invalid result and was swallowed, and the inset
     # drew land far outside its own frame.
     wide = _inset_context_bbox(context, 1.4)
+    # And never more than half a world either side of the projection's
+    # centre. The Andes context runs from 180 W to 108 E, centred on 36 W;
+    # widened, it reached 165.6 E, more than 180 degrees from that centre,
+    # and land out there wrapped round to the far side of the projection and
+    # was stretched back across the whole locator as horizontal bands.
+    centre = (context[0] + context[2]) / 2.0
+    wide = [max(wide[0], centre - 179.9), wide[1], min(wide[2], centre + 179.9), wide[3]]
     land = load_land(wide)
     with contextlib.suppress(Exception):
         land = land.intersection(box(*wide))
@@ -8234,7 +8345,11 @@ def _attribution_layer(
     if cfg.get("_panel"):  # credited once on the sheet, not once per panel
         return '<g id="attribution"></g>'
     credits: list[str] = []
-    if _bbox_in_osm_admin1(bbox) and cfg.get("internal_borders", {}).get("show", True) is not False:
+    osm_borders = _bbox_in_osm_admin1(bbox) and cfg.get("internal_borders", {}).get(
+        "show", True
+    ) is not False
+    osm_rivers = cfg.get("rivers", {}).get("show", True) is not False and osm_rivers_in_view(bbox)
+    if osm_borders or osm_rivers:
         credits.append("© OpenStreetMap contributors (ODbL)")
     extra = cfg.get("attribution")
     if isinstance(extra, str) and extra:
@@ -9862,8 +9977,16 @@ _NAME_LISTS: tuple[tuple[str, str, str], ...] = (
 
 def _known_feature_names(dataset: str) -> set[str]:
     """Return every name the vendored ``dataset`` carries, lowercased."""
-    source = load_lakes() if dataset == "lakes" else load_rivers()
-    return {str(name).lower() for _geom, name, *_ in source if name}
+    if dataset == "lakes":
+        return {str(name).lower() for _geom, name, *_ in load_lakes() if name}
+    # Both tiers: a plate may name a river only the 1:10m set carries.
+    return {
+        str(feat.get("properties", {}).get("name", "")).lower()
+        for path in (_RIVERS_GEOJSON, _RIVERS_GEOJSON_10M)
+        if path.is_file()
+        for feat in json.loads(path.read_text()).get("features", [])
+        if feat.get("properties", {}).get("name")
+    }
 
 
 def _check_named_features(cfg: dict[str, Any]) -> None:

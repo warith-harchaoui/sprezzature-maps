@@ -33,9 +33,29 @@ All notable changes to sprezzature-maps are documented here.
   (OpenHistoricalMap's `start_date` / `end_date`), not only CShapes' year,
   month and day.
 - `basemap.relief_over_fills` (default 0.85).
+- **The rivers a region is about.** A regional plate (the same span the
+  10m coastline uses) reads Natural Earth's 1:10m centerlines and European
+  supplement, 1 916 named rivers against 450: the Vltava, the Morava, the
+  Váh, the Drina were absent. `scripts/build_rivers_10m.py` rebuilds the
+  file. **The Vardar**: Natural Earth files it as "Treska", its tributary,
+  fused to the main stem below Skopje; the line is cut at the confluence
+  and the Vardar, Gostivar to the Thermaic Gulf, comes from OpenStreetMap
+  (relation 5896030), with the ODbL credit printed whenever it is drawn.
 
 ### Fixed
 
+- **The date line is no longer a coast.** A lon/lat ring that crosses the
+  antimeridian was read as written, and its jump from +179.9 to -179.9
+  closed back across the world: Russia carried bands of land 200 degrees
+  wide at 65 to 71.5 N (365 square degrees too many on the 50m tier), and
+  Fiji's seam ran through Lake Titicaca as two straight lines of coast on
+  the Andes plate. Rings are now unwrapped and cut at +-180, in one
+  decoder shared by the four that each built polygons themselves; world
+  land is dissolved from the countries, not the pre-dissolved object whose
+  seam was already fused to the continents.
+- **The locator no longer wraps land round the world.** Its widened
+  context reached more than 180 degrees from its projection's centre on
+  the Andes plate, and that land came back as horizontal bands.
 - **The terrain shows through a flat fill.** The editorial register fills
   flat, and a flat fill averaged the hillshade under it away: every zone
   read as a sheet of colour with the relief stopping at its edge. The same

@@ -1931,6 +1931,7 @@ def build_munich() -> dict[str, Any]:
         # Off for the same reason: the automatic names are today's, and the
         # plate would print Wrocław where the map's own year says Breslau.
         "cities": {"show": False},
+        "rivers": {"always_label": ["Vltava", "Elbe", "Váh", "Morava"]},
         "legend_position": "top-right",
         "change": {
             "before": _ohm(2692764),
@@ -2005,6 +2006,10 @@ def build_serbia_1913() -> dict[str, Any]:
             "focus": "Kingdom of Serbia",
         },
         "cities": {"show": False},
+        # The Vardar is the axis of the ground Serbia took: Skopje, Veles,
+        # the road to Salonika. 1:10m, and from OpenStreetMap for this one
+        # river, which Natural Earth files under its tributary's name.
+        "rivers": {"always_label": ["Vardar", "Morava", "Drina", "Sava"]},
         "legend_position": "top-right",
         "change": {
             "before": _ohm(2692716),

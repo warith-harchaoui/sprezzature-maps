@@ -848,7 +848,8 @@ needs no credit. Two sources do:
   mirror, under the Licence Ouverte / Etalab 2.0
   (France's official open-data licence).
 - Switzerland, Germany, and Italy's first-level administrative
-  boundaries (regions, cantons, Länder): ©
+  boundaries (regions, cantons, Länder), and the Vardar river (Natural
+  Earth files it under its tributary's name): ©
   [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors,
   under ODbL 1.0 (the Open Database Licence).
 
