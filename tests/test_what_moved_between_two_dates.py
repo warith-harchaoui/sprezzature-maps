@@ -332,3 +332,178 @@ def test_actor_is_an_option_the_validator_accepts() -> None:
     """The key was removed once for being read by no line. It is read now."""
     assert "actor" in msm.SECTION_KEYS["change"]
     msm.validate_config(_two_camp_config(actor="A"))
+
+
+# ── the editorial register, the hover, the sequence ──────────────────────
+
+
+def _story_config(style: str = "editorial") -> dict:
+    cfg = _config(**{"from": "April 2022", "to": "December 2022"})
+    cfg["style"] = style
+    cfg["title"] = "Change"
+    msm.validate_config(cfg)
+    return cfg
+
+
+def _plate(cfg: dict) -> str:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _plates import plate
+
+    return plate(cfg)
+
+
+def _class_path(svg: str, key: str) -> str:
+    import re
+
+    found = re.search(rf'<path class="hit"[^>]*data-change="{key}"[^>]*/>', svg)
+    assert found, f"no {key} path on the plate"
+    return found.group(0)
+
+
+def test_the_editorial_change_is_one_hue_and_lost_ground_is_an_outline() -> None:
+    """
+    Held pale, taken full, lost an outline with nothing inside: what is
+    drawn where ground was lost is an absence, and a second hue for it would
+    read as a second camp (ASSESSMENT, round 7).
+    """
+    svg = _plate(_story_config())
+    held, gained, lost = (_class_path(svg, k) for k in ("held", "gained", "lost"))
+    assert f'fill="{msm._CHANGE_EDITORIAL["held"]}"' in held
+    assert f'fill="{msm._CHANGE_EDITORIAL["gained"]}"' in gained
+    assert 'fill-opacity="0"' in lost and "stroke-dasharray" in lost
+    assert f'stroke="{msm._CHANGE_EDITORIAL["lost"]}"' in lost
+    assert "mix-blend-mode" not in held, "a multiply cannot lighten the pale tint"
+
+
+def test_the_key_draws_lost_ground_the_way_the_map_does() -> None:
+    cfg = _story_config()
+    _plate(cfg)
+    rows = {row.get("change"): row for row in msm._legend_rows(cfg, 1.0)}
+    swatch = msm._legend_mark(rows["lost"], 0.0, 10.0, 12.0, 1.0)
+    assert 'fill="none"' in swatch and "stroke-dasharray" in swatch
+    assert 'fill="none"' not in msm._legend_mark(rows["gained"], 0.0, 10.0, 12.0, 1.0)
+
+
+def test_the_atlas_change_keeps_its_three_fills() -> None:
+    svg = _plate(_story_config("atlas"))
+    assert 'fill-opacity="0"' not in _class_path(svg, "lost")
+
+
+def test_hovering_a_place_says_what_it_was_at_each_date() -> None:
+    """
+    The before / after, said of the place under the pointer rather than
+    asked of the reader's memory of a second frame.
+    """
+    svg = _plate(_story_config())
+    for key, words in (
+        ("held", "held in April 2022 and in December 2022"),
+        ("gained", "not held in April 2022, held in December 2022"),
+        ("lost", "held in April 2022, not in December 2022"),
+    ):
+        path = _class_path(svg, key)
+        assert 'tabindex="0"' in path and words in path
+        group = svg[svg.index(path):]
+        group = group[: group.index("</g>", group.index('class="tip"'))]
+        assert words in group, f"the {key} bubble does not follow its own path"
+
+
+def test_each_bubble_is_alone_with_its_path() -> None:
+    """``.hit:hover~.tip`` reaches every following sibling: one group each."""
+    import re
+
+    svg = _plate(_story_config())
+    layer = svg[svg.index('<g id="change">'):]
+    for group in re.findall(r"<g><path class=\"hit\"(.*?)</g></g>", layer, flags=re.S)[:3]:
+        assert group.count('class="hit"') == 0
+
+
+def test_the_difference_is_never_counted_as_a_camp() -> None:
+    """The sidecar and the auditor read camps off ``data-category``."""
+    svg = _plate(_story_config())
+    layer = svg[svg.index('<g id="change">'): svg.index("</g>", svg.index('data-change="lost"'))]
+    assert "data-category" not in layer
+
+
+def test_a_key_row_isolates_its_class() -> None:
+    """The row's label carries a share; the button must carry the class."""
+    cfg = _story_config()
+    svg = _plate(cfg)
+    assert 'data-legend-category="gained"' in svg
+    from sprezzature_maps import _load_script as load
+
+    script = load("_plate_controls").controls_script()
+    assert "data-change" in script
+
+
+def test_the_change_tells_its_interval_in_order() -> None:
+    """First date's ground, then the loss empties, then the gain arrives."""
+    import re
+
+    style = msm._animation_css(_story_config())
+    assert "@keyframes sz-lose" in style
+    delay = {
+        key: float(re.search(rf'data-change="{key}"\][^{{]*\{{animation:sz-fade [\d.]+s ease-out ([\d.]+)s', style).group(1))
+        for key in ("held", "gained")
+    }
+    assert delay["gained"] > delay["held"]
+    guard = style[style.index("prefers-reduced-motion"):]
+    for key in ("held", "gained", "lost"):
+        assert f'#change [data-change="{key}"]' in guard
+    assert "forwards;" not in style.replace("backwards", "")
+
+
+# ── two records of one border ────────────────────────────────────────────
+
+
+def test_a_hairline_between_two_tracings_is_not_a_change() -> None:
+    """
+    Two records of one border never share their vertices. Subtracted, they
+    left a hairline along the whole frontier, and the Munich plate keyed
+    "Taken -- under 1%" for a state that took nothing in 1938.
+    """
+    nudged = Polygon([(0, 0), (2, 0), (2.004, 2), (0, 2)])
+    cfg = _config()
+    cfg["change"]["after"] = _fc(nudged)
+    parts = msm._change_geometries(cfg, Path("."))
+    assert parts["gained"].is_empty and parts["lost"].is_empty
+    cfg["change"]["sliver_km"] = 0
+    assert not msm._change_geometries(cfg, Path("."))["gained"].is_empty
+
+
+def test_a_real_gain_beside_a_hairline_is_kept_whole() -> None:
+    cfg = _config()
+    parts = msm._change_geometries(cfg, Path("."))
+    assert parts["gained"].area == pytest.approx(2.0), "the filter ate ground that moved"
+
+
+def test_a_change_plate_keeps_its_key_corner_to_itself() -> None:
+    """The locator took the corner the key was in: the Serbian plate's did."""
+    cfg = _story_config()
+    cfg["legend_position"] = "top-right"
+    assert msm._has_key_card(cfg)
+    assert msm._inset_corner(cfg, 1.0, 1000.0) != "top-right"
+
+
+@pytest.mark.parametrize("name", ["munich-1938", "serbia-1913"])
+def test_a_shipped_change_plate_is_two_records_not_a_memory(name: str) -> None:
+    """
+    Both sides come from tracked OpenHistoricalMap files, public domain,
+    each naming the relation it was taken from, so the plate can be taken
+    again with ``scripts/fetch_historical_extent.py``.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import build_situation_examples as examples
+
+    change = examples.BUILDERS[name]()["change"]
+    for side in ("before", "after"):
+        props = change[side]["features"][0]["properties"]
+        assert props["license"].startswith("CC0"), props
+        assert props["source"].startswith("OpenHistoricalMap relation "), props
+        assert props["start_date"] and props["end_date"], props
+    assert change["before"]["features"][0]["properties"]["end_date"] <= (
+        change["after"]["features"][0]["properties"]["start_date"]
+    ), "the 'before' record ends after the 'after' one begins"

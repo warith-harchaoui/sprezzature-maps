@@ -116,7 +116,7 @@ def _root_role(svg: str) -> str:
 THEMATIC = sorted(
     n
     for n in _builders()
-    if n in {"ukraine", "syria", "libya", "sudan", "drc", "dnieper"}
+    if n in {"ukraine", "syria", "libya", "sudan", "drc", "dnieper", "munich-1938", "serbia-1913"}
 )
 REFERENCE = sorted(n for n in _builders() if n not in set(THEMATIC))
 
@@ -192,6 +192,15 @@ def test_a_claim_names_the_claim(name: str) -> None:
     """
     svg = plate(_builders()[name]())
     zones = [f for f in _focusables(svg) if f["role"] == "graphics-symbol" and f["category"]]
+    if 'data-change="' in svg:
+        # A change plate's claim is a difference, not a camp: each class
+        # names its class and says what the place was at each date.
+        changes = re.findall(r'<path class="hit"[^>]*aria-label="([^"]*)"[^>]*data-change="', svg)
+        assert changes, f"{name}: no named change class found"
+        for label in changes:
+            assert re.search(r"^(Held throughout|Taken|Lost)\b", label), label
+            assert " in " in label or "date" in label, f"{name}: {label!r} names no date"
+        return
     assert zones, f"{name}: no named control zone found"
     for z in zones:
         assert z["category"] in z["label"], (

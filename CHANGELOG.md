@@ -4,6 +4,40 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Change plates from two dated records, not a record and a memory.**
+  `munich-1938` (Czechoslovakia across the Munich Agreement) and
+  `serbia-1913` (Serbia across the Balkan Wars) subtract two
+  OpenHistoricalMap relations, each with its own `start_date` and
+  `end_date`, public domain (CC0). `scripts/fetch_historical_extent.py
+  <relation id>…` takes them again into `assets/historical-extents/`, and
+  refuses a relation tagged with another licence.
+- **`change` in the editorial register.** Held ground is the pale tint of
+  the accent, taken ground the full accent, lost ground an outline with
+  nothing inside, keyed the same way.
+- **Hovering a change class says what the place was at each date**
+  ("held in September 1938, not in October 1938"); each class is
+  focusable and named, and its key row isolates it.
+- **A change plate opens on the first date's ground**, then the loss
+  empties and the gain arrives, under the same `backwards`-only rule as
+  the rest of the sequence, stopped by `prefers-reduced-motion`.
+- The accessible description of a change plate states the interval and
+  the share of each class.
+
+### Fixed
+
+- **A hairline between two tracings of one border is no longer a
+  change.** `change.sliver_km` (default 1.5) drops any piece of taken or
+  lost ground narrower than twice that width, whole. Without it the Munich
+  plate keyed "Taken — under 1%" for a state that took nothing.
+- A change plate's key owns its corner: the locator, the north arrow and
+  the subtitle used to be told only about a control palette, and the
+  locator printed under the key.
+- A change key row isolated nothing: its button carried the row's label,
+  share included, which matched no shape on the map, and clicking it hid
+  every control zone.
+
 ## [1.2.0] — 2026-11-09
 
 ### Added

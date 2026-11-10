@@ -209,7 +209,7 @@ The assessment
 ``change``
     What was held, taken and lost between two dates, the answer an arrow
     only pretends to give: ``{before, after, actor, from, to, palette,
-    fill_opacity, blend}``. ``before`` is the earlier extent, a
+    fill_opacity, blend, sliver_km}``. ``before`` is the earlier extent, a
     FeatureCollection or a path beside the config; ``after`` is the later
     one and defaults to ``areas_of_control.source``. Both are required --
     a difference with one side absent is the other side drawn in the
@@ -227,7 +227,16 @@ The assessment
     ``palette`` recolours any of ``held``, ``gained`` and ``lost``.
     ``fill_opacity`` and ``blend`` set how the three fills meet the
     terrain and are read by the key as well as by the layer, so a key
-    cannot show a colour the ground does not.
+    cannot show a colour the ground does not. ``sliver_km`` (default 1.5)
+    drops any piece of taken or lost ground narrower than twice that
+    width, whole: two tracings of one border never share their vertices,
+    and their difference is a hairline along the frontier, not a change;
+    0 keeps everything. On an editorial plate held ground is the pale
+    tint of the accent, taken ground the full accent and lost ground an
+    outline with nothing inside; each class says, on hover or focus,
+    what its ground was at each of the two dates, and in a browser the
+    plate opens on the first date's ground before the loss empties and
+    the gain arrives.
 ``forces``, ``events``
     Point markers; each takes ``lon``, ``lat``, ``color``, ``r``,
     ``label``, ``precision``, ``radius_km``, ``date``, ``time_precision``
@@ -1715,9 +1724,7 @@ def _header_right_limit(cfg: dict[str, Any], width: float) -> float:
     """
     ts = max(1.0, width / 1000.0)
     limit = width - _ARROW_GUTTER * ts
-    if _resolve_legend_position(cfg, ts, width) == "top-right" and (
-        cfg.get("areas_of_control", {}).get("palette")
-    ):
+    if _resolve_legend_position(cfg, ts, width) == "top-right" and _has_key_card(cfg):
         card_w, _card_h, corner = _legend_panel_dims(cfg, ts)
         limit = min(limit, width - (card_w + corner + _ARROW_GUTTER * ts))
     inset = _inset_settings(cfg)
@@ -3053,6 +3060,25 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
                 f"Some zones are drawn at a lower confidence than assessed control: {spelled}."
             )
 
+    # The difference, said as the key says it, with the shares the layer
+    # measured -- ``_change_key`` is set by the time this runs, because the
+    # layers are drawn before the root that carries this description.
+    shares = cfg.get("_change_key") or {}
+    if cfg.get("change") and not shares:
+        # Called on a bare config, before any layer: the same subtraction,
+        # without the region clip the layer applies.
+        parts = _change_geometries(cfg, Path(cfg.get("_config_dir", ".")))
+        total = sum(g.area for g in parts.values()) or 1.0
+        shares = {k: g.area / total for k, g in parts.items() if not g.is_empty}
+    if cfg.get("change"):
+        interval = _change_interval(cfg) or "Change between two dates"
+        drawn = [
+            f"{label.lower()} {_share_phrase(shares[key]).replace(' of the mapped area', '')}"
+            for key, _color, label in _CHANGE_CLASSES
+            if key in shares
+        ]
+        sentences.append(f"{interval}: {', '.join(drawn)}." if drawn else f"{interval}.")
+
     if cfg.get("front", {}).get("line"):
         sentences.append("An approximate front line is drawn.")
 
@@ -3076,7 +3102,9 @@ def accessible_text(cfg: dict[str, Any]) -> tuple[str, str]:
     # reach. A plate whose zones and marks are keyboard-reachable is useless
     # to someone who never learns they are: the description is the only place
     # that fact can be stated once, before the thirty tab stops begin.
-    reachable = len(palette) + len(cfg.get("events", [])) + len(cfg.get("forces", []))
+    reachable = (
+        len(palette) + len(shares) + len(cfg.get("events", [])) + len(cfg.get("forces", []))
+    )
     if reachable:
         sentences.append(
             f"{reachable} mapped features can be reached with the Tab key, each one "
@@ -3180,7 +3208,31 @@ def _animation_css(cfg: dict[str, Any]) -> str:
         f'#areas-of-control .hit:not([data-category="{base}"]),'
         '#areas-of-control path[fill^="url(#hatch"]'
     )
+    # A change plate tells its interval in the order it happened: the
+    # ground of the first date appears -- held and lost together, lost in
+    # the tint of held, because on that date it *was* held -- then the lost
+    # ground empties to its outline and the taken ground arrives. The lost
+    # path's own attributes are its end state, so its keyframe only leads
+    # into them, like every other here.
+    held_color = _change_color(cfg, "held")
+    held_op = float(_change_blend(cfg)["fill_opacity"])
+    cd, ct = _ANIMATION["zones"]
+    change = (
+        f"@keyframes sz-lose{{0%,45%{{fill:{held_color};fill-opacity:{held_op:.2f}}}}}"
+        f'#change [data-change="held"],#change [data-change="lost"]'
+        f"{{animation:sz-fade {ct}s ease-out {cd}s backwards;}}"
+        f'#change [data-change="lost"]'
+        f"{{animation:sz-fade {ct}s ease-out {cd}s backwards,"
+        f"sz-lose {2 * ct}s ease-in {cd}s backwards;}}"
+        f'#change [data-change="gained"]'
+        f"{{animation:sz-fade {ct}s ease-out {cd + ct}s backwards;}}"
+    ) if cfg.get("change") else ""
+    still = (
+        '#change [data-change="held"],#change [data-change="lost"],'
+        '#change [data-change="gained"],'
+    ) if change else ""
     return (
+        f"{change}"
         "@keyframes sz-fade{from{opacity:0}}"
         "@keyframes sz-draw{from{stroke-dasharray:1 1;stroke-dashoffset:1}"
         "to{stroke-dasharray:1 1;stroke-dashoffset:0}}"
@@ -3190,7 +3242,7 @@ def _animation_css(cfg: dict[str, Any]) -> str:
         "#events .hit,#forces .hit{transform-box:fill-box;transform-origin:center;"
         f"animation:sz-pop {mt}s cubic-bezier(.3,1.6,.5,1) {md}s backwards;}}"
         "@media (prefers-reduced-motion: reduce){"
-        f"{zones},#front-reveal path,#events .hit,#forces .hit{{animation:none;}}}}"
+        f"{still}{zones},#front-reveal path,#events .hit,#forces .hit{{animation:none;}}}}"
     )
 
 
@@ -3664,7 +3716,7 @@ def build_map(cfg: dict[str, Any]) -> str:
     # children are still announced, which is strictly better than today.
     a11y_title, a11y_desc = accessible_text(cfg)
     navigable = bool(cfg.get("areas_of_control", {}).get("palette")) or bool(
-        cfg.get("events") or cfg.get("forces")
+        cfg.get("events") or cfg.get("forces") or cfg.get("change")
     )
     role = "graphics-document" if navigable else "img"
     # ``print_width`` states the figure's physical width, and the root carries
@@ -4579,6 +4631,69 @@ _CHANGE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("lost", "#5b7fa6", "Lost"),
 )
 
+#: The same three states in the editorial register, as a newsroom sets a
+#: change map (ASSESSMENT, round 7): one hue, two strengths and an outline.
+#: Ground held at both dates is the pale tint and ground taken is the full
+#: accent -- the FT's dark red for the recent and light red for the long
+#: held, which is R4 -- and ground lost is an outline with nothing inside,
+#: because what is drawn there is an absence: the place this actor stood
+#: and stands no more. A second hue for it would be a second camp on a
+#: plate that has one.
+_CHANGE_EDITORIAL: dict[str, str] = {
+    "held": "#f0cdc4",
+    "gained": "#c4513f",
+    "lost": "#8e3328",
+}
+
+
+def _change_color(cfg: dict[str, Any], key: str) -> str:
+    """The colour a change class is drawn in: the config's, else the style's.
+
+    One function for the layer and for the key, so the swatch cannot name a
+    colour the map did not use.
+    """
+    palette = (cfg.get("change") or {}).get("palette") or {}
+    if key in palette:
+        return str(palette[key])
+    if _is_editorial(cfg):
+        return _CHANGE_EDITORIAL[key]
+    return next(color for k, color, _ in _CHANGE_CLASSES if k == key)
+
+
+def _change_outlined(cfg: dict[str, Any], key: str) -> bool:
+    """Whether a class is drawn as an outline only: lost ground, editorially."""
+    return key == "lost" and _is_editorial(cfg)
+
+
+def _change_story(cfg: dict[str, Any], key: str) -> str:
+    """What one class says about its ground at each of the two dates.
+
+    This is the before / after a reader hovers for, said of the very place
+    under the pointer: not a second frame to compare from memory, but the
+    two facts the colour stands for.
+
+    Examples
+    --------
+    >>> cfg = {"change": {"from": "April 2022", "to": "December 2022"}}
+    >>> _change_story(cfg, "gained")
+    'not held in April 2022, held in December 2022'
+    >>> _change_story({}, "lost")
+    'held at the first date, not at the second'
+    """
+    spec = cfg.get("change") or {}
+    first, last = spec.get("from"), spec.get("to")
+    if first and last:
+        return {
+            "held": f"held in {first} and in {last}",
+            "gained": f"not held in {first}, held in {last}",
+            "lost": f"held in {first}, not in {last}",
+        }[key]
+    return {
+        "held": "held at both dates",
+        "gained": "not held at the first date, held at the second",
+        "lost": "held at the first date, not at the second",
+    }[key]
+
 
 def _change_camps(features: list[dict[str, Any]], field: str) -> list[str]:
     """Return the distinct camps a list of control features spells, in order.
@@ -4745,11 +4860,49 @@ def _change_geometries(
         sides[name] = merged
     before, after = sides["before"], sides["after"]
     before, after = make_valid(before), make_valid(after)
+    reach = float(spec.get("sliver_km", _CHANGE_SLIVER_KM)) / 111.32
     return {
         "held": before.intersection(after),
-        "gained": after.difference(before),
-        "lost": before.difference(after),
+        "gained": _drop_slivers(after.difference(before), reach),
+        "lost": _drop_slivers(before.difference(after), reach),
     }
+
+
+#: Half the width, in kilometres, below which a piece of taken or lost
+#: ground is the two tracings disagreeing and not the ground moving. Two
+#: records of one border, digitised by different hands, never share their
+#: vertices; subtracted, they leave a hairline along the whole frontier.
+#: On the Munich plate that hairline was a key row reading "Taken -- under
+#: 1%" for a state that took nothing in 1938.
+_CHANGE_SLIVER_KM = 1.5
+
+
+def _drop_slivers(geom: Any, reach: float) -> Any:
+    """Keep the parts of ``geom`` wider than ``2 * reach`` degrees, unaltered.
+
+    A part is kept or dropped whole, never eroded: what survives is drawn
+    with the exact edges the two sources gave it. ``reach`` is in degrees of
+    latitude, so east-west the threshold widens by ``1 / cos(lat)`` --
+    coarser where the meridians close, which errs towards dropping a
+    hairline, the direction that cannot invent a change.
+
+    Examples
+    --------
+    >>> from shapely.geometry import box
+    >>> from shapely.ops import unary_union
+    >>> hair, field = box(0, 0, 10, 0.001), box(0, 1, 1, 2)
+    >>> kept = _drop_slivers(unary_union([hair, field]), 0.01)
+    >>> round(kept.area, 3)
+    1.0
+    >>> _drop_slivers(hair, 0.0).area > 0
+    True
+    """
+    if reach <= 0 or geom.is_empty:
+        return geom
+    whole = _polygonal(geom)
+    parts = getattr(whole, "geoms", [whole])
+    kept = [p for p in parts if not p.is_empty and not p.buffer(-reach).is_empty]
+    return unary_union(kept) if kept else Polygon()
 
 
 def _change_layer(
@@ -4795,7 +4948,8 @@ def _change_layer(
             f"Known keys: {', '.join(sorted(SECTION_KEYS['change']))}"
         )
     parts = _change_geometries(cfg, Path(cfg.get("_config_dir", ".")))
-    palette = dict(spec.get("palette") or {})
+    W, H, ts = vp["width"], vp["height"], vp["ts"]
+    actor = str(spec.get("actor") or "").strip()
     # The same relationship to the terrain the control fills have, for the
     # same reason and -- critically -- by the same arithmetic the legend
     # simulates. Drawn with a plain alpha while ``_as_rendered`` simulated
@@ -4812,7 +4966,7 @@ def _change_layer(
     # hands" is asked of the ground either side ever held, not of the
     # whole plate, most of which was never in play.
     total = sum(g.area for g in parts.values()) or 1.0
-    for key, default_color, _label in _CHANGE_CLASSES:
+    for key, _default_color, label in _CHANGE_CLASSES:
         geom = parts[key]
         if region_box is not None:
             geom = geom.intersection(region_box)
@@ -4821,12 +4975,52 @@ def _change_layer(
         d = projected_geom_to_path(_project_geom(_polygonal(geom), proj), vp)
         if not d:
             continue
-        drawn[key] = geom.area / total
+        share = geom.area / total
+        drawn[key] = share
+        color = _change_color(cfg, key)
+        # Lost ground is an outline with nothing inside, but it still has a
+        # fill -- white at zero opacity -- so the pointer finds it: an SVG
+        # shape with ``fill="none"`` answers hover on its edge only, and a
+        # reader asking "what was here" points at the middle.
+        if _change_outlined(cfg, key):
+            paint = (
+                f'fill="#ffffff" fill-opacity="0" stroke="{color}" '
+                f'stroke-width="{1.5 * ts:.1f}" '
+                f'stroke-dasharray="{4.5 * ts:.1f} {2.6 * ts:.1f}"'
+            )
+        else:
+            paint = (
+                f'fill="{color}" fill-opacity="{fill_op:.2f}" stroke="#ffffff" '
+                f'stroke-width="{0.9 * ts:.1f}"{fill_style}'
+            )
+        story = _change_story(cfg, key)
+        who = f" by {actor}" if actor else ""
+        rp = geom.representative_point()
+        tx, ty = vp["to_svg"](rp.x, rp.y)
+        tip = tooltip_bubble(
+            tx,
+            ty,
+            [f"{label}{who}", f"{story} · {share * 100:.1f}% of the ground in play"],
+            anchor="middle",
+            canvas_w=W,
+            canvas_h=H,
+            ink="#1b2733",
+            secondary="#5b6169",
+            border="#e4e8ec",
+        )
+        # Each class in its own group with its bubble: ``.hit:hover~.tip``
+        # reaches every following sibling, so three paths and three bubbles
+        # side by side would open the later classes' bubbles too. Focusable
+        # and named, like a control zone: a stop the keyboard reaches has to
+        # say what it is. ``data-change`` rather than ``data-category``, so
+        # the sidecar and the auditor, which read control zones by that
+        # attribute, never count the difference as a camp.
         out.append(
-            f'<path d="{d}" fill="{palette.get(key, default_color)}" '
-            f'fill-opacity="{fill_op:.2f}" stroke="#ffffff" '
-            f'stroke-width="{0.9 * vp["ts"]:.1f}" stroke-linejoin="round"'
-            f"{fill_style}/>"
+            f'<g><path class="hit" tabindex="0" role="graphics-symbol" '
+            f'aria-label="{_esc(f"{label}{who}: {story}")}" d="{d}" {paint} '
+            f'stroke-linejoin="round" data-change="{key}" '
+            f'data-change-label="{_esc(label)}" data-area-fraction="{share:.4f}"/>'
+            f"{tip}</g>"
         )
     # Only the classes the plate actually drew reach the key, each with
     # the share it covers. A sliver of ground is still real change and
@@ -4848,7 +5042,10 @@ def _change_blend(cfg: dict[str, Any]) -> dict[str, Any]:
     spec = cfg.get("change") or {}
     has_relief = bool(cfg.get("basemap", {}).get("relief", True))
     plate_blend = cfg.get("_plate", _PLATES["day"])["blend"]
-    blend = spec.get("blend", plate_blend if has_relief else "none")
+    # Flat on an editorial plate, as its control fills are: a multiply
+    # cannot lighten, and the pale tint of held ground is the whole of R4.
+    flat = _is_editorial(cfg) or not has_relief
+    blend = spec.get("blend", "none" if flat else plate_blend)
     default_op = 0.88 if blend == "multiply" else COMPOSITING["claim"]
     return {"blend": blend, "fill_opacity": float(spec.get("fill_opacity", default_op))}
 
@@ -7140,6 +7337,17 @@ def _inset_settings(cfg: dict[str, Any]) -> dict[str, Any] | None:
     return dict(inset)
 
 
+def _has_key_card(cfg: dict[str, Any]) -> bool:
+    """Whether the plate draws a key card that owns a corner.
+
+    A control palette draws one, and so does a ``change``: asked only about
+    the palette, the locator, the north arrow and the subtitle each took the
+    corner a change plate's key was already in, and the Serbian plate's
+    locator printed under its key.
+    """
+    return bool(cfg.get("areas_of_control", {}).get("palette") or cfg.get("change"))
+
+
 def _inset_corner(cfg: dict[str, Any], ts: float, W: float) -> str:
     """Return the corner a locator takes when the config does not name one.
 
@@ -7151,7 +7359,7 @@ def _inset_corner(cfg: dict[str, Any], ts: float, W: float) -> str:
     """
     taken = {"top-left"}  # the title block
     legend = _resolve_legend_position(cfg, ts, W)
-    if cfg.get("areas_of_control", {}).get("palette"):
+    if _has_key_card(cfg):
         # ``right`` floats the card against the plate's right edge, top-
         # aligned, so it owns that corner as surely as ``top-right`` does.
         taken.add("top-right" if legend == "right" else legend)
@@ -7436,7 +7644,7 @@ def _inset_box(cfg: dict[str, Any], vp: dict[str, Any]) -> tuple[float, float, f
     if (
         inset.get("position") is None
         and _resolve_legend_position(cfg, ts, W) == "right"
-        and cfg.get("areas_of_control", {}).get("palette")
+        and _has_key_card(cfg)
     ):
         panel_w, panel_h, corner = _legend_panel_dims(cfg, ts)
         box_w = panel_w
@@ -7872,8 +8080,7 @@ def _furniture_layer(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     # arrow never sits on the card.
     arrow_x = W - 30 * ts
     legend_pos = _resolve_legend_position(cfg, ts, W)
-    has_legend = bool(cfg.get("areas_of_control", {}).get("palette"))
-    if legend_pos == "top-right" and has_legend:
+    if legend_pos == "top-right" and _has_key_card(cfg):
         # Read off the card rather than restating its width: the 262 that used
         # to be written here twice is now a floor the card can exceed.
         card_w, _card_h, corner = _legend_panel_dims(cfg, ts)
@@ -8049,15 +8256,18 @@ def _legend_rows(cfg: dict[str, Any], ts: float) -> list[dict[str, Any]]:
     # the ones it actually drew: a key for a colour nothing used sends a
     # reader looking for it.
     shares = cfg.get("_change_key") or {}
-    for key, default_color, label in _CHANGE_CLASSES:
+    for key, _default_color, label in _CHANGE_CLASSES:
         if key not in shares:
             continue
-        change = cfg.get("change") or {}
         rows.append({
             "kind": "class",
             "label": f"{label} — {_share_phrase(shares[key]).replace(' of the mapped area', '')}",
-            "color": _as_rendered(
-                (change.get("palette") or {}).get(key, default_color),
+            # What the row's button isolates: the class, not its label,
+            # which carries a share and matches nothing on the map.
+            "change": key,
+            "outline": _change_outlined(cfg, key),
+            "color": _change_color(cfg, key) if _change_outlined(cfg, key) else _as_rendered(
+                _change_color(cfg, key),
                 # ``_as_rendered`` reads the blend off ``areas_of_control``;
                 # a change plate may carry no control layer at all, so it is
                 # shown this layer's own settings under that name.
@@ -8172,6 +8382,11 @@ def _legend_mark(row: dict[str, Any], x: float, y: float, sw: float, ts: float) 
     """
     kind = row["kind"]
     sy = y - sw / 2 - 1 * ts
+    if kind == "class" and row.get("outline"):
+        return (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
+                f'rx="{2.5 * ts:.1f}" fill="none" stroke="{row["color"]}" '
+                f'stroke-width="{1.5 * ts:.1f}" '
+                f'stroke-dasharray="{3.0 * ts:.1f} {1.8 * ts:.1f}"/>')
     if kind == "class":
         out = (f'<rect x="{x:.1f}" y="{sy:.1f}" width="{sw:.1f}" height="{sw:.1f}" '
                f'rx="{2.5 * ts:.1f}" fill="{row["color"]}" fill-opacity="{row["fill"]:.2f}" '
@@ -8714,8 +8929,11 @@ def _legend_button(row: dict[str, Any]) -> str:
     if row["kind"] != "class":
         return ""
     label = _esc(str(row["label"]))
+    # A change row isolates its class by key, read against ``data-change``;
+    # a control row by its name, read against ``data-category``.
+    target = _esc(str(row.get("change") or row["label"]))
     return (
-        f' data-legend-category="{label}" role="button" tabindex="0"'
+        f' data-legend-category="{target}" role="button" tabindex="0"'
         f' aria-label="Show only {label}"'
     )
 
@@ -9499,7 +9717,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     "small_multiples": frozenset({"by", "from", "to", "columns", "panel_width"}),
     "change": frozenset({
         "before", "after", "actor", "from", "to", "palette", "fill_opacity",
-        "blend",
+        "blend", "sliver_km",
     }),
     "detail_area": frozenset({"bbox", "label", "color", "label_at"}),
     "values": frozenset({

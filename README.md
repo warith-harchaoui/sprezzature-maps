@@ -273,6 +273,32 @@ question is asked of the ground either side ever held and not of a frame
 that is mostly ocean. It is also what stops a sliver from taking a silent
 row a reader then hunts the map for.
 
+Two records of one border, digitised by different hands, never share their
+vertices, so their difference is a hairline along the whole frontier: the
+Munich plate first keyed "Taken — under 1%" for a state that took nothing
+in 1938. Any piece of taken or lost ground narrower than three kilometres
+is dropped whole (`sliver_km: 1.5`, half that width; `0` keeps everything).
+
+In the editorial register (`style: editorial`) the three classes are one
+hue: held ground the pale tint, taken ground the full accent — the FT's
+dark red for the recent, light red for the long held — and lost ground an
+outline with nothing inside, because what is drawn there is an absence.
+Hovering or focusing a class says what that ground was at each date
+("held in September 1938, not in October 1938"), the before and after of
+the place under the pointer rather than a second frame to compare from
+memory. In a browser the plate opens on the first date's ground, then the
+loss empties to its outline and the gain arrives; the PNG and
+`prefers-reduced-motion` get the finished plate.
+
+Both shipped change plates subtract two records rather than a record and a
+memory. `munich-1938` and `serbia-1913` take each side from an
+OpenHistoricalMap relation with its own `start_date` and `end_date` —
+public domain (CC0), one source, one tagging scheme — fetched by
+`scripts/fetch_historical_extent.py <relation id>…` into
+`assets/historical-extents/`, so anyone can take them again. Present-day
+frontiers and today's city names are switched off on both: on a plate of a
+past year they would be a different claim.
+
 ### A number per administrative unit
 
 A choropleth of the world keys on ISO-3166-1 numeric. An analysis usually
@@ -497,15 +523,17 @@ three kinds render from their bundled demo data, and the command line
 renders them to real SVG files. There is no FIGURES.md-style catalogue page
 (with three kinds, this README is the catalogue).
 
-Fifteen worked situation maps live in `scripts/build_situation_examples.py`,
+Seventeen worked situation maps live in `scripts/build_situation_examples.py`,
 regenerated into `assets/situation-maps/` with
 `python scripts/build_situation_examples.py` (or one by name, such as
-`python scripts/build_situation_examples.py sudan`). Six are thematic:
+`python scripts/build_situation_examples.py sudan`). Eight are thematic:
 Ukraine, the lower Dnieper (the plate that goes with an article, with its
 numbered marks), Syria and Libya as historical snapshots, and Sudan and
-eastern DRC drawn from open-source reporting to late September 2026. Each
-of those is schematic by construction, says so on the plate, and keeps its
-claim lines in readable Python rather than an opaque data file, so a reader
+eastern DRC drawn from open-source reporting to late September 2026, and
+two change plates, Czechoslovakia across Munich in 1938 and Serbia across
+the Balkan Wars, each the difference between two dated OpenHistoricalMap
+records. The first six are schematic by construction, say so on the
+plate, and keep their claim lines in readable Python rather than an opaque data file, so a reader
 who disagrees can see exactly which coordinates to argue with. The other
 nine are reference plates with no thematic layer: Switzerland, Iberia,
 western Europe, the Himalaya, the Caribbean, the Andes, the Sahel, the

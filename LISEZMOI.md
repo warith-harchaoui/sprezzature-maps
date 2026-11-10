@@ -283,6 +283,35 @@ sur un cadre qui est surtout de la mer. C'est aussi ce qui empêche un
 éclat de prendre une ligne muette qu'un lecteur cherchera ensuite sur la
 carte.
 
+Deux relevés d'une même frontière, numérisés par des mains différentes, ne
+partagent jamais leurs sommets : leur différence est un liseré le long de
+toute la frontière, et la planche de Munich a d'abord légendé « Taken —
+under 1 % » pour un État qui n'a rien pris en 1938. Tout morceau de terrain
+pris ou perdu plus étroit que trois kilomètres est écarté en entier
+(`sliver_km: 1.5`, la moitié de cette largeur ; `0` garde tout).
+
+Dans le registre éditorial (`style: editorial`), les trois classes sont
+une seule teinte : le terrain tenu en ton pâle, le terrain pris en accent
+plein — le rouge foncé du FT pour le récent, le rouge clair pour le tenu
+de longue date — et le terrain perdu en contour vide, parce que ce qui est
+dessiné là est une absence. Survoler ou atteindre une classe au clavier dit
+ce qu'était ce terrain à chaque date (« held in September 1938, not in
+October 1938 ») : l'avant et l'après du lieu sous le pointeur, plutôt
+qu'une seconde image à comparer de mémoire. Dans un navigateur, la planche
+s'ouvre sur le terrain de la première date, puis la perte se vide jusqu'à
+son contour et le gain arrive ; le PNG et `prefers-reduced-motion`
+reçoivent la planche finie.
+
+Les deux planches de changement livrées soustraient deux relevés, pas un
+relevé et un souvenir. `munich-1938` et `serbia-1913` prennent chaque côté
+dans une relation OpenHistoricalMap qui porte ses propres `start_date` et
+`end_date` — domaine public (CC0), une seule source, un seul schéma de
+balisage — téléchargée par `scripts/fetch_historical_extent.py <id de
+relation>…` dans `assets/historical-extents/`, si bien que n'importe qui
+peut les reprendre. Les frontières actuelles et les noms de villes
+d'aujourd'hui sont coupés sur les deux : sur la planche d'une année passée,
+ce serait une autre affirmation.
+
 ### Une valeur par unité administrative
 
 Un choroplèthe du monde s'indexe sur l'ISO-3166-1 numérique. Une analyse,
@@ -527,7 +556,7 @@ démonstration intégrées, et la ligne de commande produit de vrais fichiers
 SVG. Il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
 LISEZMOI en tient lieu).
 
-Quinze cartes de situation complètes vivent dans
+Dix-sept cartes de situation complètes vivent dans
 `scripts/build_situation_examples.py`, régénérables dans
 `assets/situation-maps/` par `python scripts/build_situation_examples.py` (ou
 une seule par son nom, par exemple
@@ -535,8 +564,10 @@ une seule par son nom, par exemple
 l'Ukraine, le bas Dniepr (la planche qui accompagne un article, avec ses
 repères numérotés), la Syrie et la Libye comme instantanés historiques, le
 Soudan et l'est de la RDC d'après des sources ouvertes jusqu'à fin septembre
-2026. Chacune de celles-ci est schématique par construction, le dit sur la
-planche, et garde ses lignes de revendication en Python lisible plutôt que
+2026, et deux planches de changement, la Tchécoslovaquie à travers Munich en
+1938 et la Serbie à travers les guerres balkaniques, chacune la différence
+entre deux relevés datés d'OpenHistoricalMap. Chacune des six premières est
+schématique par construction, le dit sur la planche, et garde ses lignes de revendication en Python lisible plutôt que
 dans un fichier de données opaque : un lecteur en désaccord voit exactement
 quelles coordonnées contester. Les neuf autres sont des planches de référence
 sans couche thématique : la Suisse, la péninsule Ibérique, l'Europe de

@@ -260,11 +260,15 @@ _SCRIPT = r"""
       });
     });
     var limit = ORDER.indexOf(state.upto);
-    var zones = svg.querySelectorAll('[data-confidence]');
+    // Control zones, then change classes. A change class has no
+    // confidence tier: it is shown at every step of the ladder.
+    var zones = [].slice.call(svg.querySelectorAll('[data-confidence]'))
+      .concat([].slice.call(svg.querySelectorAll('[data-change]')));
     for (var i = 0; i < zones.length; i++) {
       var z = zones[i];
-      var tier = ORDER.indexOf(z.getAttribute('data-confidence'));
-      var category = z.getAttribute('data-category');
+      var confidence = z.getAttribute('data-confidence');
+      var tier = confidence === null ? 0 : ORDER.indexOf(confidence);
+      var category = z.getAttribute('data-category') || z.getAttribute('data-change');
       var show = tier >= 0 && tier <= limit && (!state.only || category === state.only);
       z.style.display = show ? '' : 'none';
     }

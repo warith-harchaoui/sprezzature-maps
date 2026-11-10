@@ -1847,6 +1847,161 @@ def build_south_china_sea() -> dict[str, Any]:
         },
     }
 
+# --------------------------------------------------------------------------- #
+# Change plates: two dated extents of one state, from one source              #
+# --------------------------------------------------------------------------- #
+
+#: Where ``scripts/fetch_historical_extent.py`` writes the OpenHistoricalMap
+#: extents these plates subtract. Tracked, CC0, and taken again by running
+#: that script with the relation ids each builder names.
+HISTORICAL_DATA = Path(__file__).resolve().parents[1] / "assets" / "historical-extents"
+
+
+def _ohm(relation_id: int) -> dict[str, Any]:
+    """One OpenHistoricalMap relation's extent, as fetched and tracked."""
+    return json.loads((HISTORICAL_DATA / f"ohm-{relation_id}.geojson").read_text())
+
+
+#: The two change plates' ink, the editorial accent's deep shade.
+CHANGE_INK = "#8e3328"
+_OHM_METHOD = (
+    "Both extents are OpenHistoricalMap relations, taken by one script from "
+    "one source under one tagging scheme, so the difference between them is "
+    "the change it records and not a change of method. Crowd-sourced: the "
+    "border precision varies along its length. Present-day frontiers are not "
+    "drawn: on a plate of a past year they would be a different claim."
+)
+
+
+def build_munich() -> dict[str, Any]:
+    """Czechoslovakia before and after the Munich Agreement, 1938.
+
+    The first change plate with both sides sourced rather than drawn. The
+    open item of the editorial loop (ASSESSMENT, round 6) was that the
+    package could subtract two extents and had no honest pair to subtract:
+    every plate here is traced by hand from reporting, and tracing the
+    *earlier* side as well would be inventing it. OpenHistoricalMap holds
+    Czechoslovakia as dated relations -- 2692764 up to 30 September 1938,
+    2747874 from then until the First Vienna Award of 2 November -- in the
+    public domain, so the Sudetenland is the difference between two records
+    and not a memory of one.
+
+    Lost ground is an outline with nothing in it, which is what it was for
+    Czechoslovakia by the tenth of October: a horseshoe of border country,
+    its fortifications with it, around a Bohemia left without a defensible
+    edge.
+    """
+    return {
+        "style": "editorial",
+        "title": "Munich, 1938",
+        "subtitle": "The ground Czechoslovakia ceded in the autumn of 1938, before the Vienna Award",
+        "region": {"bbox": [11.3, 47.0, 27.4, 51.6]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {},
+        # A present-day frontier on a plate of 1938 is a different claim:
+        # it would draw the Czech-Slovak line of 1993 through the middle of
+        # the state the plate is about. The neighbours are lettered by hand.
+        "frontiers": {"show": False},
+        # Off for the same reason: the automatic names are today's, and the
+        # plate would print Wrocław where the map's own year says Breslau.
+        "cities": {"show": False},
+        "legend_position": "top-right",
+        "change": {
+            "before": _ohm(2692764),
+            "after": _ohm(2747874),
+            "actor": "Czechoslovakia",
+            "from": "September 1938",
+            "to": "October 1938",
+        },
+        "legend_footer": "Czechoslovakia, before and after Munich",
+        "caption": "full",
+        "method": _OHM_METHOD,
+        "source": "OpenHistoricalMap relations 2692764 and 2747874 (CC0); Natural Earth basemap",
+        "as_of": "Before 30 September and after 10 October 1938",
+        "labels": {
+            "territories": [
+                {"lon": 13.6, "lat": 50.95, "text": "SUDETENLAND", "size": 11,
+                 "tracking": 3, "color": CHANGE_INK, "weight": "700", "halo": "none"},
+                {"lon": 12.4, "lat": 49.0, "text": "GERMANY", "size": 13, "tracking": 4},
+                {"lon": 19.5, "lat": 51.3, "text": "POLAND", "size": 13, "tracking": 4},
+                {"lon": 20.3, "lat": 47.85, "text": "HUNGARY", "size": 13, "tracking": 4},
+                {"lon": 23.6, "lat": 47.55, "text": "ROMANIA", "size": 11, "tracking": 3},
+                {"lon": 15.3, "lat": 47.6, "text": "(Austria, annexed March 1938)",
+                 "size": 9.5, "tracking": 0.6},
+            ],
+            "places": [
+                {"lon": 14.4208, "lat": 50.0880, "text": "Prague"},
+                {"lon": 16.6068, "lat": 49.1951, "text": "Brno"},
+                {"lon": 17.1077, "lat": 48.1486, "text": "Bratislava", "anchor": "below"},
+                {"lon": 21.2611, "lat": 48.7164, "text": "Košice"},
+                {"lon": 15.0566, "lat": 50.7671, "text": "Reichenberg (Liberec)", "anchor": "end"},
+                {"lon": 12.3739, "lat": 50.0791, "text": "Eger (Cheb)", "anchor": "below"},
+            ],
+        },
+    }
+
+
+def build_serbia_1913() -> dict[str, Any]:
+    """The Kingdom of Serbia before and after the Balkan Wars, 1913.
+
+    The other direction of the same plate: ground taken, almost none lost.
+    OpenHistoricalMap relation 2692716 is Serbia up to the Treaty of
+    Bucharest of 10 August 1913, 2746681 is Serbia from then until the
+    Kingdom of Serbs, Croats and Slovenes of December 1918. The state
+    nearly doubled, southward, into Kosovo and Vardar Macedonia -- the
+    ground of the 1990s wars and of North Macedonia, which is why it is
+    worth a plate.
+    """
+    return {
+        "style": "editorial",
+        "title": "Serbia after the Balkan Wars",
+        "subtitle": "The kingdom nearly doubled in a year, all of it to the south",
+        "region": {"bbox": [17.6, 40.2, 24.4, 45.6]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {},
+        "frontiers": {"show": False},
+        "cities": {"show": False},
+        "legend_position": "top-right",
+        "change": {
+            "before": _ohm(2692716),
+            "after": _ohm(2746681),
+            "actor": "Kingdom of Serbia",
+            "from": "1912",
+            "to": "August 1913",
+        },
+        "legend_footer": "Serbia, before and after the Treaty of Bucharest",
+        "caption": "full",
+        "method": _OHM_METHOD,
+        "source": "OpenHistoricalMap relations 2692716 and 2746681 (CC0); Natural Earth basemap",
+        "as_of": "Before October 1912 and after 10 August 1913",
+        "labels": {
+            "territories": [
+                {"lon": 21.0, "lat": 42.55, "text": "KOSOVO", "size": 10.5,
+                 "tracking": 3, "color": CHANGE_INK, "weight": "700", "halo": "none"},
+                {"lon": 21.7, "lat": 41.55, "text": "VARDAR MACEDONIA", "size": 10.5,
+                 "tracking": 2.5, "color": CHANGE_INK, "weight": "700", "halo": "none"},
+                {"lon": 18.4, "lat": 44.6, "text": "AUSTRIA-HUNGARY", "size": 12, "tracking": 3},
+                {"lon": 23.6, "lat": 43.2, "text": "BULGARIA", "size": 12, "tracking": 3.5},
+                {"lon": 19.3, "lat": 42.3, "text": "MONTENEGRO", "size": 10, "tracking": 2},
+                {"lon": 19.9, "lat": 40.9, "text": "ALBANIA", "size": 11, "tracking": 3},
+                {"lon": 22.9, "lat": 40.75, "text": "GREECE", "size": 12, "tracking": 3.5},
+                {"lon": 22.9, "lat": 45.2, "text": "ROMANIA", "size": 12, "tracking": 3.5},
+            ],
+            "places": [
+                {"lon": 20.4573, "lat": 44.7866, "text": "Belgrade", "anchor": "end"},
+                {"lon": 21.8958, "lat": 43.3209, "text": "Niš"},
+                {"lon": 21.4314, "lat": 41.9973, "text": "Skopje (Üsküb)"},
+                {"lon": 21.1655, "lat": 42.6629, "text": "Pristina", "anchor": "end"},
+                {"lon": 21.3343, "lat": 41.0297, "text": "Bitola (Monastir)"},
+            ],
+        },
+    }
+
+
 BUILDERS = {
     "ukraine": build_ukraine,
     "dnieper": build_dnieper,
@@ -1863,6 +2018,8 @@ BUILDERS = {
     "sahel": build_sahel,
     "hormuz": build_hormuz,
     "south-china-sea": build_south_china_sea,
+    "munich-1938": build_munich,
+    "serbia-1913": build_serbia_1913,
 }
 
 PNG_WIDTH = 1300  # export raster width, px
