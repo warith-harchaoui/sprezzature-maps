@@ -84,6 +84,7 @@ from shapely.geometry import (  # noqa: E402
     Polygon,
     box,
     mapping,
+    shape,
 )
 from shapely.ops import unary_union  # noqa: E402
 
@@ -2053,6 +2054,367 @@ def build_serbia_1913() -> dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------- #
+# Israel / Palestine, 1949 to today: dated records, UN naming                  #
+# --------------------------------------------------------------------------- #
+
+
+#: The region every Israel / Palestine plate is cut from, for the land clip.
+_IPAL_BBOX = (31.0, 27.0, 38.0, 34.5)
+
+
+def _on_land(geom: Any) -> Any:
+    """``geom`` without the sea. OpenHistoricalMap's state relations run out
+    to the territorial waters, and drawn as written Israel's fill and the
+    frontier line went twelve nautical miles out into the Mediterranean."""
+    return geom.intersection(load_land(bbox=list(_IPAL_BBOX)))
+
+
+def _geom(name: str) -> Any:
+    """One tracked extent as a single shapely geometry, on land."""
+    data = json.loads((HISTORICAL_DATA / f"{name}.geojson").read_text())
+    return _on_land(unary_union([shape(f["geometry"]) for f in data["features"] if f.get("geometry")]))
+
+
+def _ohm_on_land(*relation_ids: int) -> dict[str, Any]:
+    """OpenHistoricalMap extents as a FeatureCollection, each cut to land."""
+    features = []
+    for rid in relation_ids:
+        for f in _ohm(rid)["features"]:
+            features.append({**f, "geometry": mapping(_on_land(shape(f["geometry"])))})
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _ocha_class(layer: str, label: str) -> Any:
+    data = json.loads((HISTORICAL_DATA / f"ocha-{layer}.geojson").read_text())
+    return unary_union([
+        shape(f["geometry"]) for f in data["features"] if f["properties"].get("label") == label
+    ])
+
+
+#: The naming every one of these plates follows, and the reason it is not
+#: OpenHistoricalMap's: after June 1967 OHM draws the ground Israel took as
+#: part of Israel, at the same administrative level as Israel itself. The
+#: plates use the UN's and the ICJ's terms (advisory opinion of 19 July
+#: 2024): the Occupied Palestinian Territory, including East Jerusalem; the
+#: occupied Syrian Golan. The annexations of East Jerusalem (1980) and of the
+#: Golan (1981) are not recognised (Security Council resolutions 478, 497).
+_IPAL_NAMING = (
+    "Names follow UN usage: the Occupied Palestinian Territory, including "
+    "East Jerusalem, and the occupied Syrian Golan; the 1980 and 1981 "
+    "annexations are not recognised (UN Security Council resolutions 478 "
+    "and 497)."
+)
+_IPAL_OHM_CAVEAT = (
+    "OpenHistoricalMap's relations for this region carry 'needs source' on "
+    "their boundary lines, so the lines are as precise as a crowd-sourced "
+    "record of them, no more. The UN General Assembly partition plan of "
+    "November 1947 (resolution 181) is not drawn: no open vector of it "
+    "exists, only the UN's scanned map 103.1(b)."
+)
+#: Neutral, and none of them a flag: blue-grey for Israel, sand for the
+#: ground under Jordanian and then Palestinian administration, clay for
+#: Gaza, a slate for settlements, a deep red only for military presence.
+IPAL_ISRAEL = "#c3cfdb"
+IPAL_WEST_BANK = "#e2c48f"
+IPAL_GAZA = "#d9a48f"
+IPAL_INK = "#5b4a33"
+
+
+def build_israel_palestine_1949() -> dict[str, Any]:
+    """The 1949 armistice lines, as they stood until June 1967.
+
+    Israel from OpenHistoricalMap relation 2864015 (1949-02-24 to
+    1967-06-10); the West Bank as the part of the former Mandate (2848316)
+    held by Jordan (2744317); the Gaza Strip as the All-Palestine
+    Government's ground (2855300), the one relation OHM has for it. OHM
+    assigns the Latrun no-man's land to Israel; OCHA's no-man's-land polygon
+    is cut out of it and drawn as what it was.
+    """
+    mandate = _geom("ohm-2848316")
+    no_mans_land = _ocha_class("oslo-ab", "No Man's Land")
+    israel = _geom("ohm-2864015").difference(no_mans_land)
+    west_bank = _geom("ohm-2744317").intersection(mandate).difference(no_mans_land)
+    gaza = _geom("ohm-2855300")
+    dmz = _geom("ohm-2864013")
+    israel = israel.difference(dmz)
+    return {
+        "style": "editorial",
+        "title": "The 1949 armistice lines",
+        "subtitle": "Israel, the West Bank and the Gaza Strip, as they stood until June 1967",
+        "region": {"bbox": [33.9, 29.4, 36.5, 33.45]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {},
+        "frontiers": {
+            "source": _ohm_on_land(2864015, 2744317, 2855300, 2748904, 2803204, 2864014),
+            "as_of": "1950-06-01",
+            "fields": _OHM_FIELDS,
+            "focus": "Israel",
+        },
+        "cities": {"show": False},
+        "rivers": {"always_label": ["Jordan"]},
+        "legend_position": "top-right",
+        "areas_of_control": {
+            "category_field": "actor",
+            "palette": {
+                "Israel (1949 armistice lines)": IPAL_ISRAEL,
+                "West Bank, under Jordanian administration": IPAL_WEST_BANK,
+                "Gaza Strip, under Egyptian administration": IPAL_GAZA,
+                "No man's land and demilitarised zones": "#b9b2a6",
+            },
+            "source": {"type": "FeatureCollection", "features": [
+                _feat("Israel (1949 armistice lines)", israel),
+                _feat("West Bank, under Jordanian administration", west_bank),
+                _feat("Gaza Strip, under Egyptian administration", gaza),
+                _feat("No man's land and demilitarised zones", unary_union([no_mans_land, dmz])),
+            ]},
+        },
+        "annotations": [
+            {"at": [35.234, 31.777], "number": 1, "place": "auto", "color": _NOTE,
+             "text": "Jerusalem, divided along the armistice line: the west held by Israel, the east and the Old City by Jordan."},
+            {"at": [34.98, 31.84], "number": 2, "place": "auto", "color": _NOTE,
+             "text": "The Latrun salient, a no man's land under the armistice."},
+            {"at": [34.40, 31.40], "number": 3, "place": "auto", "color": _NOTE,
+             "text": "Gaza, administered by Egypt; refugees from 1948 made up most of its people."},
+        ],
+        "legend_footer": "1949 to 1967",
+        "caption": "full",
+        "method": _IPAL_OHM_CAVEAT,
+        "source": (
+            "OpenHistoricalMap relations 2864015, 2744317, 2848316, 2855300, 2864013 "
+            "(CC0); no man's land: OCHA oPt; Natural Earth basemap"
+        ),
+        "as_of": "Lines of the 1949 armistice agreements, to 5 June 1967",
+        "labels": {
+            "territories": [
+                {"lon": 35.25, "lat": 32.05, "text": "WEST BANK", "size": 10.5,
+                 "tracking": 2.6, "color": IPAL_INK, "weight": "700", "halo": "none"},
+                {"lon": 34.85, "lat": 30.55, "text": "NEGEV", "size": 9.5, "tracking": 3, "color": "#7d7468"},
+            ],
+            "places": [
+                {"lon": 34.78, "lat": 32.08, "text": "Tel Aviv"},
+                {"lon": 34.99, "lat": 32.79, "text": "Haifa"},
+                {"lon": 35.20, "lat": 31.90, "text": "Ramallah", "anchor": "end"},
+                {"lon": 35.10, "lat": 31.53, "text": "Hebron", "anchor": "end"},
+                {"lon": 35.0, "lat": 29.56, "text": "Eilat", "anchor": "end"},
+                {"lon": 35.93, "lat": 31.95, "text": "Amman"},
+            ],
+        },
+    }
+
+
+def _ipal_change(before: str, after: str, *, title: str, subtitle: str,
+                 first: str, last: str, as_of: str, frontiers: tuple[int, ...],
+                 day: str, notes: list[dict[str, Any]], labels: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "style": "editorial",
+        "title": title,
+        "subtitle": subtitle,
+        "region": {"bbox": [31.9, 27.6, 36.95, 33.5]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {},
+        "frontiers": {
+            "source": _ohm_on_land(*frontiers),
+            "as_of": day,
+            "fields": _OHM_FIELDS,
+            "focus": "Israel",
+        },
+        "cities": {"show": False},
+        "rivers": {"always_label": ["Jordan", "Nile"]},
+        "legend_position": "top-right",
+        "change": {
+            "before": _ohm_on_land(int(before)),
+            "after": _ohm_on_land(int(after)),
+            "actor": "Israel",
+            "from": first,
+            "to": last,
+        },
+        "annotations": notes,
+        "legend_footer": f"Ground held by Israel, {first} and {last}",
+        "caption": "full",
+        "method": (
+            "Both extents are OpenHistoricalMap relations, whose 'Israel' after "
+            "June 1967 is the ground Israel controlled, not territory the UN "
+            "recognises as Israel's. " + _IPAL_NAMING + " " + _IPAL_OHM_CAVEAT
+        ),
+        "source": f"OpenHistoricalMap relations {before} and {after} (CC0); Natural Earth basemap",
+        "as_of": as_of,
+        "labels": {"territories": labels},
+    }
+
+
+def build_israel_palestine_1967() -> dict[str, Any]:
+    """June 1967: the ground Israel held before and after the war.
+
+    OpenHistoricalMap relation 2864015 (Israel, 1949 to 1967-06-10) against
+    2742218 (from 1967-06-10). OHM draws the second as Israel; the plate
+    names what it took as the UN does: occupied.
+    """
+    return _ipal_change(
+        "2864015", "2742218",
+        title="June 1967: six days, four territories",
+        subtitle="The West Bank with East Jerusalem, the Gaza Strip, the Golan and Sinai, occupied by Israel",
+        first="May 1967", last="July 1967",
+        as_of="Before 5 June and after 10 June 1967",
+        frontiers=(2742218, 2744265, 2748904, 2864018, 2878087),
+        day="1967-07-01",
+        notes=[
+            {"at": [35.25, 31.95], "number": 1, "place": "auto", "color": _NOTE,
+             "text": "The West Bank, including East Jerusalem: occupied Palestinian territory in UN usage."},
+            {"at": [34.40, 31.42], "number": 2, "place": "auto", "color": _NOTE,
+             "text": "The Gaza Strip, occupied."},
+            {"at": [35.75, 33.0], "number": 3, "place": "auto", "color": _NOTE,
+             "text": "The Golan Heights, taken from Syria: the occupied Syrian Golan."},
+            {"at": [33.8, 29.6], "number": 4, "place": "auto", "color": _NOTE,
+             "text": "Sinai, taken from Egypt and returned by April 1982."},
+        ],
+        labels=[
+            {"lon": 33.9, "lat": 30.4, "text": "SINAI", "size": 12, "tracking": 4,
+             "color": CHANGE_INK, "weight": "700", "halo": "none"},
+        ],
+    )
+
+
+def build_israel_palestine_2005() -> dict[str, Any]:
+    """What Israel left after 1967: Sinai in 1982, Gaza in 2005.
+
+    OpenHistoricalMap relation 2742218 (from 1967-06-10) against 2863757
+    (from 2000): Sinai returned to Egypt under the 1979 treaty, Gaza left in
+    the disengagement of September 2005. What stays is the West Bank and the
+    Golan, which OHM, unlike the UN, draws as Israel.
+    """
+    return _ipal_change(
+        "2742218", "2863757",
+        title="Sinai returned, Gaza evacuated, the West Bank held",
+        subtitle="The ground Israel held after June 1967 and after the 2005 disengagement",
+        first="July 1967", last="2006",
+        as_of="After 10 June 1967 and after 12 September 2005",
+        frontiers=(2863757, 2744316, 2828408, 2863755, 2921291, 2864022),
+        day="2006-01-01",
+        notes=[
+            {"at": [33.8, 29.6], "number": 1, "place": "auto", "color": _NOTE,
+             "text": "Sinai, returned to Egypt on 25 April 1982 under the 1979 peace treaty."},
+            {"at": [34.40, 31.42], "number": 2, "place": "auto", "color": _NOTE,
+             "text": "Gaza: settlers and troops withdrawn in September 2005. The UN still counts it occupied."},
+            {"at": [35.25, 31.95], "number": 3, "place": "auto", "color": _NOTE,
+             "text": "The West Bank, including East Jerusalem, and most of the Golan: still held. The slivers lost east of the Golan and by the Suez Canal are the 1974 and 1975 disengagements."},
+        ],
+        labels=[
+            {"lon": 33.9, "lat": 30.4, "text": "SINAI", "size": 12, "tracking": 4,
+             "color": CHANGE_INK, "weight": "700", "halo": "none"},
+        ],
+    )
+
+
+def build_israel_palestine_today() -> dict[str, Any]:
+    """Today: the Oslo areas, the settlements, Gaza under military presence.
+
+    Every polygon from OCHA oPt's own server (March and April 2026): the
+    Oslo areas A, B and C, the East Jerusalem Israel declared, the
+    settlements, and in Gaza the area of Israeli military presence behind
+    the "yellow line" of the October 2025 ceasefire. Israel within the 1949
+    lines is the paper; the Golan is OpenHistoricalMap relation 2734971.
+    """
+    wb_gaza = json.loads((HISTORICAL_DATA / "ocha-wb-gaza.geojson").read_text())
+    gaza = unary_union([shape(f["geometry"]) for f in wb_gaza["features"]
+                        if f["properties"]["label"] == "Gaza Strip"])
+    west_bank = unary_union([shape(f["geometry"]) for f in wb_gaza["features"]
+                             if f["properties"]["label"] == "West Bank"])
+    military = _ocha_class("military-presence", "Yellow").intersection(gaza)
+    settlements = unary_union([shape(f["geometry"]) for f in json.loads(
+        (HISTORICAL_DATA / "ocha-settlements.geojson").read_text())["features"]])
+    east_jerusalem = _ocha_class("oslo-ab", "Israeli Declared East Jerusalem")
+    area_a = _ocha_class("oslo-ab", "AREA (A)").difference(settlements)
+    area_b = _ocha_class("oslo-ab", "AREA (B)").difference(settlements)
+    area_c = (
+        _ocha_class("oslo-c", "Inferred AREA (C)")
+        .difference(settlements).difference(east_jerusalem)
+        .difference(area_a).difference(area_b)
+    )
+    golan = _geom("ohm-2734971")
+    israel = (
+        _geom("ohm-2863757").difference(west_bank).difference(golan)
+        .difference(gaza).difference(east_jerusalem)
+    )
+    yellow = json.loads((HISTORICAL_DATA / "ocha-yellow-line.geojson").read_text())
+    line = list(shape(yellow["features"][0]["geometry"]).coords)
+    palette = {
+        "Area A (Palestinian civil and security control)": "#c98f4e",
+        "Area B (Palestinian civil, Israeli security control)": "#e2c48f",
+        "Area C (Israeli civil and security control)": "#f1e4c6",
+        "East Jerusalem (annexed by Israel, not recognised)": "#c9a07f",
+        "Israeli settlements": "#5c6f8a",
+        "Gaza: Israeli military presence (OCHA, April 2026)": "#9e3b30",
+        "Gaza: rest of the Strip": IPAL_GAZA,
+        "Occupied Syrian Golan": "#b7b9bf",
+    }
+    return {
+        "style": "editorial",
+        "title": "The West Bank in pieces, Gaza behind a yellow line",
+        "subtitle": "The Oslo areas, the settlements and Gaza under Israeli military presence, 2026",
+        "region": {"bbox": [33.85, 30.95, 36.0, 33.4]},
+        "projection": "auto",
+        "canvas_width": 1320,
+        "padding": 30,
+        "basemap": {},
+        "cities": {"show": False},
+        "rivers": {"always_label": ["Jordan"]},
+        "legend_position": "right",
+        "areas_of_control": {
+            "category_field": "actor",
+            "baseline": "Israel (1949 lines)",
+            "palette": palette,
+            "source": {"type": "FeatureCollection", "features": [
+                _feat("Israel (1949 lines)", israel),
+                _feat("Area A (Palestinian civil and security control)", area_a),
+                _feat("Area B (Palestinian civil, Israeli security control)", area_b),
+                _feat("Area C (Israeli civil and security control)", area_c),
+                _feat("East Jerusalem (annexed by Israel, not recognised)", east_jerusalem),
+                _feat("Israeli settlements", settlements),
+                _feat("Gaza: Israeli military presence (OCHA, April 2026)", military),
+                _feat("Gaza: rest of the Strip", gaza.difference(military)),
+                _feat("Occupied Syrian Golan", golan),
+            ]},
+        },
+        # Named in the key only: on the map the label ran over note 1.
+        "front": {"line": [list(c) for c in line],
+                  "legend_label": "The 'yellow line' (OCHA, moved March 2026)", "color": "#c79a1e"},
+        "annotations": [
+            {"at": [34.45, 31.40], "number": 1, "place": "auto", "color": _NOTE,
+             "text": "Gaza: OCHA puts some 55 % of the Strip under Israeli military presence in April 2026."},
+            {"at": [35.23, 31.78], "number": 2, "place": "auto", "color": _NOTE,
+             "text": "East Jerusalem, annexed by Israel in 1980; the annexation is not recognised."},
+            {"at": [35.45, 32.0], "number": 3, "place": "auto", "color": _NOTE,
+             "text": "Area C, some 60 % of the West Bank, under full Israeli control since the 1995 Oslo II accord."},
+        ],
+        "legend_footer": "OCHA oPt, March–April 2026",
+        "caption": "full",
+        "method": (
+            "Oslo areas, settlements, the Gaza military-presence area and the "
+            "yellow line are OCHA oPt's layers as published on its server, "
+            "which declares no licence. " + _IPAL_NAMING
+        ),
+        "source": (
+            "© OCHA oPt (gis.unocha.org, 2024–2026); Golan and Israel: "
+            "OpenHistoricalMap relations 2734971, 2863757 (CC0); Natural Earth basemap"
+        ),
+        "as_of": "Positions as of March–April 2026",
+        "labels": {
+            "places": [
+                {"lon": 34.78, "lat": 32.08, "text": "Tel Aviv"},
+                {"lon": 35.20, "lat": 31.90, "text": "Ramallah", "anchor": "end"},
+                {"lon": 35.10, "lat": 31.53, "text": "Hebron", "anchor": "end"},
+                {"lon": 35.26, "lat": 32.22, "text": "Nablus"},
+                {"lon": 34.46, "lat": 31.52, "text": "Gaza", "anchor": "end"},
+            ],
+        },
+    }
+
+
 BUILDERS = {
     "ukraine": build_ukraine,
     "dnieper": build_dnieper,
@@ -2071,6 +2433,10 @@ BUILDERS = {
     "south-china-sea": build_south_china_sea,
     "munich-1938": build_munich,
     "serbia-1913": build_serbia_1913,
+    "israel-palestine-1949": build_israel_palestine_1949,
+    "israel-palestine-1967": build_israel_palestine_1967,
+    "israel-palestine-2005": build_israel_palestine_2005,
+    "israel-palestine-today": build_israel_palestine_today,
 }
 
 PNG_WIDTH = 1300  # export raster width, px

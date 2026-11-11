@@ -244,8 +244,8 @@ def test_the_terrain_shows_through_a_flat_fill() -> None:
     assert 'id="relief"' in svg
     over = re.search(r'<g id="relief-over"[^>]*>(.*?)</g>', svg, flags=re.S)
     assert over, "no terrain over the flat fills"
-    assert "soft-light" in over.group(0), "only soft-light leaves paper as paper"
-    assert '<use href="#relief"/>' in over.group(1), "a second copy of the image"
+    assert "soft-light" in over.group(0), "only soft-light leaves flat ground as it is"
+    assert "data:image/jpeg;base64," in over.group(1), "the dedicated shading, light enough"
     clip = svg[svg.index('<clipPath id="relief-over-clip">'):]
     clip = clip[: clip.index("</clipPath>")]
     assert clip.count("<path") >= 2, "the terrain is not clipped to the fills"
@@ -276,3 +276,38 @@ def test_a_note_keeps_a_margin_around_itself() -> None:
     widest = max(text_boxes, key=lambda b: b[2] - b[0])
     line = min(text_boxes, key=lambda b: b[3] - b[1])
     assert widest[0] < line[0] - 5 and widest[3] > line[3] + 5, "no margin around the note"
+
+
+def test_the_shading_for_the_fills_is_centred_and_stretched() -> None:
+    """
+    The plate's own relief is pale and narrow (luminance 150 to 237), and
+    soft-light is neutral at mid-grey: laid over the fills as it was, it
+    lightened everything and carved almost nothing.
+    """
+    import base64
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.default_rng(0)
+    lum = (180 + 20 * rng.standard_normal((80, 80))).clip(150, 237)
+    rgba = np.dstack([lum, lum, lum, np.full_like(lum, 140)]).astype("uint8")
+    def decoded(**kw):
+        tag = msm._relief_over_image(rgba, 0.0, 80, 80, **kw)
+        data = base64.b64decode(tag.split("base64,")[1].split('"')[0])
+        return np.asarray(Image.open(io.BytesIO(data)).convert("L")).astype(float)
+
+    assert abs(np.median(decoded()) - 128) < 12, "flat ground is not mid-grey for soft-light"
+    assert np.percentile(decoded(shadows_only=True), 90) > 245, "lit paper is not white"
+    soft = msm._relief_over_image(rgba, 0.0, 80, 80)
+    grey = np.asarray(Image.open(io.BytesIO(base64.b64decode(
+        soft.split("base64,")[1].split('"')[0]))).convert("L")).astype(float)
+    assert grey.std() > 1.8 * lum.std() * 0.5, "the slopes were not stretched"
+
+
+def test_paper_gets_its_shadows() -> None:
+    """Soft-light cannot darken white: paper got its relief from a multiply."""
+    svg = plate(_cfg(style="editorial", basemap={"relief": True}))
+    paper = re.search(r'<g id="relief-paper"[^>]*>', svg)
+    assert paper and "multiply" in paper.group(0)

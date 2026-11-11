@@ -95,7 +95,7 @@ def main(argv: list[str]) -> int:
         # all of it to see it small. The 1:10m rivers took the Serbian and
         # South China Sea plates past it, so the terrain's share of the
         # palette narrows until the file fits; the inks keep theirs.
-        for ground in (192, 160, 128, 96):
+        for ground in (192, 160, 128, 96, 64, 48):
             if png_path.stat().st_size <= PNG_BUDGET_BYTES:
                 break
             _shrink_png(png_path, ground=ground)

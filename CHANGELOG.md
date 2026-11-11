@@ -4,6 +4,22 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The relief reads through the fills, and on paper.** The pass laid over
+  the flat fills reused the plate's own relief raster, which is pale and
+  narrow (luminance 150 to 237, median 184, at 55 % alpha); soft-light is
+  neutral at mid-grey, so it lightened everything and carved almost
+  nothing. It now draws a dedicated shading, re-centred on mid-grey and
+  stretched 2.5 times, at full opacity: the Šar range, the Crimean
+  mountains, Jebel Marra and the Nuba hills read inside their zones, and
+  the zone stays its colour (overlay, tried beside it, turned the red to
+  cream and maroon). Soft-light cannot darken white, so the paper-white
+  status quo gets a shadows-only multiply: white where the ground is flat
+  or lit, darker on the slopes in shadow; the Carpathians are back in
+  western Ukraine. Both at half resolution, in JPEG: 115 KB on the Serbian
+  plate, against 860 KB for the same shading as a PNG.
+
 ## [1.3.0] — 2026-11-10
 
 ### Added

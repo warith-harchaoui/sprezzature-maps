@@ -142,9 +142,9 @@ Basemap layers
     strength on a plate with no thematic layer and held back under one.
     ``hypsometric`` colours the ground by elevation as well as by light,
     and follows the same hierarchy by default. ``relief_over_fills``
-    (0--1, default 0.85) lays the same hillshade back over every flat
-    thematic fill, in soft-light, so a range still reads inside a zone
-    painted over it; 0 turns it off. A multiplied fill needs none.
+    (0--1, default 1) lays the hillshade back over every flat thematic
+    fill, re-centred on mid-grey and stretched, in soft-light, so a range
+    still reads inside a zone painted over it; 0 turns it off. A multiplied fill needs none.
 ``frontiers``
     International borders: ``{show, color, label_neighbours, focus,
     label_min_area_frac}``, plus ``{source, as_of, fields}`` to draw the
@@ -2823,11 +2823,73 @@ def _relief_strength(cfg: dict[str, Any], palette: dict[str, Any]) -> float:
     return float(palette["relief_opacity"]) if thematic else 1.0
 
 
-#: How strongly the terrain shows through a flat thematic fill. Tuned by eye
-#: on the Serbian and Munich change plates and the Ukraine plate: enough
-#: for a range to read inside a zone, not so much that the zone's colour
-#: stops being one colour.
-_RELIEF_OVER_FILLS = 0.85
+#: How strongly the terrain shows through a flat thematic fill: the opacity
+#: of the soft-light pass. Tuned by eye on the Serbian, Dnieper and Ukraine
+#: plates against overlay and against lower contrasts (ASSESSMENT, round 8).
+_RELIEF_OVER_FILLS = 1.0
+
+#: How far the shading for that pass is stretched around flat ground. The
+#: plate's own relief raster is pale and narrow -- luminance 150 to 237,
+#: median 184, at 55 % alpha -- and soft-light is neutral at mid-grey, so
+#: laid over the fills as it was it lightened everything a little and carved
+#: almost nothing (Warith: "on ne voit pas encore assez bien les reliefs").
+#: Re-centred on 128 and stretched 2.5 times, a valley darkens and a ridge
+#: lifts; overlay, tried beside it, turned the red to cream and maroon and
+#: lost the class the colour stands for.
+_RELIEF_OVER_CONTRAST = 2.5
+
+#: How dark the shadows-only pass lays the slopes on paper. Paper is the
+#: status quo, the ground the eye is meant to pass over: the mountains have
+#: to be there, and quieter than on the ground that changed hands.
+_RELIEF_ON_PAPER = 0.55
+
+
+def _is_paper(color: str) -> bool:
+    """Whether a fill is the paper-white of a status quo.
+
+    Examples
+    --------
+    >>> _is_paper("#ffffff"), _is_paper("#FFF"), _is_paper("#f0cdc4")
+    (True, True, False)
+    """
+    return color.strip().lower() in ("#fff", "#ffffff", "white")
+
+
+def _relief_over_image(
+    rgba: Any, pad: float, plot_w: int, plot_h: int, *, shadows_only: bool = False
+) -> str:
+    """The shading a pass over the fills draws: grey, at half size.
+
+    For the soft-light pass, flat ground at mid-grey, so soft-light leaves it
+    as it is, and slopes spread either side by :data:`_RELIEF_OVER_CONTRAST`.
+
+    ``shadows_only`` is the shading for paper. Soft-light cannot darken pure
+    white, so a status quo drawn as paper -- the west of Ukraine, the
+    Carpathians in it -- stayed blank. This one is white wherever the ground
+    is flat or lit and darker only on the slopes in shadow, for a multiply:
+    the paper stays paper and the mountains draw themselves on it.
+
+    Half resolution and JPEG, because shading is smooth and the full-size PNG
+    of it weighed 860 KB on the Serbian plate against 115 KB here, drawn back
+    at full size.
+    """
+    import base64
+    import io
+
+    from PIL import Image
+
+    lum = rgba[..., :3].astype(float).mean(axis=2)
+    spread = _RELIEF_OVER_CONTRAST * (lum - np.median(lum))
+    grey = np.clip((255.0 if shadows_only else 128.0) + spread, 0, 255)
+    image = Image.fromarray(grey.astype("uint8"))
+    image = image.resize((max(1, image.width // 2), max(1, image.height // 2)), Image.LANCZOS)
+    buf = io.BytesIO()
+    image.save(buf, "JPEG", quality=85, optimize=True)
+    uri = base64.b64encode(buf.getvalue()).decode("ascii")
+    return (
+        f'<image x="{pad:.1f}" y="{pad:.1f}" width="{plot_w}" height="{plot_h}" '
+        f'preserveAspectRatio="none" href="data:image/jpeg;base64,{uri}"/>'
+    )
 
 
 def _relief_over_fills(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
@@ -2847,12 +2909,24 @@ def _relief_over_fills(cfg: dict[str, Any], vp: dict[str, Any]) -> str:
     if strength <= 0:
         return ""
     paths = "".join(f'<path d="{d}"/>' for d in shapes)
-    return (
+    shading = vp.get("relief_over_image") or '<use href="#relief"/>'
+    out = (
         f'<defs><clipPath id="relief-over-clip">{paths}</clipPath></defs>'
         '<g id="relief-over" data-layer-id="relief" clip-path="url(#relief-over-clip)" '
         f'style="mix-blend-mode:soft-light" opacity="{strength:.2f}" pointer-events="none">'
-        '<use href="#relief"/></g>'
+        f"{shading}</g>"
     )
+    paper = vp.pop("paper_fills", [])
+    shadow = vp.get("relief_shadow_image")
+    if paper and shadow:
+        paper_paths = "".join(f'<path d="{d}"/>' for d in paper)
+        out += (
+            f'<defs><clipPath id="relief-paper-clip">{paper_paths}</clipPath></defs>'
+            '<g id="relief-paper" data-layer-id="relief" clip-path="url(#relief-paper-clip)" '
+            f'style="mix-blend-mode:multiply" opacity="{_RELIEF_ON_PAPER * strength:.2f}" '
+            f'pointer-events="none">{shadow}</g>'
+        )
+    return out
 
 
 def _relief_layer(
@@ -2949,6 +3023,10 @@ def _relief_layer(
     # terrain typically look like", which is the question a swatch asks.
     median_rgb = np.median(relief_rgba[..., :3].reshape(-1, 3), axis=0)
     tone = (int(median_rgb[0]), int(median_rgb[1]), int(median_rgb[2]))
+    vp["relief_over_image"] = _relief_over_image(relief_rgba, pad, plot_w, plot_h)
+    vp["relief_shadow_image"] = _relief_over_image(
+        relief_rgba, pad, plot_w, plot_h, shadows_only=True
+    )
     markup = (
         '<defs><clipPath id="relief-clip">'
         f'<path d="{clip_path_d}"/></clipPath></defs>'
@@ -3669,6 +3747,8 @@ def build_map(cfg: dict[str, Any]) -> str:
         shared = cfg.get("_relief_cache")
         if shared is not None and "markup" in shared:
             relief, cfg["_relief_tone"] = shared["markup"], shared["tone"]
+            vp["relief_over_image"] = shared.get("over")
+            vp["relief_shadow_image"] = shared.get("shadow")
         else:
             relief, cfg["_relief_tone"] = _relief_layer(
                 vp, proj, pad, W, H, projected_geom_to_path(region_proj, vp), bbox,
@@ -3677,6 +3757,8 @@ def build_map(cfg: dict[str, Any]) -> str:
             if shared is not None:
                 shared["markup"] = relief
                 shared["tone"] = cfg["_relief_tone"]
+                shared["over"] = vp.get("relief_over_image")
+                shared["shadow"] = vp.get("relief_shadow_image")
         layers.append(
             f'<defs><clipPath id="relief-land-clip"><path d="{land_d}"/></clipPath></defs>'
             f'<g id="relief-blend" data-layer-id="relief" '
@@ -4438,6 +4520,8 @@ def _areas_of_control_layer(
         label = _esc(zone_label(str(cat), conf, geom.area / total_area))
         if not fill_style:
             vp.setdefault("flat_fills", []).append(d)
+            if _is_paper(color):
+                vp.setdefault("paper_fills", []).append(d)
         fills.append(
             f'<path class="hit" tabindex="0" role="graphics-symbol" '
             f'aria-label="{label}" d="{d}" fill="{color}" fill-opacity="{zone_op:.2f}" '
