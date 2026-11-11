@@ -2,10 +2,10 @@
 
 [🇫🇷 LISEZMOI.md](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/LISEZMOI.md) · 🇬🇧 README.md
 
-This library draws maps as SVG (Scalable Vector Graphics, an image format
+This library draws maps as SVG (Scalable Vector Graphics): an image format
 built from lines and shapes described in text rather than a grid of
 pixels, so it stays sharp at any zoom and its labels stay selectable
-text). Every line is written by hand, by our own drawing code: no
+text. Every line is written by hand, by our own drawing code: no
 charting library sits underneath it. `sprezzature-maps` used to be part
 of [sprezzature-figures](https://github.com/warith-harchaoui/sprezzature-figures);
 it was split out as its own product, with its own release schedule and,
@@ -42,8 +42,9 @@ pip install sprezzature-maps
 ```
 
 One line, and it is everything: the three generators, the library, the
-command line, the HTTP API, the MCP server and the editor. There are no
-feature extras. `[dev]` holds the test toolchain (pytest, ruff, mypy and
+command line, the API (application programming interface, the door other programs knock on: a script sends its numbers and gets a map back) served over HTTP (Hypertext Transfer Protocol, the language behind every web address: what your browser speaks to fetch a page), the
+MCP (Model Context Protocol, the protocol through which AI agents call tools in English) server and the editor. There
+are no feature extras. `[dev]` holds the test toolchain (pytest, ruff, mypy and
 the rest) and adds no feature. Python 3.10 to 3.13.
 
 `sprezzature-maps` depends on `sprezzature-figures` for rendering primitives
@@ -108,7 +109,7 @@ one of them calls the same library functions.
 |---|---|
 | `make_choropleth`, `make_situation_map`, `make_density` | Render one plate and return the path written |
 | `classification_methods()` | The class-break methods a choropleth accepts: `quantile`, `equal`, `jenks`, `headtail` |
-| `acled_events`, `ucdp_events` | Turn an ACLED or UCDP GED export into a situation-map config fragment |
+| `acled_events`, `ucdp_events` | Turn an ACLED (Armed Conflict Location & Event Data, a worldwide log of political violence: one row per battle, riot or attack, with its date and place) or UCDP (Uppsala Conflict Data Program, a team at Uppsala University in Sweden that counts the dead of armed conflicts worldwide) GED (Georeferenced Event Dataset, its list of deadly events, each one pinned to a latitude and a longitude) export into a situation-map config fragment |
 | `article_sidecar(svg)` | Read back the title, alt text, description, zones, markers and numbered callouts of a finished plate |
 | `plate_provenance(svg)`, `replay_report(svg, cfg, files)` | Read a plate's provenance stamp, and check whether a config and files are what drew it |
 | `KINDS`, `MapKind`, `kind`, `kind_names` | The registry of the three map kinds that every surface reads |
@@ -126,8 +127,8 @@ older notes count differently.
 | Sub-command | What it does | Main options |
 |---|---|---|
 | `list` | Print the three map kinds | none |
-| `choropleth` | Render a world choropleth | `--data` (CSV, TSV, JSON or JSONL; `-` reads CSV from stdin), `--map id=COL --map value=COL`, `--classes 2..12`, `--method`, `--diverging/--no-diverging`, `--relief/--no-relief`, `--simplify`, `--title`, `--out` |
-| `situation-map` | Render a situation map from a YAML config | `--config`, `--title`, `--out` |
+| `choropleth` | Render a world choropleth | `--data` (a CSV (comma-separated values, a table saved as plain text, one row per line, cells separated by commas: what a spreadsheet exports), TSV (tab-separated values, the same table with a tab between the cells instead of a comma), JSON (JavaScript Object Notation, a text format in which programs store data as named fields, such as "value": 42) or JSONL (JSON Lines, one JSON record per line, so a file of a million events can be read one line at a time) file; `-` reads CSV from stdin), `--map id=COL --map value=COL`, `--classes 2..12`, `--method`, `--diverging/--no-diverging`, `--relief/--no-relief`, `--simplify`, `--title`, `--out` |
+| `situation-map` | Render a situation map from a YAML (YAML Ain't Markup Language, a plain-text settings file, one setting per line such as title: Sudan, indented like an outline) config | `--config`, `--title`, `--out` |
 | `situation-new` | Write a starter config for a new situation plate | `--country` or `--bbox west,south,east,north`, `--title`, `--subtitle`, `--as-of YYYY-MM-DD`, `--out` |
 | `density` | Render an accumulation map | `--points` (JSON list of `[lon, lat]`), `--bins`, `--title`, `--out` |
 | `audit` | Check that a finished plate says how it was made | `TARGET` (a file or a folder), `--format text\|json` |
@@ -228,7 +229,8 @@ face, under the key.
 
 In a browser the plate also tells its story when it opens: the changed
 ground fades in, the front draws itself, the flashpoints land, in two and a
-half seconds (`animate`). It is CSS, so `prefers-reduced-motion` stops it,
+half seconds (`animate`). It is CSS (Cascading Style Sheets, the language that sets a web page's colours, fonts and animations), so
+`prefers-reduced-motion` stops it,
 an `<img>` embed included, and every keyframe only leads into the drawn
 state. A rasteriser never runs it: the PNG is the finished map, measured
 within 1/255 of the same plate with `animate: false`.
@@ -280,8 +282,8 @@ in 1938. Any piece of taken or lost ground narrower than three kilometres
 is dropped whole (`sliver_km: 1.5`, half that width; `0` keeps everything).
 
 In the editorial register (`style: editorial`) the three classes are one
-hue: held ground the pale tint, taken ground the full accent — the FT's
-dark red for the recent, light red for the long held — and lost ground an
+hue: held ground the pale tint, taken ground the full accent — the Financial
+Times' dark red for the recent, light red for the long held — and lost ground an
 outline with nothing inside, because what is drawn there is an absence.
 Hovering or focusing a class says what that ground was at each date
 ("held in September 1938, not in October 1938"), the before and after of
@@ -301,7 +303,8 @@ past year they would be a different claim.
 
 ### A number per administrative unit
 
-A choropleth of the world keys on ISO-3166-1 numeric. An analysis usually
+A choropleth of the world keys on the numeric country codes of ISO
+(International Organization for Standardization, the Geneva body behind shared standards such as A4 paper and country codes) standard 3166-1. An analysis usually
 does not: it is a rate by French region, a count by US state, a score by
 German Kreis. Those atlases were vendored here all along and read only by
 the layers that draw the *lines*, so `values` fills what is inside them:
@@ -354,7 +357,7 @@ below: it measures whether every word can be read.
 
 Four more only apply to a **regional** plate (`no-locator`,
 `undated-control`, `evidence-unclassed`, `disputed-unflagged`), and come from the
-standards such a plate gets read against — the UNHCR Mapping Guidelines for
+standards such a plate gets read against — the UNHCR (United Nations High Commissioner for Refugees, the United Nations agency that protects refugees and maps their camps) Mapping Guidelines for
 the furniture, the Institute for the Study of War for the evidence model.
 Does it carry a **locator**, so a reader who does not know where this is can
 place it. Does a control map say **as of when** — looser is not enough here,
@@ -426,7 +429,7 @@ sheet rather than binned anyway.
 A word on how long that takes, because nothing on screen will tell you. A
 choropleth is about a second. A situation map depends on how much world is
 in the frame: the bundled Europe demo is about 10 s from a cold start, a
-regional plate like eastern DRC about 3 s once the process is warm. Of the
+regional plate like eastern DRC (Democratic Republic of the Congo) about 3 s once the process is warm. Of the
 demo's time, roughly 2 s is terrain shading, about 2 s is loading the
 vendored atlases and importing — paid once per process, so a server renders
 its second plate faster than its first — and the rest is real geometry.
@@ -516,7 +519,8 @@ is importable and testable without a server.
 ## Status
 
 Published on PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
-with a green CI workflow (lint, type checks, tests and doctests on every
+with a green CI (continuous integration, a robot that reruns every test each time code is pushed to GitHub)
+workflow (lint, type checks, tests and doctests on every
 push and pull request to `main`, plus an install-and-import check on Python
 3.10; see `.github/workflows/ci.yml`): `pytest` passes, all
 three kinds render from their bundled demo data, and the command line
@@ -545,7 +549,7 @@ flattened landmass like Greenland or Russia is not exaggerated the way
 it is on a classic Mercator map); Natural Earth country borders at
 1:50,000,000 scale (a level of simplification suited to a whole-world
 view, coarser than the 1:10,000,000 detail used for a single region);
-a colour scale computed in the OKLCH colour space (a way of describing
+a colour scale computed in the OKLCH (Oklab lightness, chroma, hue) colour space (a way of describing
 colour, chosen here because equal steps in OKLCH look like equal steps
 in perceived brightness, so the scale still reads correctly to someone
 who cannot distinguish red from green, the most common form of colour
@@ -595,7 +599,8 @@ options above exist only to let a plate be less confident than its ink
 would otherwise make it look.
 
 **How sure the assessment is**, on a control zone. The vocabulary is
-[ISW](https://www.understandingwar.org)'s: their control-of-terrain maps
+that of the [Institute for the Study of War](https://www.understandingwar.org)
+(ISW, a Washington think tank that publishes a daily map of the front in Ukraine): their control-of-terrain maps
 keep three things apart that one fill runs together — ground a force is
 assessed to hold, ground where movement has been *reported* but not
 assessed as held, and ground a belligerent *claims* and nobody has
@@ -752,7 +757,8 @@ inset:
 ```
 
 **Its date is stamped under the title, not only at the foot.** The
-guidelines put "as of DD Month YYYY" directly beneath the strapline,
+guidelines put the line `as of DD Month YYYY` (day, month in words, year)
+directly beneath the strapline,
 because it is the single most important fact on a control plate and the
 one a reader needs before anything else. The footer keeps the whole line
 — the copy that travels with a screenshot; the stamp is the one a reader
@@ -779,7 +785,7 @@ is an obligation the plates will not meet. Declining the footer does not
 decline the sentence.
 
 **The page around it needs words and numbers.** `article_sidecar(svg)` reads
-them back out of the finished file, so a caption typed into a CMS cannot
+them back out of the finished file, so a caption typed into a CMS (content management system, the editor a newsroom types its articles into, such as WordPress) cannot
 drift from the plate above it:
 
 ```python
@@ -827,7 +833,8 @@ conic projection, on by default (`scripts/make_situation_map.py`'s
 for the whole-world Equal Earth view, reworked for the region-scale
 projection's own analytic inverse. A few lower-priority items from the
 full cartography plan are tracked but not scheduled yet: relief built
-from the ETOPO global elevation dataset, alternate projections better
+from the ETOPO (Earth Topography, a world grid of heights and depths, from the top of Everest to the bottom of the Mariana Trench)
+dataset of NOAA (National Oceanic and Atmospheric Administration, the US agency behind weather forecasts and hurricane warnings), alternate projections better
 suited to editorial maps (Robinson, Mollweide). The shared reader for the
 TopoJSON format (a compact way of storing map boundaries that records each
 shared border only once, instead of once per neighbouring country) was the
@@ -835,15 +842,17 @@ third item here and is now `scripts/_topojson.py`.
 
 ## Data credits
 
-The code is BSD-3-Clause (see below). The geographic data bundled under
+The code is under the Berkeley Software Distribution licence, BSD-3-Clause,
+which lets anyone reuse this code, even in a paid product, as long as the
+copyright notice stays (see below). The geographic data bundled under
 `assets/geo/` carries its own, separate licences; the full list with
 sources is in `doc/CARTOGRAPHY.tex`, § Data provenance and licensing.
-Most of it (Natural Earth, the USGS/NGA's GMTED2010 elevation dataset,
-the U.S. Census Bureau's TIGER/Line boundaries) is public domain and
+Most of it (Natural Earth, the GMTED2010 (Global Multi-resolution Terrain Elevation Data 2010, a world grid of land heights, one value every few hundred metres) elevation dataset of the
+USGS (United States Geological Survey, the US agency that maps the land and tracks earthquakes) and the NGA (National Geospatial-Intelligence Agency, the US agency that makes maps and satellite imagery for the military), the TIGER (Topologically Integrated Geographic Encoding and Referencing, the Census Bureau's map of every US road, county and state line) boundaries
+of the U.S. Census Bureau, TIGER/Line edition) is public domain and
 needs no credit. Two sources do:
 
-- France's region and department boundaries: © IGN (France's national
-  mapping agency), ADMIN EXPRESS dataset, via the
+- France's region and department boundaries: © IGN (Institut national de l'information géographique et forestière, France's national mapping agency, publisher of its official hiking maps), ADMIN EXPRESS dataset, via the
   [`gregoiredavid/france-geojson`](https://github.com/gregoiredavid/france-geojson)
   mirror, under the Licence Ouverte / Etalab 2.0
   (France's official open-data licence).
@@ -868,8 +877,8 @@ scrolling story are all forms taken from [mapped.earth](https://mapped.earth)
 maps are built on, in case you want the real thing rather than our synthetic
 demonstrations:
 
-- **Lightning**: NOAA's GOES Geostationary Lightning Mapper over the
-  Americas, EUMETSAT's Meteosat Lightning Imager over Europe and Africa,
+- **Lightning**: NOAA's GOES (Geostationary Operational Environmental Satellite, US weather satellites parked over the equator that film the clouds) Geostationary Lightning Mapper over the Americas, the Meteosat
+  Lightning Imager of EUMETSAT (European Organisation for the Exploitation of Meteorological Satellites, which runs the satellites behind Europe's forecasts) over Europe and Africa,
   and national ground networks. `make_density.py` ships synthetic points and
   says so on the plate; it has never seen a real flash.
 - **River discharge**: [GloFAS v4](https://global-flood.emergency.copernicus.eu/)
@@ -879,7 +888,7 @@ demonstrations:
   cartographic prominence rank, **not** by discharge — which is why it is
   not called hydraulic width.
 - **River basins**: [HydroSHEDS / BasinATLAS](https://www.hydrosheds.org/hydroatlas),
-  CC-BY 4.0.
+  CC-BY (Creative Commons Attribution, a licence that lets you reuse the data freely, provided you say where it came from) 4.0.
 - **Water temperature**: DynQual 1980–2019 climatology.
 
 ## License

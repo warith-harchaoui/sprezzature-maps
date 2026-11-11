@@ -2,10 +2,10 @@
 
 [🇬🇧 README.md](README.md) · 🇫🇷 LISEZMOI.md
 
-Cette bibliothèque dessine des cartes en SVG (Scalable Vector Graphics,
+Cette bibliothèque dessine des cartes en SVG (Scalable Vector Graphics),
 un format d'image construit à partir de lignes et de formes décrites en
 texte plutôt qu'une grille de pixels, ce qui lui permet de rester nette
-à n'importe quel niveau de zoom et de garder son texte sélectionnable).
+à n'importe quel niveau de zoom et de garder son texte sélectionnable.
 Chaque trait est écrit à la main, par notre propre code de dessin :
 aucune bibliothèque de graphiques ne se cache dessous.
 `sprezzature-maps` faisait autrefois partie de
@@ -44,7 +44,8 @@ pip install sprezzature-maps
 ```
 
 Une seule ligne, et elle installe tout : les trois générateurs, la
-bibliothèque, la ligne de commande, l'API HTTP, le serveur MCP et l'éditeur.
+bibliothèque, la ligne de commande, l'API (Application Programming Interface, la porte où frappent les autres programmes : un script envoie ses chiffres et reçoit une carte) servie en HTTP (Hypertext Transfer Protocol, la langue derrière chaque adresse web : celle que parle votre navigateur pour aller chercher une page), le serveur
+MCP (Model Context Protocol, le protocole par lequel les agents IA appellent des outils en français) et l'éditeur.
 Il n'y a pas d'extra de fonctionnalité. `[dev]` porte l'outillage de test
 (pytest, ruff, mypy et le reste) et n'ajoute aucune fonctionnalité. Python 3.10
 à 3.13.
@@ -112,7 +113,7 @@ chacune appelle les mêmes fonctions de la bibliothèque.
 |---|---|
 | `make_choropleth`, `make_situation_map`, `make_density` | Rendent une planche et renvoient le chemin écrit |
 | `classification_methods()` | Les méthodes de seuils qu'accepte un choroplèthe : `quantile`, `equal`, `jenks`, `headtail` |
-| `acled_events`, `ucdp_events` | Transforment un export ACLED ou UCDP GED en fragment de configuration de carte de situation |
+| `acled_events`, `ucdp_events` | Transforment un export ACLED (Armed Conflict Location & Event Data, un registre mondial de la violence politique : une ligne par combat, émeute ou attaque, avec date et lieu) ou UCDP (Uppsala Conflict Data Program, une équipe de l'université d'Uppsala, en Suède, qui compte les morts des conflits armés dans le monde) GED (Georeferenced Event Dataset, sa liste d'événements meurtriers, chacun épinglé à une latitude et une longitude) en fragment de configuration de carte de situation |
 | `article_sidecar(svg)` | Relit le titre, le texte alternatif, la description, les zones, les marqueurs et les renvois numérotés d'une planche finie |
 | `plate_provenance(svg)`, `replay_report(svg, cfg, files)` | Lisent le tampon de provenance d'une planche, et vérifient qu'une configuration et des fichiers sont bien ce qui l'a dessinée |
 | `KINDS`, `MapKind`, `kind`, `kind_names` | Le registre des trois types de carte que lit chaque surface |
@@ -130,8 +131,8 @@ un extra `[cli]`, d'où le compte différent des notes plus anciennes.
 | Sous-commande | Ce qu'elle fait | Options principales |
 |---|---|---|
 | `list` | Imprime les trois types de carte | aucune |
-| `choropleth` | Rend un choroplèthe du monde | `--data` (CSV, TSV, JSON ou JSONL ; `-` lit du CSV sur l'entrée standard), `--map id=COL --map value=COL`, `--classes 2..12`, `--method`, `--diverging/--no-diverging`, `--relief/--no-relief`, `--simplify`, `--title`, `--out` |
-| `situation-map` | Rend une carte de situation depuis une configuration YAML | `--config`, `--title`, `--out` |
+| `choropleth` | Rend un choroplèthe du monde | `--data` (un fichier CSV (comma-separated values, un tableau enregistré en texte brut, une ligne par rangée et les cellules séparées par des virgules : ce qu'exporte un tableur), TSV (tab-separated values, le même tableau avec une tabulation entre les cellules au lieu d'une virgule), JSON (JavaScript Object Notation, un format texte dans lequel les programmes rangent des données en champs nommés, comme un champ « valeur » qui vaut 42) ou JSONL (JSON Lines, un enregistrement JSON par ligne, si bien qu'un fichier d'un million d'événements se lit une ligne à la fois) ; `-` lit du CSV sur l'entrée standard), `--map id=COL --map value=COL`, `--classes 2..12`, `--method`, `--diverging/--no-diverging`, `--relief/--no-relief`, `--simplify`, `--title`, `--out` |
+| `situation-map` | Rend une carte de situation depuis une configuration YAML (YAML Ain't Markup Language, un fichier de réglages en texte brut, un réglage par ligne comme title : Soudan, indenté comme un plan) | `--config`, `--title`, `--out` |
 | `situation-new` | Écrit une configuration de départ pour une nouvelle planche de situation | `--country` ou `--bbox ouest,sud,est,nord`, `--title`, `--subtitle`, `--as-of AAAA-MM-JJ`, `--out` |
 | `density` | Rend une carte d'accumulation | `--points` (liste JSON de `[lon, lat]`), `--bins`, `--title`, `--out` |
 | `audit` | Vérifie qu'une planche finie dit comment elle a été faite | `TARGET` (un fichier ou un dossier), `--format text\|json` |
@@ -234,7 +235,7 @@ du texte, sous la clé.
 
 Dans un navigateur, la planche raconte aussi son histoire à l'ouverture : le
 terrain changé apparaît, le front se trace, les points chauds tombent, en
-deux secondes et demie (`animate`). C'est du CSS : `prefers-reduced-motion`
+deux secondes et demie (`animate`). C'est du CSS (Cascading Style Sheets, le langage qui fixe les couleurs, les polices et les animations d'une page web) : `prefers-reduced-motion`
 l'arrête, dans un `<img>` compris, et chaque image-clé ne fait que mener à
 l'état dessiné. Un rasteriseur ne la joue jamais : le PNG est la carte
 finie, à 1/255 près de la même planche avec `animate: false`.
@@ -292,7 +293,7 @@ pris ou perdu plus étroit que trois kilomètres est écarté en entier
 
 Dans le registre éditorial (`style: editorial`), les trois classes sont
 une seule teinte : le terrain tenu en ton pâle, le terrain pris en accent
-plein — le rouge foncé du FT pour le récent, le rouge clair pour le tenu
+plein — le rouge foncé du Financial Times pour le récent, le rouge clair pour le tenu
 de longue date — et le terrain perdu en contour vide, parce que ce qui est
 dessiné là est une absence. Survoler ou atteindre une classe au clavier dit
 ce qu'était ce terrain à chaque date (« held in September 1938, not in
@@ -314,7 +315,8 @@ ce serait une autre affirmation.
 
 ### Une valeur par unité administrative
 
-Un choroplèthe du monde s'indexe sur l'ISO-3166-1 numérique. Une analyse,
+Un choroplèthe du monde s'indexe sur les codes pays numériques de la norme ISO
+(International Organization for Standardization, l'organisme de Genève derrière des normes communes comme le format A4 et les codes pays) 3166-1. Une analyse,
 non : c'est un taux par région française, un compte par État américain, un
 score par Kreis allemand. Ces atlas étaient vendorisés ici depuis toujours
 et lus seulement par les couches qui tracent les *lignes* ; `values`
@@ -370,7 +372,7 @@ plus bas : elle mesure si chaque mot peut se lire.
 
 Quatre autres ne valent que pour une planche **régionale** (`no-locator`,
 `undated-control`, `evidence-unclassed`, `disputed-unflagged`), et viennent des
-normes contre lesquelles on la lit — les UNHCR Mapping Guidelines pour le
+normes contre lesquelles on la lit — les UNHCR (United Nations High Commissioner for Refugees, l'agence des Nations unies qui protège les réfugiés et cartographie leurs camps) Mapping Guidelines pour le
 mobilier, l'Institute for the Study of War pour le modèle de preuve.
 Porte-t-elle un **carton de localisation**, pour qu'un lecteur qui ignore où
 c'est puisse le situer. Une carte de contrôle dit-elle **à quelle date** — et
@@ -451,7 +453,7 @@ Un mot sur le temps que cela prend, puisque rien à l'écran ne vous le dira.
 Un choroplèthe demande environ une seconde. Une carte de situation dépend de
 la quantité de monde dans le cadre : la démo Europe embarquée demande une
 dizaine de secondes à froid, une planche régionale comme l'est de la RDC
-environ trois une fois le processus chaud. Sur le temps de la démo, environ
+(République démocratique du Congo) environ trois une fois le processus chaud. Sur le temps de la démo, environ
 2 s vont à l'ombrage du relief, environ 2 s au chargement des atlas embarqués
 et aux imports — payés une fois par processus, donc un serveur rend sa
 deuxième planche plus vite que la première — et le reste est de la géométrie
@@ -547,7 +549,7 @@ testable sans serveur.
 ## État du projet
 
 Publié sur PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
-avec une CI au vert (lint, vérification des types, tests et doctests à
+avec une CI (Continuous Integration, un robot qui relance tous les tests à chaque fois que du code est poussé sur GitHub) au vert (lint, vérification des types, tests et doctests à
 chaque push et pull request vers `main`, plus une vérification
 d'installation et d'import sous Python 3.10 ; voir
 `.github/workflows/ci.yml`) : `pytest` passe,
@@ -582,7 +584,7 @@ classique) ; des frontières Natural Earth à l'échelle 1:50 000 000 (un
 niveau de simplification adapté à une vue du monde entier, plus
 grossier que le niveau de détail 1:10 000 000 utilisé pour une seule
 région) ; une échelle de couleur calculée dans l'espace colorimétrique
-OKLCH (une façon de décrire la couleur choisie ici parce que des pas
+OKLCH (Oklab Lightness, Chroma, Hue) (une façon de décrire la couleur choisie ici parce que des pas
 égaux en OKLCH se voient comme des pas égaux de luminosité perçue, si
 bien que l'échelle reste lisible même pour quelqu'un qui ne distingue
 pas le rouge du vert, la forme la plus courante de daltonisme) pour les
@@ -637,7 +639,8 @@ défaut. Deux options existent uniquement pour permettre à une planche
 d'être moins affirmative que son encre ne le laisserait croire.
 
 **Le degré de certitude de l'évaluation**, sur une zone de contrôle. Le
-vocabulaire est celui d'[ISW](https://www.understandingwar.org) : leurs
+vocabulaire est celui de l'[Institute for the Study of War](https://www.understandingwar.org)
+(ISW, un think tank de Washington qui publie chaque jour une carte du front en Ukraine) : leurs
 planches de contrôle du terrain distinguent visuellement trois choses
 qu'un aplat unique confond — le terrain qu'une force est évaluée comme
 tenant, celui où un mouvement est *rapporté* sans être évalué comme tenu,
@@ -803,7 +806,8 @@ inset:
 ```
 
 **Sa date est estampillée sous le titre, pas seulement au pied.** Les
-guidelines mettent « as of DD Month YYYY » juste sous la ligne de
+guidelines mettent la ligne `as of DD Month YYYY` (jour, mois en toutes
+lettres, année) juste sous la ligne de
 chapeau, parce que c'est le fait le plus important d'une planche de
 contrôle et celui qu'un lecteur veut avant tout le reste. Le pied garde
 la ligne entière — la copie qui voyage avec une capture d'écran ;
@@ -830,7 +834,7 @@ est une obligation que les planches ne tiendront pas. Refuser le pied de
 planche ne refuse pas la phrase.
 
 **La page autour a besoin de mots et de chiffres.** `article_sidecar(svg)`
-les relit dans le fichier fini, pour qu'une légende saisie dans un CMS ne
+les relit dans le fichier fini, pour qu'une légende saisie dans un CMS (Content Management System, l'éditeur dans lequel une rédaction tape ses articles, comme WordPress) ne
 puisse pas diverger de la planche au-dessus :
 
 ```python
@@ -875,7 +879,7 @@ terrain que `choropleth` utilise pour la vue du monde entier en Equal
 Earth, adaptée à l'inverse propre à cette autre projection. Quelques
 points de moindre priorité du plan cartographique complet restent
 consignés mais non planifiés : un relief construit à partir du jeu de
-données d'élévation mondial ETOPO, des projections alternatives mieux
+données d'élévation mondial ETOPO (Earth Topography, une grille mondiale des altitudes et des profondeurs, du sommet de l'Everest au fond de la fosse des Mariannes) de la NOAA (National Oceanic and Atmospheric Administration, l'agence américaine derrière les prévisions météo et les alertes aux ouragans), des projections alternatives mieux
 adaptées à une carte éditoriale (Robinson, Mollweide). Le lecteur
 TopoJSON partagé unique (TopoJSON est un format compact qui enregistre
 chaque frontière commune une seule fois, au lieu d'une fois par pays
@@ -884,17 +888,22 @@ voisin) était le troisième point de cette liste ; c'est désormais
 
 ## Crédits des données
 
-Le code est sous licence BSD-3-Clause (voir plus bas). Les données
+Le code est sous la licence Berkeley Software Distribution BSD-3-Clause,
+qui permet à chacun de réutiliser ce code, même dans un produit payant, tant
+que la mention de copyright reste (voir plus bas). Les données
 géographiques intégrées sous `assets/geo/` portent leurs propres
 licences séparées ; la liste complète avec les sources se trouve dans
 `doc/CARTOGRAPHY.tex`, § Data provenance and licensing. La majeure
-partie (Natural Earth, le jeu de données d'élévation GMTED2010 de
-l'USGS/NGA, les frontières TIGER/Line du bureau du recensement
-américain) est dans le domaine public et ne demande aucun crédit. Deux
+partie (Natural Earth, le jeu de données d'élévation GMTED2010
+(Global Multi-resolution Terrain Elevation Data 2010, une grille mondiale des altitudes, une valeur toutes les quelques centaines de mètres) de l'USGS (United States Geological Survey, l'agence américaine qui cartographie le sol et suit les séismes) et de
+la NGA (National Geospatial-Intelligence Agency, l'agence américaine qui produit cartes et images satellite pour l'armée), les frontières TIGER
+(Topologically Integrated Geographic Encoding and Referencing, la carte de chaque route, comté et frontière d'État des États-Unis) du bureau du
+recensement américain, dans leur édition TIGER/Line) est dans le domaine public et ne demande aucun crédit. Deux
 sources en demandent un :
 
 - Les limites régionales et départementales françaises : © IGN
-  (l'institut géographique national français), jeu de données ADMIN
+  (Institut national de l'information géographique et forestière, l'éditeur
+  des cartes de randonnée officielles), jeu de données ADMIN
   EXPRESS, via le miroir
   [`gregoiredavid/france-geojson`](https://github.com/gregoiredavid/france-geojson),
   sous licence Ouverte / Etalab 2.0 (la licence française officielle
@@ -922,8 +931,9 @@ récit défilant sont des formes reprises de
 mieux que ceci. Les jeux de données sur lesquels ces cartes sont bâties, si
 vous voulez la chose réelle plutôt que nos démonstrations synthétiques :
 
-- **Foudre** : le Geostationary Lightning Mapper de la NOAA sur les
-  Amériques, le Lightning Imager d'EUMETSAT sur l'Europe et l'Afrique, et
+- **Foudre** : le Geostationary Lightning Mapper des satellites GOES
+  (Geostationary Operational Environmental Satellite, des satellites météo américains immobiles au-dessus de l'équateur, qui filment les nuages) de la NOAA sur les
+  Amériques, le Lightning Imager de l'EUMETSAT (European Organisation for the Exploitation of Meteorological Satellites, qui fait voler les satellites derrière les prévisions européennes) sur l'Europe et l'Afrique, et
   les réseaux nationaux au sol. `make_density.py` livre des points
   synthétiques et le dit sur la planche ; il n'a jamais vu un seul éclair.
 - **Débit des fleuves** : [GloFAS v4](https://global-flood.emergency.copernicus.eu/)
@@ -933,7 +943,7 @@ vous voulez la chose réelle plutôt que nos démonstrations synthétiques :
   un rang de proéminence cartographique, et **non** selon le débit — raison
   pour laquelle cela ne s'appelle pas une largeur hydraulique.
 - **Bassins versants** : [HydroSHEDS / BasinATLAS](https://www.hydrosheds.org/hydroatlas),
-  CC-BY 4.0.
+  CC-BY (Creative Commons Attribution, une licence qui permet de réutiliser librement les données, à condition de dire d'où elles viennent) 4.0.
 - **Température de l'eau** : climatologie DynQual 1980-2019.
 
 ## Licence
