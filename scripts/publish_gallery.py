@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the twelve maps the website's gallery vendors, in one command.
+"""Regenerate every situation plate the website's maps page vendors, in one command.
 
 Author: Warith HARCHAOUI
 
@@ -36,7 +36,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
-from build_choropleth_examples import BUILDERS as CHOROPLETH_BUILDERS  # noqa: E402
 from build_situation_examples import BUILDERS as PLATE_BUILDERS  # noqa: E402
 from build_situation_examples import _render_png, _shrink_png  # noqa: E402
 from make_situation_map import build_map, validate_config  # noqa: E402
@@ -46,10 +45,6 @@ from make_situation_map import build_map, validate_config  # noqa: E402
 #: so this is a little over 1x on a retina display and sharp on both.
 PLATE_PNG_WIDTH = 1300
 
-#: Raster width for a choropleth. Narrower because a world map at gallery
-#: size is read as a whole rather than inspected, and the extra pixels buy
-#: nothing a reader will use.
-CHOROPLETH_PNG_WIDTH = 900
 
 #: Where the gallery lives when both repositories are checked out side by
 #: side, which is the normal arrangement.
@@ -62,9 +57,10 @@ DEFAULT_TARGET = REPO.parent / "sprezzature" / "web" / "img" / "maps"
 
 def _published_names() -> dict[str, str]:
     """Return ``published stem -> builder key`` for every map the gallery shows."""
-    names = {f"situation-{key}": key for key in PLATE_BUILDERS}
-    names.update({f"choropleth-{key}": key for key in CHOROPLETH_BUILDERS})
-    return names
+    # Situation plates only. The choropleths left the site on 2026-11-11
+    # at Warith's word ("they don't deserve to be on the website"); the
+    # generator stays in the package while that decision is open.
+    return {f"situation-{key}": key for key in PLATE_BUILDERS}
 
 
 def main(argv: list[str]) -> int:
@@ -78,16 +74,12 @@ def main(argv: list[str]) -> int:
     written: list[str] = []
     for stem, key in sorted(_published_names().items()):
         svg_path = target / f"{stem}.svg"
-        if stem.startswith("situation-"):
-            cfg = PLATE_BUILDERS[key]()
-            # The same validation the example builder runs. A config that the
-            # generator would refuse must never reach another repository.
-            validate_config(cfg)
-            svg_path.write_text(build_map(cfg), encoding="utf-8")
-            width = PLATE_PNG_WIDTH
-        else:
-            svg_path.write_text(CHOROPLETH_BUILDERS[key](), encoding="utf-8")
-            width = CHOROPLETH_PNG_WIDTH
+        cfg = PLATE_BUILDERS[key]()
+        # The same validation the example builder runs. A config that the
+        # generator would refuse must never reach another repository.
+        validate_config(cfg)
+        svg_path.write_text(build_map(cfg), encoding="utf-8")
+        width = PLATE_PNG_WIDTH
         png_path = target / f"{stem}.png"
         if not _render_png(svg_path, png_path, width=width):
             raise SystemExit(f"could not rasterise {stem}; the gallery needs both files")

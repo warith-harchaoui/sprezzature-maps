@@ -2181,12 +2181,16 @@ def build_israel_palestine_1949() -> dict[str, Any]:
         ],
         "legend_footer": "1949 to 1967",
         "caption": "full",
-        "method": _IPAL_OHM_CAVEAT,
+        "method": (
+            "Every zone is drawn as the record holds it, not assessed afresh: "
+            "the lines of the 1949 armistice agreements; no claimed-only ground "
+            "is shown. " + _IPAL_OHM_CAVEAT
+        ),
         "source": (
             "OpenHistoricalMap relations 2864015, 2744317, 2848316, 2855300, 2864013 "
             "(CC0); no man's land: OCHA oPt; Natural Earth basemap"
         ),
-        "as_of": "Lines of the 1949 armistice agreements, to 5 June 1967",
+        "as_of": "As of the 1949 armistice agreements, to 5 June 1967",
         "labels": {
             "territories": [
                 {"lon": 35.25, "lat": 32.05, "text": "WEST BANK", "size": 10.5,
@@ -2396,7 +2400,9 @@ def build_israel_palestine_today() -> dict[str, Any]:
         "method": (
             "Oslo areas, settlements, the Gaza military-presence area and the "
             "yellow line are OCHA oPt's layers as published on its server, "
-            "which declares no licence. " + _IPAL_NAMING
+            "which declares no licence: every zone is drawn as OCHA reported "
+            "it, not assessed independently; no claimed-only ground is shown. "
+            + _IPAL_NAMING
         ),
         "source": (
             "© OCHA oPt (gis.unocha.org, 2024–2026); Golan and Israel: "

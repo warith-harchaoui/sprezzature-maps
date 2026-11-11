@@ -116,7 +116,9 @@ def _root_role(svg: str) -> str:
 THEMATIC = sorted(
     n
     for n in _builders()
-    if n in {"ukraine", "syria", "libya", "sudan", "drc", "dnieper", "munich-1938", "serbia-1913"}
+    if n in {"ukraine", "syria", "libya", "sudan", "drc", "dnieper", "munich-1938", "serbia-1913",
+               "israel-palestine-1949", "israel-palestine-1967",
+               "israel-palestine-2005", "israel-palestine-today"}
 )
 REFERENCE = sorted(n for n in _builders() if n not in set(THEMATIC))
 
