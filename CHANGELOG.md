@@ -4,6 +4,8 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-11-12
+
 ### Added
 
 - **The skill travels with the package.** `SKILL.md`, its references and

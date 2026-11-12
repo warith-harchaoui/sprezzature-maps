@@ -22,7 +22,7 @@ compatibility: >-
   Earth data — no network, no tile server, no API key at any point.
 metadata:
   author: Warith HARCHAOUI
-  version: 1.8.4
+  version: 1.9.0
 ---
 
 > The generators below ship as the standalone package [`sprezzature-maps`](https://github.com/warith-harchaoui/sprezzature-maps) (`pip install sprezzature-maps`), invoked as `make-map …`. This skill ships inside that package, in `sprezzature_maps/skill/`; `sprezzature-maps-skill` says whether the copy an agent reads is in step with it, and `sprezzature-maps-skill --install` puts it there.
