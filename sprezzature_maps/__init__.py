@@ -234,7 +234,10 @@ def replay_report(svg: str, cfg: Any, files: Any = ()) -> dict[str, Any]:
     return _load_script("_sidecar").replay_report(svg, cfg, files)
 
 
+from sprezzature_maps._skill import skill_path  # noqa: E402
+
 __all__ = [
+    "skill_path",
     "KINDS",
     "MapKind",
     "acled_events",

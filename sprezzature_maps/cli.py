@@ -55,6 +55,8 @@ from typing import Any
 
 import click
 
+from sprezzature_maps._skill import skill_command
+
 from sprezzature_maps.data import parse_mapping, read_choropleth_rows
 from sprezzature_maps.kinds import kind as kind_of
 from sprezzature_maps.kinds import kind_names
@@ -556,6 +558,10 @@ def situation_map_cmd(config_path: str | None, out: str | None, title: str | Non
 # `make-map` and `sprezzature-maps`.
 main.add_command(main.commands["situation-map"], "situation_map")
 main.add_command(main.commands["situation-new"], "situation_new")
+
+# The skill this package ships, one sub-command away: `sprezzature-maps skill --install`.
+main.add_command(skill_command)
+
 
 if __name__ == "__main__":
     main()
