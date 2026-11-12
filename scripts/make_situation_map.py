@@ -2882,7 +2882,7 @@ def _relief_over_image(
     spread = _RELIEF_OVER_CONTRAST * (lum - np.median(lum))
     grey = np.clip((255.0 if shadows_only else 128.0) + spread, 0, 255)
     image = Image.fromarray(grey.astype("uint8"))
-    image = image.resize((max(1, image.width // 2), max(1, image.height // 2)), Image.LANCZOS)
+    image = image.resize((max(1, image.width // 2), max(1, image.height // 2)), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
     image.save(buf, "JPEG", quality=85, optimize=True)
     uri = base64.b64encode(buf.getvalue()).decode("ascii")
