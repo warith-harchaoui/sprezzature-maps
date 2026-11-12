@@ -108,6 +108,9 @@ THEME_CSS: str = f"""
     --border: #e5e5ea;
     --card-bg: #fafafa;
     --accent: #007aff;
+    --sans: {SANS_STACK};
+    --serif: {SERIF_STACK};
+    --mono: {MONO_STACK};
   }}
   @media (prefers-color-scheme: dark) {{
     :root {{

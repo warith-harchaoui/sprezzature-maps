@@ -197,8 +197,10 @@ holds the routing rules it follows.
 ### And the editor, for a person
 
 `sprezzature-maps` opens an editor on `http://127.0.0.1:8010/`
-(`--host`, `--port`, `--reload`). Paste rows, a config or points, render,
-and optionally run the same look-and-repair loop as `improve`. It is a page
+(`--host`, `--port`, `--reload`). Paste rows, a config or points, or start
+from an example or a country; set the options; render; download the plate
+as SVG, PNG, PDF or JPG; read the audit beside it; and optionally run the
+same look-and-repair loop as `improve`. It is a page
 a person opens rather than a surface a program calls. Why it exists apart
 from the editor is explained [below](#why-a-separate-repo-not-a-chart-type-in-sprezzature-figures).
 

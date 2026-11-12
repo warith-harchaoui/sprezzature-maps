@@ -4,6 +4,21 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **the editor became a tool for making a map, not only for rendering one.**
+  Judged by driving it in a browser. Fixed: every kind tab answered 405
+  after the first render (the links resolved against `/render`); the title
+  and code were set in Times and Courier because `--serif` and `--mono` were
+  never defined (now in the shared theme). Added: an options panel generated
+  from `options.py`, split into "Look" and "Meaning"; id and value column
+  fields (`--map` on the command line); subtitle and source line where the
+  renderer takes them; "Fill in an example" and, for a situation plate,
+  "Start from a country"; downloads in SVG, PNG, PDF and JPG converted from
+  the plate on disk; the audit beside every map, plus a note when your own
+  rows carry the demo's title; a busy line with elapsed seconds during a
+  render that can take a minute; the frame fitted to the plate's ratio.
+
 ### Fixed
 
 - **The relief reads through the fills, and on paper.** The pass laid over
