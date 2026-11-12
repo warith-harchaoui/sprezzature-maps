@@ -17,8 +17,7 @@ sprezzature suite
 ├── sprezzature-colors        (accessible palettes, OKLCH)
 ├── sprezzature-accessibility (static HTML lint, alt text)
 ├── sprezzature-publish       (a folder of Markdown into a findable site)
-├── sprezzature-ui            (the screens the figure sits in)
-└── best-engine-ai-helper     (local model selection)
+└── sprezzature-ui            (the screens the figure sits in)
 ```
 
 **What comes before.** Somebody else does the geography. GeoPandas, QGIS or a
@@ -45,7 +44,7 @@ coastlines.
 ## When to choose sprezzature-maps
 
 - **A journal wants a vector figure and will reject a raster.** The output is
-  real SVG, exports to PDF and EPS as vector, and carries its smallest type
+  real SVG, exports to PDF and EPS (Encapsulated PostScript, the vector page format of older print workflows) as vector, and carries its smallest type
   size as a checked property: the bundled Ukraine plate is 1364 units wide and
   its smallest label is 10.8 of them, which in a 90 mm column sets at 2.0 pt,
   a third of Elsevier's 6 pt minimum and under every major publisher's floor. The package reports that
@@ -63,7 +62,7 @@ coastlines.
   rows that only know the country are dropped and counted in the plate's own
   method line.
 - **The file has to still work in five years, offline.** One SVG, fonts
-  embedded, no tile server, no API key, no account, no runtime. The sidecar
+  embedded, no tile server, no API (application programming interface, a service a program calls over the network) key, no account, no runtime. The sidecar
   that records what drew it carries no clock, so two renders of the same
   inputs stay identical.
 
@@ -76,8 +75,9 @@ coastlines.
   classification is chosen by eye against the distribution. This package makes
   you choose without that picture.
 - **[svgis](https://github.com/fitnr/svgis)** when you want the geometry and
-  none of the opinions. It takes real geodata in any EPSG code and writes
-  clean CSS-classed SVG, which is exactly the base map to finish in
+  none of the opinions. It takes real geodata in any EPSG (European Petroleum Survey Group, whose numbered registry names every
+  coordinate system) code and writes clean CSS (Cascading Style Sheets, the
+  language that styles a web page) classed SVG, which is exactly the base map to finish in
   Illustrator. It is the closest living relative, and it wins outright on
   arbitrary coordinate reference systems.
 - **[deck.gl](https://deck.gl/) or [kepler.gl](https://kepler.gl/)** when the
@@ -173,7 +173,7 @@ the reader zooms out. Half the parts are here already: `scripts/_svg.py` has
 cubic Bezier flow ribbon paths, used for the situation plate's axes of
 advance, and `scripts/_conflict.py` already sizes marks area-true on a square
 root for the same perceptual reason. A fourth kind, `make-map flow`, reading a
-two column origin and destination CSV, is a real possibility. **Not taken for
+two column origin and destination CSV (comma-separated values, a table as plain text), is a real possibility. **Not taken for
 now**, and the reason is maintenance rather than difficulty: a fourth
 generator is a fourth set of legends, label collisions, scale bars and audit
 rules, and the three that exist are the three this package can defend. The
@@ -182,7 +182,7 @@ not.
 
 **[Protomaps](https://protomaps.com/) and PMTiles, by Brandon LIU: the whole
 basemap as one indexed file.** PMTiles packs an entire tile pyramid into a
-single file and serves it with HTTP Range requests, which is how a world
+single file and serves it with HTTP (Hypertext Transfer Protocol, what a browser speaks to a server) Range requests, which is how a world
 basemap ships with no tile server at all. `assets/geo/` here is 329 MB across
 26 vector files and six elevation tiers. **Refused**, and the reason is the
 direction of the suite rather than the format: a Range request is a server,
@@ -210,7 +210,7 @@ drawing does the tool do, and how much do you.**
   and lives almost entirely in R.
 - A **web map** (Leaflet, MapLibre GL JS, OpenLayers, Mapbox GL JS) ships
   tiles and a viewport, and the reader pans and zooms.
-- A **GPU visualisation layer** (deck.gl, kepler.gl, pydeck) composites
+- A **GPU (graphics processing unit, the chip that draws a screen) visualisation layer** (deck.gl, kepler.gl, pydeck) composites
   millions of rows over one of those viewports.
 - A **tile supply** (Protomaps and PMTiles, Tippecanoe, Overture, Natural
   Earth, TopoJSON) is not a drawing tool at all: it is what the drawing tools
@@ -219,7 +219,7 @@ drawing does the tool do, and how much do you.**
   an analyst drives to analyse geography, which can also export a map.
 - A **hosted editor** (Datawrapper, Flourish, Felt, CARTO) trades control for
   speed and keeps the map on someone else's server.
-- An **SVG writer** emits the XML directly. No runtime, no canvas, no
+- An **SVG writer** emits the XML (Extensible Markup Language, the tagged text an SVG is written in) directly. No runtime, no canvas, no
   viewport: the geometry on the page is whatever the code decided to write.
 
 The second division that matters is **when the tool runs**. A static writer
@@ -245,7 +245,7 @@ category.
 
 | Tool | Language | Alive? | Thematic kinds | Projection | Designed plate |
 |---|---|---|---|---|---|
-| **sprezzature-maps** | Python | yes | choropleth, situation map, density | Equal Earth / auto-centred LCC | legend, scale bar, relief, provenance caption |
+| **sprezzature-maps** | Python | yes | choropleth, situation map, density | Equal Earth / auto-centred LCC (Lambert conformal conic) | legend, scale bar, relief, provenance caption |
 | [svgis](https://github.com/fitnr/svgis) | Python | yes (0.6.0, September 2026) | none, geometry styled by CSS class | any EPSG | no |
 | [kartograph.py](https://github.com/kartograph/kartograph.py) | Python | **no**, unmaintained, points to mapshaper | choropleth via CSS | several | no |
 | [map-generator](https://github.com/schiste/map-generator) | Rust | yes | none | several | no |
@@ -309,7 +309,7 @@ it. **Interactivity, zoom and tiles** is two stars and that is generous: there
 is a fullscreen control and there are tooltips, there is no pan, no zoom and
 no tile at any scale. **Reach for a non-programmer** is two stars: there is a
 gallery page behind the HTTP surface, and everything real goes through Python,
-a command line or a YAML file. **Projection breadth** is two stars against
+a command line or a YAML (YAML Ain't Markup Language, a plain-text settings file) file. **Projection breadth** is two stars against
 five for svgis, OpenLayers, Cartopy and QGIS: two projections chosen on
 purpose are still two projections, and if your data belongs in a national grid
 this is the wrong tool.
@@ -398,7 +398,7 @@ almost always one of two.
 | Dataset | Unit | Where it says it is | When it says it is | Updated |
 |---|---|---|---|---|
 | [ACLED](https://acleddata.com/methodology/acled-codebook) | one political violence or protest event | `latitude`/`longitude` plus `geo_precision` 1 to 3 | `event_date` plus `time_precision` 1 to 3 | weekly |
-| [UCDP GED](https://ucdp.uu.se/downloads/) | one organised violence event with at least one death | `latitude`/`longitude` plus `where_prec` **1 to 7** | `date_start`/`date_end` plus `date_prec` 1 to 5 | yearly |
+| [UCDP GED (Georeferenced Event Dataset)](https://ucdp.uu.se/downloads/) | one organised violence event with at least one death | `latitude`/`longitude` plus `where_prec` **1 to 7** | `date_start`/`date_end` plus `date_prec` 1 to 5 | yearly |
 
 Both ship a precision code beside every coordinate, and both mean something
 specific by it. ACLED's 3 is a provincial capital standing in for a whole
@@ -427,10 +427,10 @@ What the suite still leaves to others, stated as plainly as the rest:
 |---|---|---|
 | Fetch the data | no | `acled` (PyPI), `acled.api` and `acledR` (CRAN), the UCDP API |
 | Filter, aggregate, join to admin units | no | GeoPandas, QGIS |
-| Historical borders for a pre-2019 map | yes, `frontiers.source` plus `frontiers.as_of`, nothing vendored | you supply [CShapes 2.0](https://doi.org/10.1177/00220027211013563), which is CC BY-NC-SA and cannot ship inside a BSD package |
-| A grid of equal cells for a statistical model | no | [PRIO-GRID](https://doi.org/10.1177/0022343311431287) 0.5° |
-| Subnational polygons beyond the bundled tiers | partly (admin-1, admin-2) | geoBoundaries CGAZ, GADM |
-| NATO APP-6D unit symbols | no | `milsymbol` (JS), `mil-sym-java`; there is no Python renderer |
+| Historical borders for a pre-2019 map | yes, `frontiers.source` plus `frontiers.as_of`, nothing vendored | you supply [CShapes 2.0](https://doi.org/10.1177/00220027211013563), which is under the Creative Commons licence `CC BY-NC-SA` (credit, no commercial use, same terms) and cannot ship inside a package under the BSD (Berkeley Software Distribution) 3-Clause licence |
+| A grid of equal cells for a statistical model | no | [PRIO-GRID (grid of the Peace Research Institute Oslo)](https://doi.org/10.1177/0022343311431287) 0.5° |
+| Subnational polygons beyond the bundled tiers | partly (admin-1, admin-2) | geoBoundaries CGAZ (Comprehensive Global Administrative Zones), GADM (Database of Global Administrative Areas) |
+| NATO APP-6D (Allied Procedural Publication 6, edition D, NATO's standard for military map symbols) unit symbols | no | `milsymbol` (JS), `mil-sym-java`; there is no Python renderer |
 | Draw the result as a finished, citable plate | **yes** | |
 
 The last row is the claim. The row above it is the most interesting gap in
@@ -459,5 +459,5 @@ following, read in October 2026:
 - [tmap 4.4 on CRAN](https://cran.r-project.org/package=tmap) and [mapsf 1.3 on CRAN](https://cran.r-project.org/package=mapsf)
 - [kepler.gl under OpenJS Foundation governance](https://opensource.foursquare.com/kepler-gl/)
 - [FlowmapBlue](https://www.flowmap.blue/)
-- [ADA accessibility requirements for government maps, April 2026 deadline](https://dymaptic.com/blog/the-clock-is-ticking)
+- [Americans with Disabilities Act (ADA) accessibility requirements for government maps, April 2026 deadline](https://dymaptic.com/blog/the-clock-is-ticking)
 - [GeoLinter, a linting framework for choropleth maps](https://arxiv.org/pdf/2310.13707)

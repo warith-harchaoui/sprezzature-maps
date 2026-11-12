@@ -43,7 +43,7 @@ pip install sprezzature-maps
 
 One line, and it is everything: the three generators, the library, the
 command line, the API (application programming interface, the door other programs knock on: a script sends its numbers and gets a map back) served over HTTP (Hypertext Transfer Protocol, the language behind every web address: what your browser speaks to fetch a page), the
-MCP (Model Context Protocol, the protocol through which AI agents call tools in English) server and the editor. There
+MCP (Model Context Protocol, the protocol through which AI agents call tools in English) server, the agent skill and the editor. There
 are no feature extras. `[dev]` holds the test toolchain (pytest, ruff, mypy and
 the rest) and adds no feature. Python 3.10 to 3.13.
 
@@ -113,6 +113,7 @@ one of them calls the same library functions.
 | `article_sidecar(svg)` | Read back the title, alt text, description, zones, markers and numbered callouts of a finished plate |
 | `plate_provenance(svg)`, `replay_report(svg, cfg, files)` | Read a plate's provenance stamp, and check whether a config and files are what drew it |
 | `KINDS`, `MapKind`, `kind`, `kind_names` | The registry of the three map kinds that every surface reads |
+| `skill_path()` | The folder of the agent skill shipped inside the package (section 5) |
 
 ### 2. The command line
 
@@ -133,6 +134,7 @@ older notes count differently.
 | `density` | Render an accumulation map | `--points` (JSON list of `[lon, lat]`), `--bins`, `--title`, `--out` |
 | `audit` | Check that a finished plate says how it was made | `TARGET` (a file or a folder), `--format text\|json` |
 | `improve` | Render a map, read it with a vision model, apply only the safe repairs | `--kind`, `--data` / `--config` / `--points`, `--map`, `--out` (a `.png`), `--title`, `--rounds` |
+| `skill` | Report whether the agent skill installed for an agent matches the one shipped here, or install it (section 5) | `--install`, `--agent claude\|opencode`, `--path`, `-V` |
 
 `improve` needs a local vision model. It never changes the classification
 method, the number of classes or the frame on its own: it prints those for
@@ -165,6 +167,7 @@ uvicorn sprezzature_maps.api:app --host 127.0.0.1 --port 8000
 | `POST /v1/density` | `render_density` | Render an accumulation map from `[lon, lat]` points, or the demo |
 | `GET /` | none | The gallery page |
 | `GET /docs`, `GET /redoc` | none | Interactive documentation generated from the OpenAPI schema |
+| `GET /docs-redirect` | none | Redirects to `/docs` |
 
 Every body field is optional, and `format` picks `svg`, `png`, `pdf` or
 `jpg`. The repository carries a `Dockerfile` and a `docker-compose.yml`.
@@ -188,20 +191,45 @@ so one container serves both the `/v1/...` routes and `/mcp`.
 
 ### 5. The skill
 
-The agent skill `sprezzature-maps` ships with the
-[sprezzature](https://github.com/warith-harchaoui/sprezzature) hub
-repository, not with this one. It routes an agent to the calls above.
+The agent skill `sprezzature-maps` (a `SKILL.md` file and its references,
+which an agent such as Claude Code or OpenCode reads to know when and how to
+call this package) ships inside the package, in `sprezzature_maps/skill/`, so
+`pip install` carries it with the other four surfaces.
+`sprezzature_maps.skill_path()` returns that folder.
+
+```bash
+sprezzature-maps-skill                    # is the installed copy in step with this package?
+sprezzature-maps-skill --install          # copy it into ~/.claude/skills/sprezzature-maps
+sprezzature-maps-skill --install --agent opencode   # or into ~/.opencode/skills
+sprezzature-maps-skill --path             # where pip put the shipped copy
+sprezzature-maps skill                    # the same command, as a sub-command
+```
+
+Without `--install` it only reports, and says which file differs.
+`--install` writes under your home directory, so it changes what every
+later agent session reads; a copy already there is moved aside to
+`~/.claude/skills-superseded/` (or `~/.opencode/skills-superseded/`), not
+deleted. `-V` (or `--version`) prints the version. The
+skill routes an agent to the calls above, and
 [`TRIGGERS.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/TRIGGERS.md)
 holds the routing rules it follows.
 
 ### And the editor, for a person
 
 `sprezzature-maps` opens an editor on `http://127.0.0.1:8010/`
-(`--host`, `--port`, `--reload`). Paste rows, a config or points, or start
-from an example or a country; set the options; render; download the plate
-as SVG, PNG, PDF or JPG; read the audit beside it; and optionally run the
-same look-and-repair loop as `improve`. It is a page
-a person opens rather than a surface a program calls. Why it exists apart
+(`--host`, `--port`, `--reload`), one tab per map kind. Paste rows, a config
+or points, or press "Fill in an example", or, for a situation plate, "Start
+from a country", which writes the same starter as `situation-new`. Name the
+id and value columns of your rows (the `--map` of the command line), type a
+title, and, where the renderer takes them, a subtitle and a source line. Set
+the options, which come from the same registry as `improve` and are split
+into "Look" (what only changes the drawing) and "Meaning" (what can change
+what the map says). Render: a busy line counts the seconds, because a
+situation plate can take a minute. Download the plate as SVG, PNG, PDF or
+JPG, converted from the rendered file rather than drawn again. Read the
+audit beside it, under "Before you publish". And, if a vision model is
+reachable, run the same look-and-repair loop as `improve`. It is a page a
+person opens rather than a surface a program calls. Why it exists apart
 from the editor is explained [below](#why-a-separate-repo-not-a-chart-type-in-sprezzature-figures).
 
 ## Recipes
@@ -521,29 +549,46 @@ is importable and testable without a server.
 ## Status
 
 Published on PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
-with a green CI (continuous integration, a robot that reruns every test each time code is pushed to GitHub)
-workflow (lint, type checks, tests and doctests on every
-push and pull request to `main`, plus an install-and-import check on Python
-3.10; see `.github/workflows/ci.yml`): `pytest` passes, all
-three kinds render from their bundled demo data, and the command line
-renders them to real SVG files. There is no FIGURES.md-style catalogue page
+with a CI (continuous integration, a robot that reruns every test each time code is pushed to GitHub)
+workflow on every push and pull request to `main` (see
+`.github/workflows/ci.yml`): lint, the test suite minus the modules that
+redraw whole plates (8 to 20 s a test), and the doctests, on Python 3.12,
+plus an install-and-import check on Python 3.10. The type checks and the
+plate-drawing tests run in the pre-push hook, `.githooks/pre-push`, which
+runs the whole suite. All three kinds render from their bundled demo data,
+and the command line renders them to real SVG files. There is no FIGURES.md-style catalogue page
 (with three kinds, this README is the catalogue).
 
-Seventeen worked situation maps live in `scripts/build_situation_examples.py`,
+Twenty-one worked situation maps live in `scripts/build_situation_examples.py`,
 regenerated into `assets/situation-maps/` with
 `python scripts/build_situation_examples.py` (or one by name, such as
-`python scripts/build_situation_examples.py sudan`). Eight are thematic:
-Ukraine, the lower Dnieper (the plate that goes with an article, with its
-numbered marks), Syria and Libya as historical snapshots, and Sudan and
-eastern DRC drawn from open-source reporting to late September 2026, and
-two change plates, Czechoslovakia across Munich in 1938 and Serbia across
-the Balkan Wars, each the difference between two dated OpenHistoricalMap
-records. The first six are schematic by construction, say so on the
-plate, and keep their claim lines in readable Python rather than an opaque data file, so a reader
-who disagrees can see exactly which coordinates to argue with. The other
-nine are reference plates with no thematic layer: Switzerland, Iberia,
-western Europe, the Himalaya, the Caribbean, the Andes, the Sahel, the
-Strait of Hormuz, and the South China Sea, drawn with no claim line on it.
+`python scripts/build_situation_examples.py sudan`). Twelve are thematic.
+Six are schematic by construction, say so on the plate, and keep their
+claim lines in readable Python rather than an opaque data file, so a reader
+who disagrees can see exactly which coordinates to argue with: Ukraine, the
+lower Dnieper (the plate that goes with an article, with its numbered
+marks), Syria and Libya as historical snapshots, and Sudan and eastern DRC
+drawn from open-source reporting to late September 2026. Two are change
+plates, Czechoslovakia across Munich in 1938 and Serbia across the Balkan
+Wars, each the difference between two dated OpenHistoricalMap records. And
+four follow Israel and Palestine, each zone drawn from a record rather than
+assessed afresh, with names in UN usage: the 1949 armistice lines; June
+1967 and 2005, two change plates between OpenHistoricalMap records (the
+ground held before and after the war; Sinai returned and Gaza evacuated);
+and today, the Oslo areas A, B and C, the settlements and Gaza under Israeli
+military presence, from the layers that the office of OCHA (the United
+Nations Office for the Coordination of Humanitarian Affairs, the UN office
+that coordinates aid and maps the ground it works on) for the occupied
+Palestinian territory, OCHA oPt, serves, fetched again by
+`scripts/fetch_ocha_opt.py`. The other nine are reference
+plates with no thematic layer: Switzerland, Iberia, western Europe, the
+Himalaya, the Caribbean, the Andes, the Sahel, the Strait of Hormuz, and the
+South China Sea, drawn with no claim line on it.
+
+The suite's website, [sprezzature.ai](https://sprezzature.ai/), shows the
+situation plates only: the choropleths left it on 2026-11-11
+(`scripts/publish_gallery.py`). The `choropleth` generator stays in the
+package, on every surface.
 
 `choropleth` draws with: an Equal Earth projection (a projection that
 keeps every country's true relative area, so a huge but visually
@@ -579,7 +624,11 @@ outline, it having drained after the dam breach of 6 June 2023, and
 exists at a fraction of the polygon on file (Lake Urmia is drawn that way
 by default: faded fill, dashed edge, name suffixed "historic extent" —
 `lakes.historic: []` restores the basemap's own extents); and
-**axes of advance** — tapered, cased arrows along a smooth
+terrain that reads through the zones: the plate's own hillshade laid back
+over the flat fills in soft-light (a blend that darkens the slopes in shadow
+and lightens the lit ones while the zone keeps its colour), with a
+shadows-only pass on the paper-white ground that soft-light cannot darken;
+and **axes of advance** — tapered, cased arrows along a smooth
 curve, solid for an assessed movement and drawn as an outline for a
 reported one, the element that separates a map of where the line *is*
 from a map of where it is *going*:
@@ -687,7 +736,7 @@ jumping off it.
 
 **The direction can be measured rather than guessed.** `place` takes the
 four sides and the four diagonals — so every leader falls on 90 or 45
-degrees, which is Datawrapper's rule after Beck — and `place: auto` tries
+degrees, which is Datawrapper's rule after Harry BECK's London Underground map — and `place: auto` tries
 them in that order and takes the first whose every line clears the names
 already on the plate. `annotations` was the one text layer here that never
 consulted the ink ledger, and a hand that guessed wrong set a sentence
@@ -844,7 +893,7 @@ third item here and is now `scripts/_topojson.py`.
 
 ## Data credits
 
-The code is under the Berkeley Software Distribution licence, BSD-3-Clause,
+The code is under the BSD (Berkeley Software Distribution) 3-Clause licence,
 which lets anyone reuse this code, even in a paid product, as long as the
 copyright notice stays (see below). The geographic data bundled under
 `assets/geo/` carries its own, separate licences; the full list with
@@ -867,6 +916,14 @@ needs no credit. Two sources do:
   Whenever `situation_map` draws using either of these sources, it adds
   the required credit line to the map itself automatically; see
   `_attribution_layer` in `scripts/make_situation_map.py`.
+
+The dated extents under `assets/historical-extents/` that the change
+plates and the Israel / Palestine plates draw from OpenHistoricalMap
+(`ohm-*.geojson`) are public
+domain (CC0, the Creative Commons waiver that gives a work to the public
+domain). The layers fetched from OCHA oPt beside them (`ocha-*.geojson`)
+declare no licence; they are used as published and credited "© OCHA oPt" in the source
+line of each plate that draws them.
 
 ### Credited as a courtesy, not as an obligation
 
@@ -895,7 +952,8 @@ demonstrations:
 
 ## License
 
-BSD-3-Clause.
+BSD 3-Clause licence. Copyright (c) 2026, Warith HARCHAOUI
+(warithmetics@deraison.ai).
 
 ## Author
 

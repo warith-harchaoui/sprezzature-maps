@@ -10,11 +10,11 @@ The reference standard is the same, the New York Times graphics desk.
 
 > "The annotation layer is the most important thing we do … otherwise
 > it's a case of here it is, you go figure it out."
-> — Amanda Cox, then graphics editor, The New York Times
+> — Amanda COX, then graphics editor, The New York Times
 
 ## How this was researched, and what that limits
 
-The NYT builds these graphics with **ai2html**: the artwork is a raster,
+The NYT (The New York Times) builds these graphics with **ai2html**: the artwork is a raster,
 but every on-map label, legend entry, annotation sentence, scale bar and
 Note line is real HTML text, including the separate desktop and mobile
 variants. Read through the Internet Archive, that makes the **wording**
@@ -81,12 +81,12 @@ Turkey, Morocco, Derna, Sudan, Syria, Bakhmut and Mariupol. The step
 marker survived; the integer did not. What replaced it is a **marker
 whose label is its own handle**:
 
-- a **timestamp** — Tubbs 2017, Camp Fire 2018, Maui 2023, LA 2025;
+- a **timestamp** — Tubbs 2017, Camp Fire 2018, Maui 2023, Los Angeles 2025;
 - a **date** — Kherson 2022, Bakhmut 2023;
 - a **distance** — `Approx distance from origin of fire`, `0 miles` … `20 miles`;
 - a **place name** — Helene 2024;
 - a **named household or victim** — Camp Fire's `Home of the Wiggins
-  Family`; Tubbs's `Christina Hanson, 27, who used a wheelchair, died at
+  Family`; Tubbs's `Christina HANSON, 27, who used a wheelchair, died at
   home.`
 
 That is the finding for an implementer, and it is not "do not number
@@ -128,7 +128,7 @@ and what carried the claim afterwards was **typography** — named cities,
 coloured by who holds them. The desk's own resolution of the honesty
 problem was to move the claim out of the geometry and into the annotation
 layer. That is the single most transposable finding here, and it is free:
-a hand-written SVG generator is *better* at placing coloured, haloed,
+a hand-written SVG (Scalable Vector Graphics, the text-described image format these plates are written in) generator is *better* at placing coloured, haloed,
 tiered type than at drawing an honest polygon, because the polygon needs
 a source it does not have and the label needs a coordinate and a name.
 
@@ -209,7 +209,7 @@ drawn uncertainty in the whole corpus:
 > meant to visually display the fuzziness of the precision of our
 > timeline based on our amalgam of sources."
 
-And, on an ISIS control map, to WIRED in 2014:
+And, on a control map of ISIS (the Islamic State of Iraq and Syria), to the magazine Wired in 2014:
 
 > "**You don't want to put a hard line around that.** It's not like you
 > cross a river and all of a sudden it's sparsely populated."
@@ -218,8 +218,8 @@ And, on an ISIS control map, to WIRED in 2014:
 (18 November 2018, Camp Fire) is the only NYT fire map found that shipped
 arrows at all — three scroll-triggered PNGs, one of which is **disabled
 in the published code**, an arrow step killed during editing. Its markers
-are **red, bold and named, not numbered**: `Home of Jason Portillo and
-Lidia Rosales`, `Ridgewood Mobile Home Park`, `Fire extent at 10:45 a.m.`
+are **red, bold and named, not numbered**: `Home of Jason PORTILLO and
+Lidia ROSALES`, `Ridgewood Mobile Home Park`, `Fire extent at 10:45 a.m.`
 It replaces the scale bar with a **distance ladder** — `Approx distance
 from origin of fire`, `0 miles` … `20 miles` — and defines its own key
 term on the map face: `Over 10,000 buildings, shown in red, were more
@@ -267,7 +267,7 @@ Two rules in it are directly transposable:
   does not.
 - **Italic is reserved for hydrography.** This package already does that.
 
-The casing convention is stable across every example: ALL CAPS for
+The casing convention is stable across every example: all capitals for
 countries, seas, oblasts, the subject settlement, and — the part worth
 stealing — **status areas**: `HELD BY RUSSIA`, `ISIS-CONTROLLED AREAS
 NOV. 1`, `RUSSIAN POSITIONS AS OF JAN. 24`, `SITE OF EXPLOSIONS`. Title
@@ -291,7 +291,7 @@ Scale bars are near-universal and **always worded** — `¼ mile`,
 with a glyph.
 
 **North arrows appear almost never**: only on rotated satellite or aerial
-bases — the Gaza maps, the Turkey quake map, the LA before/after pairs.
+bases — the Gaza maps, the Turkey quake map, the Los Angeles before/after pairs.
 The Ian and Helene hurricane maps carry neither a scale bar nor a north
 arrow. The working rule is: a north arrow on a north-up thematic map
 tells the reader something they already assumed. Every plate this package
@@ -302,7 +302,7 @@ house choice and it is not the reference standard's.
 
 Their locator callout lines have a "built-in tendency to be in 90° or 45°
 angle", so a reader asking for a right angle gets 90° and not "91° or
-89°", explicitly after Harry Beck's underground map
+89°", explicitly after Harry BECK's underground map
 ([Datawrapper](https://www.datawrapper.de/blog/locator-maps-callout-lines-swoopy-arrows)).
 Their annotation guidance adds: for a region rather than a point, "use
 circles instead of arrows"; "reusing your data colors for the annotations
@@ -359,10 +359,10 @@ threat from even the thin and fletched designs of the first arrows on
 maps", and note that the conditions producing arrow maps — thin data, a
 broad audience, speed — "are the same conditions that underpinned
 Schumacher's 1935 symbology guide that rallied against nuance and
-detail". The BBC replaced its refugee arrows with circles after
-criticism; the FT abandoned refugee-flow arrows for proportional circles.
+detail". The BBC (British Broadcasting Corporation) replaced its refugee arrows with circles after
+criticism; the FT (Financial Times) abandoned refugee-flow arrows for proportional circles.
 
-The honest counter-position exists and should be recorded: Tom Fish
+The honest counter-position exists and should be recorded: Tom FISH
 argues arrows are *preferable* to control zones because they show
 movement without the messy question of who controls what. This package
 answers that with the `change` layer — a difference asserts nothing about
@@ -453,16 +453,16 @@ uncertainty in texture, which is harder to misread as a measurement.
 
 - Internet Archive snapshots of roughly forty NYT situation maps, 2016–2025,
   read through their ai2html text layer
-- Amanda Cox, interviewed in *Simply Statistics*, 1 June 2012
+- Amanda COX, interviewed in *Simply Statistics*, 1 June 2012
 - Levi Westerveld, thread on NYT Ukraine map symbology, 22 March 2022
-- Doug Specht and Alexander J. Kent, "How maps tell the story of war in
+- Doug SPECHT and Alexander J. Kent, "How maps tell the story of war in
   Ukraine", *Geographical* (Royal Geographical Society), 1 April 2022
-- James Cheshire and Alexander J. Kent, "Getting to the Point? Rethinking
+- James CHESHIRE and Alexander J. Kent, "Getting to the Point? Rethinking
   Arrows on Maps", *The Cartographic Journal*, 2023,
   doi:10.1080/00087041.2023.2178134
 - The Conversation, "Maps show and hide key information about Ukraine war"
   and "How maps are used and abused in times of conflict"
-- Tim Wallace, interviewed by GeoHipster, 15 January 2018, and by WIRED,
+- Tim Wallace, interviewed by GeoHipster, 15 January 2018, and by Wired,
   October 2014 (quoted in FlowingData, 24 October 2014)
 - Datawrapper, "Fix my chart: Map annotations"; "New in locator maps:
   Point to locations & markers with callout lines"

@@ -9,7 +9,7 @@ tier).
 
 ## Language
 
-Python 3.10+. Full type annotations on all public functions and classes.
+Python 3.10 to 3.13 (`requires-python = ">=3.10,<3.14"`). Full type annotations on all public functions and classes.
 
 ## Style
 
@@ -146,8 +146,9 @@ its own module.
   written relative to the package, `from .foo import bar` rather than
   `import foo`), which only work once the package is actually imported, so
   their doctests need to run through an import instead of a bare file path:
-  `python -m pytest -q --doctest-modules sprezzature_maps`, which is what CI
-  runs.
+  `python -m pytest -q --doctest-modules sprezzature_maps`, which is what the
+  CI (continuous integration, the GitHub workflow that reruns the checks on
+  every push) runs.
 - No mocking of file I/O or rendering. Test the real dispatcher (the
   function that actually writes the SVG), not a stand-in for it.
 - A visual or relief change also needs a render-and-look pass: render the
@@ -162,13 +163,29 @@ its own module.
 
 Declare every runtime dependency in `pyproject.toml`, under
 `[project.dependencies]`. Since 2026-11-01 there are no feature extras: the
-HTTP API, the MCP server and the command line are all in the base install.
+HTTP (Hypertext Transfer Protocol) API (application programming interface,
+the routes another program calls), the MCP (Model Context Protocol, the
+protocol through which AI agents call tools in English) server, the command
+line, the editor and the agent skill are all in the base install.
 `[project.optional-dependencies]` holds only `dev`, the test and lint
 toolchain. Use a `>=` lower bound rather than an exact pin; a ceiling is
 allowed when it is argued in a comment beside it (`mcp<2.0`, `mypy<3`).
 `requirements.txt` installs the package itself (`-e .`) and
 `requirements-dev.txt` adds the toolchain on top. `pyproject.toml` stays the
 place version constraints are decided.
+
+## The agent skill
+
+The skill an agent reads ships inside the package, in
+`sprezzature_maps/skill/` (`SKILL.md`, `references/choosing-a-map.md` and
+`references/triggers.md`), carried into the wheel by the
+`[tool.setuptools.package-data]` entry `"skill/**/*"`.
+`sprezzature_maps/_skill.py` and `tests/test_the_skill_ships_with_the_package.py`
+are identical in the ten bricks of the suite and kept in step from the
+sprezzature hub (its `scripts/sync_helpers.py`): change them there, not
+here. The `description:` in the front matter of `SKILL.md` is limited to
+1024 characters, must contain "Use it when", and is tested; the body is
+where a reader is taught.
 
 ## Vendored geo data
 

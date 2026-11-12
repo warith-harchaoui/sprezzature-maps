@@ -4,6 +4,40 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **The skill travels with the package.** `SKILL.md`, its references and
+  its trigger catalogue lived only in the sprezzature hub, so `pip install
+  sprezzature-maps` gave the library, the command line, the HTTP
+  (Hypertext Transfer Protocol) API (application programming interface,
+  the routes another program calls) and the MCP (Model Context Protocol, the
+  protocol through which AI agents call tools in English) server, but
+  nothing an agent could read. They now ship in `sprezzature_maps/skill/`,
+  inside the wheel. `sprezzature-maps-skill` (and `sprezzature-maps skill`)
+  says whether the installed copy is in step, and names the file that
+  differs; `--install` copies it into `~/.claude/skills`, `--agent opencode`
+  into `~/.opencode/skills`, moving any previous copy aside to
+  `skills-superseded/`; `--path` prints where pip put it; `-V`/`--version`
+  prints the version. `sprezzature_maps.skill_path()` returns the folder.
+  `_skill.py` imports no command-line library at load time, and it and its
+  test are identical across the ten bricks.
+- **Four Israel / Palestine plates**, every zone drawn from a record rather
+  than assessed afresh, names in UN usage (the Occupied Palestinian
+  Territory, including East Jerusalem; the occupied Syrian Golan):
+  `israel-palestine-1949` (the armistice lines, the Latrun no man's land and
+  the demilitarised zones), `israel-palestine-1967` and
+  `israel-palestine-2005` (two `change` plates between OpenHistoricalMap
+  relations: the ground held before and after June 1967; Sinai returned and
+  Gaza evacuated), and `israel-palestine-today` (the Oslo areas A, B and C,
+  the settlements, East Jerusalem, and Gaza under Israeli military presence
+  behind the October 2025 "yellow line"). The 1949 and today plates state
+  their "as of" date and the basis of each zone, as the audit asks. The last
+  one draws the layers that OCHA (the United Nations Office for the
+  Coordination of Humanitarian Affairs) serves for the occupied Palestinian
+  territory, OCHA oPt, which declare no licence and are credited "© OCHA oPt" on the
+  plate; `scripts/fetch_ocha_opt.py` takes them again into
+  `assets/historical-extents/`. Twenty-one worked plates in all.
+
 ### Changed
 
 - **the editor became a tool for making a map, not only for rendering one.**
@@ -14,12 +48,36 @@ All notable changes to sprezzature-maps are documented here.
   from `options.py`, split into "Look" and "Meaning"; id and value column
   fields (`--map` on the command line); subtitle and source line where the
   renderer takes them; "Fill in an example" and, for a situation plate,
-  "Start from a country"; downloads in SVG, PNG, PDF and JPG converted from
-  the plate on disk; the audit beside every map, plus a note when your own
-  rows carry the demo's title; a busy line with elapsed seconds during a
-  render that can take a minute; the frame fitted to the plate's ratio.
+  "Start from a country" (the `situation-new` starter, framed on the
+  country; both are addressable as `?example=1` and `?country=`); downloads
+  in SVG (Scalable Vector Graphics), PNG, PDF and JPG (`/download/<token>.<format>`) converted from
+  the plate on disk; the audit beside every map, under "Before you
+  publish", plus a note when your own rows carry the demo's title; a busy
+  line with elapsed seconds during a render that can take a minute; the
+  frame fitted to the plate's ratio.
+- **The website shows situation plates only.** `scripts/publish_gallery.py`
+  no longer publishes the choropleths (they left sprezzature.ai on
+  2026-11-11); the `choropleth` generator stays in the package and on every
+  surface. A gallery thumbnail is also held under the site's 400 KB
+  ceiling by narrowing the terrain's share of the palette, never the 32
+  colours of the inks.
+- **The documentation says what the code does today.** The skill is
+  described as shipped in the package, not in the hub; the command-line
+  table gains `skill`, the library table `skill_path()`, the route table
+  `/docs-redirect`; the editor is described as it now is; the worked plates
+  are counted again (twenty-one, twelve thematic, not seventeen, and the
+  French text no longer says six thematic where the English said eight);
+  the status no longer claims the CI (continuous integration) runs type
+  checks or the whole suite, which only the pre-push hook does; the relief
+  over the fills is described; `best-engine-ai-helper` leaves the suite tree
+  of `LANDSCAPE.md` / `PAYSAGE.md`; acronyms are defined at first use and
+  surnames set in capitals across the Markdown files.
 
 ### Fixed
+
+- `mypy` passes again on `scripts/make_situation_map.py`:
+  `Image.Resampling.LANCZOS`, since the bare `Image.LANCZOS` alias is no
+  longer typed.
 
 - **The relief reads through the fills, and on paper.** The pass laid over
   the flat fills reused the plate's own relief raster, which is pale and

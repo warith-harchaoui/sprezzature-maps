@@ -3,7 +3,8 @@
 When someone wants a map, and what to call.
 
 This file is written for an agent: a Claude Code or OpenCode skill, an MCP
-(Model Context Protocol) host, anything choosing a tool on someone's behalf.
+(Model Context Protocol, the protocol through which AI agents call tools in
+English) host, anything choosing a tool on someone's behalf.
 Humans are welcome, but the routing rules below are the point.
 
 ---
@@ -11,7 +12,8 @@ Humans are welcome, but the routing rules below are the point.
 ## The generalisation, stated once
 
 > **Data attached to *places* is the trigger.** Not the word "map". A column
-> of country names, ISO codes, regions, states or départements is a map
+> of country names, ISO (International Organization for Standardization,
+> the body behind the standard country codes) codes, regions, states or départements is a map
 > waiting to be drawn, and so is a list of coordinates where something
 > happened. The only question is which kind.
 
@@ -27,9 +29,9 @@ caller can hold is a plate that already exists.
 | zones, fronts and markers for a region | `config` | `situation_map` | `render_situation_map` |
 | a place or a bounding box, and no config yet | none yet | the start of a `situation_map` | `make-map situation_new` |
 | positions of events, `[lon, lat]` | `points` | `density` | `render_density` |
-| an ACLED or UCDP GED export | events with precision codes | `situation_map` | `acled_events` / `ucdp_events`, then `render_situation_map` |
+| an ACLED (Armed Conflict Location & Event Data, a worldwide log of political violence, one row per event) or UCDP (Uppsala Conflict Data Program, a Swedish university's count of armed conflicts) GED (Georeferenced Event Dataset, its list of deadly events, each pinned to a place) export | events with precision codes | `situation_map` | `acled_events` / `ucdp_events`, then `render_situation_map` |
 | the same ground at several moments | a config with dated marks | `situation_map` | `small_multiples` in the config, then `render_situation_map` |
-| a finished plate (an SVG) | none | none | `make-map audit`, `article_sidecar`, `replay_report` (see below) |
+| a finished plate (an SVG (Scalable Vector Graphics, an image made of shapes described in text, so it stays sharp at any zoom) file) | none | none | `make-map audit`, `article_sidecar`, `replay_report` (see below) |
 | the data behind a map that reads badly | `rows`, `config` or `points` | the map's own kind | `make-map improve`, which renders the map again from that data (see below) |
 | place-shaped data where the shape of the land does not matter | none | none | **sprezzature-figures** (hex maps, dot density, spike maps, binned grids) |
 
@@ -74,7 +76,7 @@ repository; if it is a layout convention, that one.
 
 | Tool | The request it answers |
 |---|---|
-| `make_choropleth` / `render_choropleth` | Shade real countries by one value each (rows keyed on ISO-3166-1 numeric codes), on an Equal Earth world projection |
+| `make_choropleth` / `render_choropleth` | Shade real countries by one value each (rows keyed on the ISO 3166-1 numeric codes, three digits per country), on an Equal Earth world projection |
 | `make_situation_map` / `render_situation_map` | Draw a region's zones of control, fronts, markers, values per administrative unit or a change between two dates, on a Lambert conformal conic projection |
 | `make_density` / `render_density` | Bin point events into a field with no coastline drawn |
 | `make-map situation_new` | Write a starter region config, already furnished, from a country name or a bounding box |
@@ -85,8 +87,9 @@ repository; if it is a layout convention, that one.
 | `article_sidecar` | Give the page around a plate its alt text, caption, zones, markers and numbered callouts, read from the SVG |
 | `plate_provenance`, `replay_report` | Say whether a stamped plate was drawn from a given config and files |
 | `list_kinds` / `make-map list` | Name the three kinds this package draws |
-| `health` | Check that the HTTP or MCP server is up. Call it only to diagnose a connection |
-| `sprezzature-maps` | A person wants to paste data and edit a map in a browser. Not an agent call |
+| `health` | Check that the HTTP (Hypertext Transfer Protocol, the language a browser and a server speak) or MCP server is up. Call it only to diagnose a connection |
+| `sprezzature-maps` | A person wants to paste data or start from an example or a country, set options, render, download the plate and read its audit, in a browser. Not an agent call |
+| `sprezzature-maps-skill` / `make-map skill` | Say whether the skill an agent reads is in step with the installed package; `--install` copies it into `~/.claude/skills` (`--agent opencode` for `~/.opencode/skills`). Not a map request |
 
 ---
 
@@ -96,6 +99,8 @@ The command line answers to `make-map` and to `sprezzature-maps`, which are
 the same Click group. `situation_map` and `situation_new` also accept the
 hyphenated spellings `situation-map` and `situation-new`. MCP tool names are
 the FastAPI `operation_id` of each route.
+
+The command-line interface (CLI) is the program typed in a terminal.
 
 | Job | Library | CLI | MCP tool | HTTP route |
 |---|---|---|---|---|
@@ -129,8 +134,9 @@ make_situation_map(config=cfg, out="sudan.svg")
 All three render tools take every field as optional: send nothing and you
 get the demo map, which is the quick way to show someone the format before
 committing real data to it. `format` picks `svg`, `png`, `pdf` or `jpg`. The
-situation map is configured by a YAML region file, so the CLI is usually the
-better surface for it.
+situation map is configured by a YAML (YAML Ain't Markup Language, a
+plain-text settings file, one name: value per line) region file, so the CLI
+is usually the better surface for it.
 
 The audit, the starter and `improve` have no MCP tool. The MCP surface is
 this repository's HTTP routes, and those render into a response, while these
@@ -238,7 +244,7 @@ which is all anyone can check by parsing.
 
 ## Asked whether a figure replays
 
-"Is this the map that CSV produces?" is not a rendering request, and there is
+"Is this the map that CSV (comma-separated values, a table saved as plain text) produces?" is not a rendering request, and there is
 no CLI or MCP tool for it. It is two Python calls on the finished file:
 
 ```python

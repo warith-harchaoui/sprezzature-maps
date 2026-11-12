@@ -17,8 +17,7 @@ suite sprezzature
 ├── sprezzature-colors        (palettes accessibles, OKLCH)
 ├── sprezzature-accessibility (contrôle statique du HTML, textes alternatifs)
 ├── sprezzature-publish       (un dossier de Markdown devient un site trouvable)
-├── sprezzature-ui            (les écrans où la figure se pose)
-└── best-engine-ai-helper     (choix du modèle local)
+└── sprezzature-ui            (les écrans où la figure se pose)
 ```
 
 **Ce qui vient avant.** La géographie, quelqu'un d'autre la fait. GeoPandas,
@@ -47,7 +46,7 @@ non des côtes.
 ## Quand choisir sprezzature-maps
 
 - **Une revue veut une figure vectorielle et refusera une image matricielle.**
-  La sortie est du vrai SVG, s'exporte en PDF et en EPS en vectoriel, et
+  La sortie est du vrai SVG, s'exporte en PDF et en EPS (Encapsulated PostScript, le format de page vectoriel des chaînes d'impression plus anciennes) en vectoriel, et
   porte sa plus petite taille de caractère comme une propriété vérifiée : la
   planche Ukraine embarquée fait 1364 unités de large et sa plus petite
   étiquette en mesure 10,8, ce qui, dans une colonne de 90 mm, donne 2,0 pt,
@@ -67,7 +66,7 @@ non des côtes.
   connaissent que le pays sont écartées et comptées dans la ligne de méthode
   de la planche.
 - **Le fichier doit encore marcher dans cinq ans, hors ligne.** Un SVG, les
-  fontes incorporées, pas de serveur de tuiles, pas de clé d'API, pas de
+  fontes incorporées, pas de serveur de tuiles, pas de clé d'API (Application Programming Interface, un service qu'un programme appelle par le réseau), pas de
   compte, pas de moteur. Le fichier annexe qui consigne ce qui l'a dessiné ne
   porte aucune horloge : deux rendus des mêmes entrées restent identiques.
 
@@ -81,7 +80,9 @@ non des côtes.
   l'œil contre la distribution. Ce paquet vous fait choisir sans cette image.
 - **[svgis](https://github.com/fitnr/svgis)** quand vous voulez la géométrie
   et aucun avis. Il prend de vraies données géographiques dans n'importe quel
-  code EPSG et écrit un SVG propre, classé par CSS, exactement le fond de
+  code EPSG (European Petroleum Survey Group, dont le registre numéroté nomme chaque
+  système de coordonnées) et écrit un SVG propre, classé par CSS (Cascading Style
+  Sheets, la langue qui met en forme une page web), exactement le fond de
   carte à finir dans Illustrator. C'est le parent vivant le plus proche, et
   il gagne nettement sur les systèmes de coordonnées quelconques.
 - **[deck.gl](https://deck.gl/) ou [kepler.gl](https://kepler.gl/)** quand les
@@ -189,7 +190,7 @@ des pièces est déjà là : `scripts/_svg.py` a des tracés de ruban en courbes
 de Bézier cubiques, employés pour les axes de progression de la planche de
 situation, et `scripts/_conflict.py` dimensionne déjà ses marques en aire
 vraie, sur une racine carrée, pour la même raison perceptive. Un quatrième
-type, `make-map flow`, lisant un CSV à deux colonnes origine et destination,
+type, `make-map flow`, lisant un CSV (comma-separated values, un tableau en texte brut) à deux colonnes origine et destination,
 est une vraie possibilité. **Non prise pour l'instant**, et la raison est la
 maintenance et non la difficulté : un quatrième générateur, c'est un
 quatrième jeu de légendes, de collisions d'étiquettes, d'échelles graphiques
@@ -199,7 +200,7 @@ le type de planche, non.
 
 **[Protomaps](https://protomaps.com/) et PMTiles, de Brandon LIU : tout le
 fond de carte en un seul fichier indexé.** PMTiles range une pyramide de
-tuiles entière dans un fichier unique et la sert par requêtes HTTP Range,
+tuiles entière dans un fichier unique et la sert par requêtes HTTP (Hypertext Transfer Protocol, la langue d'un navigateur avec un serveur) Range,
 c'est ainsi qu'un fond de carte mondial se livre sans aucun serveur de
 tuiles. Ici, `assets/geo/` pèse 329 Mo répartis sur 26 fichiers vectoriels et
 six paliers d'altitude. **Refusé**, et la raison tient à la direction de la
@@ -230,7 +231,7 @@ vous reste-t-il ?**
   famille est forte et vit presque entièrement en R.
 - Une **carte web** (Leaflet, MapLibre GL JS, OpenLayers, Mapbox GL JS) livre
   des tuiles et une fenêtre, et c'est le lecteur qui se déplace et zoome.
-- Une **couche de visualisation sur GPU** (deck.gl, kepler.gl, pydeck)
+- Une **couche de visualisation sur GPU (graphics processing unit, la puce qui dessine l'écran)** (deck.gl, kepler.gl, pydeck)
   compose des millions de lignes par-dessus une de ces fenêtres.
 - Une **fourniture de tuiles** (Protomaps et PMTiles, Tippecanoe, Overture,
   Natural Earth, TopoJSON) n'est pas un outil de dessin : c'est ce que les
@@ -241,7 +242,7 @@ vous reste-t-il ?**
 - Un **éditeur hébergé** (Datawrapper, Flourish, Felt, CARTO) échange le
   contrôle contre la rapidité et garde la carte sur le serveur de quelqu'un
   d'autre.
-- Un **écrivain de SVG** produit le XML directement. Aucun moteur, aucun
+- Un **écrivain de SVG** produit le XML (Extensible Markup Language, le texte balisé dans lequel s'écrit un SVG) directement. Aucun moteur, aucun
   canevas, aucune fenêtre : la géométrie sur la page est exactement ce que le
   code a décidé d'écrire.
 
@@ -269,7 +270,7 @@ utile que de revendiquer la catégorie.
 
 | Outil | Langage | Maintenu ? | Types thématiques | Projection | Planche finie |
 |---|---|---|---|---|---|
-| **sprezzature-maps** | Python | oui | choroplèthe, carte de situation, densité | Equal Earth / LCC auto-centrée | légende, échelle, relief, mention de provenance |
+| **sprezzature-maps** | Python | oui | choroplèthe, carte de situation, densité | Equal Earth / LCC (conique conforme de Lambert) auto-centrée | légende, échelle, relief, mention de provenance |
 | [svgis](https://github.com/fitnr/svgis) | Python | oui (0.6.0, septembre 2026) | aucun, géométrie stylée par classe CSS | tout EPSG | non |
 | [kartograph.py](https://github.com/kartograph/kartograph.py) | Python | **non**, abandonné, renvoie vers mapshaper | choroplèthe via CSS | plusieurs | non |
 | [map-generator](https://github.com/schiste/map-generator) | Rust | oui | aucun | plusieurs | non |
@@ -336,7 +337,7 @@ problème pour laquelle ils existent, là où deck.gl et CARTO l'avalent.
 y a un bouton plein écran et des infobulles, il n'y a ni déplacement, ni
 zoom, ni tuile à aucune échelle. **À portée de qui ne programme pas** est à
 deux étoiles : il existe une page de galerie derrière la surface HTTP, et
-tout le reste passe par Python, une ligne de commande ou un fichier YAML.
+tout le reste passe par Python, une ligne de commande ou un fichier YAML (YAML Ain't Markup Language, un fichier de réglages en texte brut).
 **Étendue des projections** est à deux étoiles contre cinq pour svgis,
 OpenLayers, Cartopy et QGIS : deux projections choisies exprès restent deux
 projections, et si vos données appartiennent à une grille nationale, ce
@@ -436,7 +437,7 @@ jeu de données, et ce jeu de données est presque toujours l'un des deux.
 | Jeu de données | Unité | Où il dit que c'est | Quand il dit que c'est | Mis à jour |
 |---|---|---|---|---|
 | [ACLED](https://acleddata.com/methodology/acled-codebook) | un événement de violence politique ou de protestation | `latitude`/`longitude` plus `geo_precision` de 1 à 3 | `event_date` plus `time_precision` de 1 à 3 | chaque semaine |
-| [UCDP GED](https://ucdp.uu.se/downloads/) | un événement de violence organisée avec au moins un mort | `latitude`/`longitude` plus `where_prec` **de 1 à 7** | `date_start`/`date_end` plus `date_prec` de 1 à 5 | chaque année |
+| [UCDP GED (Georeferenced Event Dataset)](https://ucdp.uu.se/downloads/) | un événement de violence organisée avec au moins un mort | `latitude`/`longitude` plus `where_prec` **de 1 à 7** | `date_start`/`date_end` plus `date_prec` de 1 à 5 | chaque année |
 
 Les deux livrent un code de précision à côté de chaque coordonnée, et les
 deux veulent dire quelque chose de précis par là. Le 3 d'ACLED est une
@@ -467,10 +468,10 @@ Ce que la suite laisse encore à d'autres, dit aussi platement que le reste :
 |---|---|---|
 | Récupérer les données | non | `acled` (PyPI), `acled.api` et `acledR` (CRAN), l'API d'UCDP |
 | Filtrer, agréger, joindre à des unités administratives | non | GeoPandas, QGIS |
-| Des frontières historiques pour une carte d'avant 2019 | oui, `frontiers.source` plus `frontiers.as_of`, rien n'est embarqué | vous fournissez [CShapes 2.0](https://doi.org/10.1177/00220027211013563), qui est en CC BY-NC-SA et ne peut pas tenir dans un paquet BSD |
-| Une grille de cellules égales pour un modèle statistique | non | [PRIO-GRID](https://doi.org/10.1177/0022343311431287) 0,5° |
-| Des polygones infranationaux au-delà des paliers embarqués | en partie (admin-1, admin-2) | geoBoundaries CGAZ, GADM |
-| Les symboles d'unité NATO APP-6D | non | `milsymbol` (JS), `mil-sym-java` ; il n'existe aucun rendu en Python |
+| Des frontières historiques pour une carte d'avant 2019 | oui, `frontiers.source` plus `frontiers.as_of`, rien n'est embarqué | vous fournissez [CShapes 2.0](https://doi.org/10.1177/00220027211013563), qui est sous la licence Creative Commons `CC BY-NC-SA` (crédit, pas d'usage commercial, mêmes conditions) et ne peut pas tenir dans un paquet sous licence BSD (Berkeley Software Distribution) 3-Clause |
+| Une grille de cellules égales pour un modèle statistique | non | [PRIO-GRID (la grille du Peace Research Institute Oslo)](https://doi.org/10.1177/0022343311431287) 0,5° |
+| Des polygones infranationaux au-delà des paliers embarqués | en partie (admin-1, admin-2) | geoBoundaries CGAZ (Comprehensive Global Administrative Zones), GADM (Database of Global Administrative Areas) |
+| Les symboles d'unité NATO APP-6D (Allied Procedural Publication 6, édition D, la norme de l'OTAN pour les symboles militaires sur carte) | non | `milsymbol` (JS), `mil-sym-java` ; il n'existe aucun rendu en Python |
 | Dessiner le résultat en planche finie et citable | **oui** | |
 
 La dernière ligne est la revendication. Celle du dessus est le trou le plus
@@ -501,5 +502,5 @@ d'après les pages suivantes, lues en octobre 2026 :
 - [tmap 4.4 sur le CRAN](https://cran.r-project.org/package=tmap) et [mapsf 1.3 sur le CRAN](https://cran.r-project.org/package=mapsf)
 - [kepler.gl sous la gouvernance de la fondation OpenJS](https://opensource.foursquare.com/kepler-gl/)
 - [FlowmapBlue](https://www.flowmap.blue/)
-- [Les exigences d'accessibilité ADA pour les cartes publiques, échéance d'avril 2026](https://dymaptic.com/blog/the-clock-is-ticking)
+- [Les exigences d'accessibilité de l'Americans with Disabilities Act (ADA) pour les cartes publiques, échéance d'avril 2026](https://dymaptic.com/blog/the-clock-is-ticking)
 - [GeoLinter, un cadre de contrôle pour les choroplèthes](https://arxiv.org/pdf/2310.13707)

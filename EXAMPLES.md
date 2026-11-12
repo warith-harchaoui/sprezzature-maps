@@ -4,10 +4,14 @@ Practical, runnable recipes for `sprezzature-maps`. See [`README.md`](README.md)
 for install instructions.
 
 This file covers the project's surfaces: the Python library, the command
-line, the HTTP API, the Model Context Protocol (MCP) server that lets an AI
-assistant call these tools directly, and the gallery page. the editor, the
-editor a person opens with `sprezzature-maps`, is described in the
-README. The three example images below are not hand-picked
+line, the HTTP (Hypertext Transfer Protocol, the language a browser and a
+server speak) API (application programming interface, the routes another
+program calls), the MCP (Model Context Protocol, the protocol through which
+AI agents call tools in English) server, the agent skill, the gallery page,
+and the editor, the editor a person opens with `sprezzature-maps`
+(described in full in the README). Every plate is an SVG (Scalable Vector
+Graphics, an image written as shapes in text, so it stays sharp at any
+zoom). The three example images below are not hand-picked
 screenshots; they are the actual output of `make_choropleth()`,
 `make_situation_map()` and `make_density()` called with no arguments, and
 they cannot silently drift from what the code produces — not because
@@ -22,7 +26,7 @@ directory and never touches these files.
 
 ### `choropleth`
 
-<img src="assets/svg-examples/choropleth.svg" alt="Choropleth demo: a world map shaded by a synthetic global exposure index, Equal Earth projection, OKLCH blue ramp, hillshade relief." width="700">
+<img src="assets/svg-examples/choropleth.svg" alt="Choropleth demo: a world map shaded by a synthetic global exposure index, Equal Earth projection, blue ramp computed in OKLCH (Oklab lightness, chroma and hue, a colour space where equal steps look equally different), hillshade relief." width="700">
 
 ### `situation_map`
 
@@ -205,9 +209,10 @@ docker compose run --rm api make-map choropleth --out /work/world.svg
 Everything above works under this name too, and everything here works
 under `make-map`: one Click group, two spellings. Until 2026-10-25 these
 really were two commands — an argparse `make-map` that read only a
-pre-shaped JSON array, and a richer Click twin behind a `[cli]` extra —
-and that is what the examples below are showing off: reading CSV/TSV/JSONL
-directly (comma-separated, tab-separated, or one-JSON-object-per-line) and
+pre-shaped JSON (JavaScript Object Notation, a text format of named fields) array, and a richer Click twin behind a `[cli]` extra —
+and that is what the examples below are showing off: reading CSV
+(comma-separated values), TSV (tab-separated values) or JSONL (JSON Lines,
+one JSON object per line) directly, and
 `--map role=column` bindings for a file whose columns aren't already named
 `id`/`value`. Those live on the sub-commands, so both names reach them.
 
@@ -269,7 +274,48 @@ web framework this API is built with) route docstrings in
 `sprezzature_maps/api.py`, so they stay in sync with the HTTP API
 automatically, with nothing to update by hand in two places.
 
+## The agent skill
+
+The skill an agent reads (`SKILL.md` and its references) ships inside the
+package, so the agent and the package cannot come from two different
+releases unless the installed copy has fallen behind. This says whether it
+has:
+
+```bash
+sprezzature-maps-skill
+# sprezzature-maps: differs: SKILL.md (~/.claude/skills/sprezzature-maps)
+# Pass --install to copy the shipped skill there.
+
+sprezzature-maps-skill --install                  # ~/.claude/skills/sprezzature-maps
+sprezzature-maps-skill --install --agent opencode # ~/.opencode/skills/sprezzature-maps
+sprezzature-maps-skill --path                     # where pip installed the shipped copy
+make-map skill                                    # the same command, as a sub-command
+```
+
+```python
+from sprezzature_maps import skill_path
+skill_path()   # .../site-packages/sprezzature_maps/skill
+```
+
+## the editor
+
+```bash
+sprezzature-maps                  # http://127.0.0.1:8010/
+sprezzature-maps --port 8020 --reload
+```
+
+`http://127.0.0.1:8010/?kind=density&example=1` opens the density tab with
+an example in the data box; `?kind=situation_map&country=Mali` writes a
+starter framed on Mali. After a render the plate downloads as SVG, PNG, PDF
+or JPG, and the audit sits beside it.
+
 ## Conflict event data: ACLED and UCDP GED
+
+ACLED (Armed Conflict Location & Event Data) is a worldwide log of
+political violence, one row per battle, riot or attack; the UCDP (Uppsala
+Conflict Data Program, a team at Uppsala University that counts the dead of
+armed conflicts) publishes its GED (Georeferenced Event Dataset), each
+deadly event pinned to a latitude and a longitude.
 
 A plate from the file a conflict researcher already has, rather than from a
 config written by hand. Both loaders return a *config fragment* — keys the
@@ -446,7 +492,9 @@ polygon inside one is still a polygon the screen reader has been told to skip.
 
 ### Aggregating rather than pinpointing
 
-Sometimes the honest map is the coarser one. [OCHA's data-responsibility
+Sometimes the honest map is the coarser one. OCHA (the United Nations
+Office for the Coordination of Humanitarian Affairs, which coordinates aid
+in a crisis) says so in its [data-responsibility
 guidance](https://data.humdata.org/dataset/2048a947-5714-4220-905b-e662cbcd14c8/resource/8bc5b848-8ece-4f1f-a78b-18dd972bb21a/download/data-responsibility-guidelines-2025.pdf)
 is blunt that a map plotting where vulnerable people are can be the thing that
 finds them, and that coordinates resist anonymisation precisely because they
@@ -502,7 +550,7 @@ make_situation_map(config=cfg, out="by-quarter.svg")
 | Key | Effect |
 |---|---|
 | `by` | The window: `"day"`, `"week"`, `"month"`, `"quarter"` (default `"year"`) |
-| `from`, `to` | The span to cover, as ISO dates. Defaults to the span of the dated marks; widen it to state the period under study rather than let the data define it |
+| `from`, `to` | The span to cover, as dates in the ISO (International Organization for Standardization) 8601 format, `YYYY-MM-DD`. Defaults to the span of the dated marks; widen it to state the period under study rather than let the data define it |
 | `columns` | Panels per row (default: up to four) |
 | `panel_width` | One panel's width in plate units (default 420) |
 
@@ -558,8 +606,12 @@ this exists to draw — the Soviet Union existed on 1991-01-01 and did not on
 
 **Nothing is vendored, and that is a licence, not an oversight.**
 [CShapes 2.0](https://doi.org/10.1177/00220027211013563) is the only GIS
-dataset mapping state borders worldwide from 1886, and it is published under
-CC BY-NC-SA 4.0. Bundling it into this BSD-licensed package would attach a
+(geographic information system, software and data for mapping) dataset mapping state borders worldwide from 1886, and it is published under
+the Creative Commons licence `CC BY-NC-SA 4.0` (Attribution, NonCommercial,
+ShareAlike: reuse with credit, never for money, and only under the same
+terms). Bundling it
+into this package, under the BSD (Berkeley Software Distribution) 3-Clause
+licence, would attach a
 non-commercial clause to the package and a share-alike obligation to anything
 built on it. It is free for the academic use this feature is for, so you
 download it and the licence stays with you. `fields` renames the properties

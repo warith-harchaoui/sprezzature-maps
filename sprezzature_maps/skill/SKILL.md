@@ -25,7 +25,7 @@ metadata:
   version: 1.8.4
 ---
 
-> The generators below ship as the standalone package [`sprezzature-maps`](https://github.com/warith-harchaoui/sprezzature-maps) (`pip install sprezzature-maps`), invoked as `make-map …`. There is no `scripts/` folder in this monorepo; the SKILL.md here is the agentic contract.
+> The generators below ship as the standalone package [`sprezzature-maps`](https://github.com/warith-harchaoui/sprezzature-maps) (`pip install sprezzature-maps`), invoked as `make-map …`. This skill ships inside that package, in `sprezzature_maps/skill/`; `sprezzature-maps-skill` says whether the copy an agent reads is in step with it, and `sprezzature-maps-skill --install` puts it there.
 
 # sprezzature-maps: choropleths, situation maps and accumulation maps on real geography
 
@@ -177,7 +177,7 @@ layers come on their own, and each has an off switch rather than an on one.
 |---|---|---|
 | **Cities** | A map with nobody on it gives a reader nowhere to stand — they see where the Andes are and not where Lima is. Chosen by cartographic prominence, **not** by "is it a capital": that list omits New York, Mumbai, São Paulo, Shanghai, Los Angeles and Karachi, six of the world's twelve largest. The selection widens as the map zooms in. | `cities=False` in the library / `"cities": false` on the route (the CLI has no flag for it); on a situation plate, `cities: {show: false}` |
 | **Rivers** | Drainage is the structure of a landmass, and tapering by prominence turns a tangle of blue lines into a network you can follow. Drawn over the thematic fill, where published cartography puts water. | `rivers=False` / `"rivers": false` (no CLI flag); on a plate, `rivers: {show: false}` |
-| **Relief** | Computed from real elevation — a Lambertian hillshade blended with Brown's fractional-Laplacian texture shading — not a pre-shaded picture. | `relief=False` / `--no-relief`; on a plate, `basemap: {relief: false}` |
+| **Relief** | Computed from real elevation — a Lambertian hillshade blended with Leland BROWN's fractional-Laplacian texture shading — not a pre-shaded picture. On a situation plate it is also laid back over the flat zone fills in soft-light, so the mountains read inside a zone and the zone keeps its colour, with a shadows-only pass on paper-white ground. | `relief=False` / `--no-relief`; on a plate, `basemap: {relief: false}` |
 
 **A label in the way is dropped, not moved.** A city name nudged clear of its
 own dot points at the wrong place and the reader has no way to tell. If a name
@@ -314,26 +314,35 @@ One `pip install sprezzature-maps` installs all of them; there are no extras.
 
 | Surface | How |
 |---|---|
-| Library | `from sprezzature_maps import make_choropleth, make_density, make_situation_map`, plus `acled_events`, `ucdp_events`, `classification_methods`, `article_sidecar`, `plate_provenance`, `replay_report` |
-| CLI | `make-map` (or `sprezzature-maps`), a Click group: `list`, `choropleth`, `situation-map`, `situation-new` (each also answers to its underscore spelling), `density`, `audit`, `improve` |
+| Library | `from sprezzature_maps import make_choropleth, make_density, make_situation_map`, plus `acled_events`, `ucdp_events`, `classification_methods`, `article_sidecar`, `plate_provenance`, `replay_report`, the kind registry (`KINDS`, `kind`, `kind_names`) and `skill_path()` |
+| CLI | `make-map` (or `sprezzature-maps`), a Click group: `list`, `choropleth`, `situation-map`, `situation-new` (each of these two also answers to its underscore spelling), `density`, `audit`, `improve`, `skill`; `-V` prints the version |
 | HTTP (HyperText Transfer Protocol, the language a browser and a server speak each time a page loads) API (application programming interface, the requests one program can send another, such as render this chart) | `GET /health`, `GET /v1/kinds`, `POST /v1/choropleth`, `POST /v1/situation-map`, `POST /v1/density` (`uvicorn sprezzature_maps.api:app`, or `docker compose up` in the package repository, whose image runs `sprezzature-maps-mcp`: the API and `/mcp` on port 8000) |
 | MCP (Model Context Protocol, the protocol through which AI agents call tools in English) | `sprezzature-maps-mcp`, endpoint `/mcp`. Five tools named by the routes' `operation_id`: `health`, `list_kinds`, `render_choropleth`, `render_situation_map`, `render_density`. The audit, the starter and `improve` have no MCP tool: they work on files on the caller's disk |
-| Skill | this file |
+| Skill | this file, shipped in the package at `sprezzature_maps/skill/` (`sprezzature_maps.skill_path()` returns the folder). `sprezzature-maps-skill` (or `sprezzature-maps skill`) reports whether the installed copy is in step with the package; `--install` copies it into `~/.claude/skills`, `--agent opencode` into `~/.opencode/skills`; `--path` prints where pip put it |
 
 A person can also open the editor, `sprezzature-maps`
-(`http://127.0.0.1:8010/`), to paste data and edit a map in a browser.
+(`http://127.0.0.1:8010/`), to paste data or start from an example or a
+country, set the options, render, download the plate as SVG, PNG, PDF or
+JPG, and read its audit, in a browser. It is not an agent call.
 
 All three render routes take every field as optional: send an empty body and
 you get the demo map.
 
 ## Worked plates
 
-Fifteen situation plates ship as Python configs in the package repository's
-examples builder (`build_situation_examples.py`): six thematic (Ukraine, the lower
-Dnieper with numbered article marks, Syria, Libya, Sudan, eastern Democratic Republic of the Congo (DRC)) and
-nine reference plates with no thematic layer (Switzerland, Iberia, western
+Twenty-one situation plates ship as Python configs in the package repository's
+examples builder (`build_situation_examples.py`). Six are thematic and
+schematic (Ukraine, the lower Dnieper with numbered article marks, Syria,
+Libya, Sudan, eastern Democratic Republic of the Congo (DRC)). Six use
+`change` or dated records: Czechoslovakia across Munich in 1938, Serbia
+across the Balkan Wars, and four Israel / Palestine plates (the 1949
+armistice lines, June 1967, 2005, and today's Oslo areas, settlements and
+Gaza from the layers of OCHA (the United Nations Office for the Coordination
+of Humanitarian Affairs, which maps the ground its aid covers)). Nine are
+reference plates with no thematic layer (Switzerland, Iberia, western
 Europe, the Himalaya, the Caribbean, the Andes, the Sahel, the Strait of
-Hormuz, the South China Sea). Read one before writing a config from scratch.
+Hormuz, the South China Sea). Read one before writing a config from scratch;
+for a `change` plate, read `munich-1938`.
 
 ## When NOT to use this skill
 

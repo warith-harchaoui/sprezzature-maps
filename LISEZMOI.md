@@ -45,7 +45,7 @@ pip install sprezzature-maps
 
 Une seule ligne, et elle installe tout : les trois générateurs, la
 bibliothèque, la ligne de commande, l'API (Application Programming Interface, la porte où frappent les autres programmes : un script envoie ses chiffres et reçoit une carte) servie en HTTP (Hypertext Transfer Protocol, la langue derrière chaque adresse web : celle que parle votre navigateur pour aller chercher une page), le serveur
-MCP (Model Context Protocol, le protocole par lequel les agents IA appellent des outils en français) et l'éditeur.
+MCP (Model Context Protocol, le protocole par lequel les agents IA appellent des outils en français), le skill d'agent et l'éditeur.
 Il n'y a pas d'extra de fonctionnalité. `[dev]` porte l'outillage de test
 (pytest, ruff, mypy et le reste) et n'ajoute aucune fonctionnalité. Python 3.10
 à 3.13.
@@ -117,6 +117,7 @@ chacune appelle les mêmes fonctions de la bibliothèque.
 | `article_sidecar(svg)` | Relit le titre, le texte alternatif, la description, les zones, les marqueurs et les renvois numérotés d'une planche finie |
 | `plate_provenance(svg)`, `replay_report(svg, cfg, files)` | Lisent le tampon de provenance d'une planche, et vérifient qu'une configuration et des fichiers sont bien ce qui l'a dessinée |
 | `KINDS`, `MapKind`, `kind`, `kind_names` | Le registre des trois types de carte que lit chaque surface |
+| `skill_path()` | Le dossier du skill d'agent livré dans le paquet (section 5) |
 
 ### 2. La ligne de commande
 
@@ -137,6 +138,7 @@ un extra `[cli]`, d'où le compte différent des notes plus anciennes.
 | `density` | Rend une carte d'accumulation | `--points` (liste JSON de `[lon, lat]`), `--bins`, `--title`, `--out` |
 | `audit` | Vérifie qu'une planche finie dit comment elle a été faite | `TARGET` (un fichier ou un dossier), `--format text\|json` |
 | `improve` | Rend une carte, la fait lire par un modèle de vision, n'applique que les réparations sûres | `--kind`, `--data` / `--config` / `--points`, `--map`, `--out` (un `.png`), `--title`, `--rounds` |
+| `skill` | Dit si le skill d'agent installé pour un agent est celui que livre le paquet, ou l'installe (section 5) | `--install`, `--agent claude\|opencode`, `--path`, `-V` |
 
 `improve` demande un modèle de vision local. Il ne change jamais de lui-même
 la méthode de classification, le nombre de classes ni le cadre : il les
@@ -169,6 +171,7 @@ uvicorn sprezzature_maps.api:app --host 127.0.0.1 --port 8000
 | `POST /v1/density` | `render_density` | Rend une carte d'accumulation depuis des points `[lon, lat]`, ou la démonstration |
 | `GET /` | aucun | La page de galerie |
 | `GET /docs`, `GET /redoc` | aucun | La documentation interactive tirée du schéma OpenAPI |
+| `GET /docs-redirect` | aucun | Redirige vers `/docs` |
 
 Chaque champ du corps est facultatif, et `format` choisit `svg`, `png`, `pdf`
 ou `jpg`. Le dépôt porte un `Dockerfile` et un `docker-compose.yml`.
@@ -193,18 +196,47 @@ fois les routes `/v1/...` et `/mcp`.
 
 ### 5. Le skill
 
-Le skill d'agent `sprezzature-maps` est livré avec le dépôt central
-[sprezzature](https://github.com/warith-harchaoui/sprezzature), pas avec
-celui-ci. Il oriente un agent vers les appels ci-dessus.
+Le skill d'agent `sprezzature-maps` (un fichier `SKILL.md` et ses
+références, qu'un agent comme Claude Code ou OpenCode lit pour savoir quand
+et comment appeler ce paquet) est livré dans le paquet, dans
+`sprezzature_maps/skill/` : `pip install` l'apporte avec les quatre autres
+surfaces. `sprezzature_maps.skill_path()` renvoie ce dossier.
+
+```bash
+sprezzature-maps-skill                    # la copie installée suit-elle ce paquet ?
+sprezzature-maps-skill --install          # la copier dans ~/.claude/skills/sprezzature-maps
+sprezzature-maps-skill --install --agent opencode   # ou dans ~/.opencode/skills
+sprezzature-maps-skill --path             # où pip a posé la copie livrée
+sprezzature-maps skill                    # la même commande, en sous-commande
+```
+
+Sans `--install`, la commande ne fait que rendre compte, et nomme le fichier
+qui diffère. `--install` écrit sous votre répertoire personnel, donc change
+ce que liront toutes les sessions d'agent suivantes ; une copie déjà en
+place est mise de côté dans `~/.claude/skills-superseded/` (ou
+`~/.opencode/skills-superseded/`), pas effacée. `-V` (ou `--version`)
+affiche la version. Le skill oriente un agent vers les appels ci-dessus, et
 [`TRIGGERS.md`](TRIGGERS.md) porte les règles de routage qu'il suit.
 
 ### Et l'éditeur, pour une personne
 
 `sprezzature-maps` ouvre un éditeur sur `http://127.0.0.1:8010/`
-(`--host`, `--port`, `--reload`). On y colle des lignes, une configuration ou
-des points, on rend, et on peut lancer la même boucle de relecture et de
-réparation que `improve`. C'est une page qu'une personne ouvre plutôt qu'une
-surface qu'un programme appelle. La raison de son existence à part de l'éditeur
+(`--host`, `--port`, `--reload`), un onglet par type de carte. On y colle des
+lignes, une configuration ou des points, ou l'on presse « Fill in an
+example », ou encore, pour une planche de situation, « Start from a
+country », qui écrit la même configuration de départ que `situation-new`. On
+nomme les colonnes de l'identifiant et de la valeur (le `--map` de la ligne
+de commande), on tape un titre et, là où le moteur de rendu les prend, un
+sous-titre et une ligne de source. On règle les options, qui viennent du même
+registre que celui d'`improve` et se rangent en « Look » (ce qui ne change
+que le dessin) et « Meaning » (ce qui peut changer ce que dit la carte). On
+rend : une ligne d'attente compte les secondes, parce qu'une planche de
+situation peut prendre une minute. On télécharge la planche en SVG, PNG, PDF
+ou JPG, convertie depuis le fichier rendu plutôt que redessinée. On lit
+l'audit à côté, sous « Before you publish ». Et, si un modèle de vision est
+joignable, on lance la même boucle de relecture et de réparation
+qu'`improve`. C'est une page qu'une personne ouvre plutôt qu'une surface
+qu'un programme appelle. La raison de son existence à part de l'éditeur
 de figures est expliquée [plus bas](#pourquoi-un-dépôt-séparé-plutôt-quun-type-de-graphique-dans-sprezzature-figures).
 
 ## Recettes
@@ -549,32 +581,50 @@ testable sans serveur.
 ## État du projet
 
 Publié sur PyPI ([`sprezzature-maps`](https://pypi.org/project/sprezzature-maps/)),
-avec une CI (Continuous Integration, un robot qui relance tous les tests à chaque fois que du code est poussé sur GitHub) au vert (lint, vérification des types, tests et doctests à
-chaque push et pull request vers `main`, plus une vérification
-d'installation et d'import sous Python 3.10 ; voir
-`.github/workflows/ci.yml`) : `pytest` passe,
-les trois types de carte se rendent depuis leurs données de
-démonstration intégrées, et la ligne de commande produit de vrais fichiers
-SVG. Il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
+avec une CI (Continuous Integration, un robot qui relance tous les tests à chaque fois que du code est poussé sur GitHub) à
+chaque push et pull request vers `main` (voir `.github/workflows/ci.yml`) :
+lint, la suite de tests moins les modules qui redessinent des planches
+entières (8 à 20 s par test), et les doctests, sous Python 3.12, plus une
+vérification d'installation et d'import sous Python 3.10. La vérification
+des types et les tests qui dessinent des planches tournent dans le crochet
+de pré-push, `.githooks/pre-push`, qui lance toute la suite. Les trois types
+de carte se rendent depuis leurs données de démonstration intégrées, et la
+ligne de commande produit de vrais fichiers SVG. Il n'y a pas de page de catalogue façon FIGURES.md (avec trois types, ce
 LISEZMOI en tient lieu).
 
-Dix-sept cartes de situation complètes vivent dans
+Vingt et une cartes de situation complètes vivent dans
 `scripts/build_situation_examples.py`, régénérables dans
 `assets/situation-maps/` par `python scripts/build_situation_examples.py` (ou
 une seule par son nom, par exemple
-`python scripts/build_situation_examples.py sudan`). Six sont thématiques :
-l'Ukraine, le bas Dniepr (la planche qui accompagne un article, avec ses
-repères numérotés), la Syrie et la Libye comme instantanés historiques, le
-Soudan et l'est de la RDC d'après des sources ouvertes jusqu'à fin septembre
-2026, et deux planches de changement, la Tchécoslovaquie à travers Munich en
-1938 et la Serbie à travers les guerres balkaniques, chacune la différence
-entre deux relevés datés d'OpenHistoricalMap. Chacune des six premières est
-schématique par construction, le dit sur la planche, et garde ses lignes de revendication en Python lisible plutôt que
-dans un fichier de données opaque : un lecteur en désaccord voit exactement
-quelles coordonnées contester. Les neuf autres sont des planches de référence
+`python scripts/build_situation_examples.py sudan`). Douze sont thématiques.
+Six sont schématiques par construction, le disent sur la planche, et gardent
+leurs lignes de revendication en Python lisible plutôt que dans un fichier
+de données opaque, si bien qu'un lecteur en désaccord voit exactement
+quelles coordonnées contester : l'Ukraine, le bas Dniepr (la planche qui
+accompagne un article, avec ses repères numérotés), la Syrie et la Libye
+comme instantanés historiques, le Soudan et l'est de la RDC d'après des
+sources ouvertes jusqu'à fin septembre 2026. Deux sont des planches de
+changement, la Tchécoslovaquie à travers Munich en 1938 et la Serbie à
+travers les guerres balkaniques, chacune la différence entre deux relevés
+datés d'OpenHistoricalMap. Et quatre suivent Israël et la Palestine, chaque
+zone tracée d'après un relevé plutôt qu'évaluée à nouveau, les noms selon
+l'usage de l'ONU : les lignes d'armistice de 1949 ; juin 1967 et 2005, deux
+planches de changement entre relevés d'OpenHistoricalMap (le terrain tenu
+avant et après la guerre ; le Sinaï rendu et Gaza évacuée) ; et aujourd'hui,
+les zones A, B et C d'Oslo, les colonies et Gaza sous présence militaire
+israélienne, d'après les couches que sert le bureau de l'OCHA (Office for
+the Coordination of Humanitarian Affairs, le bureau de l'ONU qui coordonne
+l'aide humanitaire et en cartographie le terrain) pour le territoire
+palestinien occupé, OCHA oPt, reprises par `scripts/fetch_ocha_opt.py`. Les
+neuf autres sont des planches de référence
 sans couche thématique : la Suisse, la péninsule Ibérique, l'Europe de
 l'Ouest, l'Himalaya, les Caraïbes, les Andes, le Sahel, le détroit d'Ormuz, et
 la mer de Chine méridionale, dessinée sans aucune ligne de revendication.
+
+Le site de la suite, [sprezzature.ai](https://sprezzature.ai/), ne montre
+que les planches de situation : les choroplèthes l'ont quitté le 2026-11-11
+(`scripts/publish_gallery.py`). Le générateur `choropleth` reste dans le
+paquet, sur toutes les surfaces.
 
 `choropleth` dessine avec : une projection Equal Earth (une projection
 qui conserve la surface relative réelle de chaque pays, si bien qu'une
@@ -615,7 +665,12 @@ du barrage du 6 juin 2023, et `lakes.historic` pour l'autre moitié du
 problème, un lac qui existe encore mais ne remplit plus qu'une fraction du
 polygone en fichier (le lac Urmia est dessiné ainsi par défaut :
 remplissage atténué, bord tireté, nom suffixé « historic extent » —
-`lakes.historic: []` restitue les étendues du fond de carte) ; et des
+`lakes.historic: []` restitue les étendues du fond de carte) ; un relief
+qui se lit à travers les zones : l'ombrage de la planche reposé sur les
+aplats en lumière douce (soft-light, un mélange qui assombrit les versants à
+l'ombre et éclaircit ceux qui sont éclairés, la zone gardant sa couleur),
+avec une passe d'ombres seules sur le fond blanc papier, que la lumière
+douce ne sait pas assombrir ; et des
 **axes de progression** : des flèches fuselées,
 cerclées de blanc, le long d'une courbe lisse, pleines pour un mouvement
 évalué et en contour pour un mouvement seulement rapporté — l'élément
@@ -731,7 +786,7 @@ lieu d'en sauter.
 
 **La direction peut être mesurée plutôt que devinée.** `place` accepte les
 quatre côtés et les quatre diagonales — chaque trait d'appel tombe donc à
-90 ou 45 degrés, la règle de Datawrapper d'après Beck — et `place: auto`
+90 ou 45 degrés, la règle de Datawrapper d'après le plan du métro de Londres de Harry BECK — et `place: auto`
 les essaie dans cet ordre et retient la première dont chaque ligne évite
 les noms déjà posés sur la planche. `annotations` était ici la seule
 couche de texte qui ne consultait jamais le registre d'encre, et une main
@@ -888,7 +943,7 @@ voisin) était le troisième point de cette liste ; c'est désormais
 
 ## Crédits des données
 
-Le code est sous la licence Berkeley Software Distribution BSD-3-Clause,
+Le code est sous licence BSD (Berkeley Software Distribution) 3-Clause,
 qui permet à chacun de réutiliser ce code, même dans un produit payant, tant
 que la mention de copyright reste (voir plus bas). Les données
 géographiques intégrées sous `assets/geo/` portent leurs propres
@@ -919,6 +974,14 @@ sources en demandent un :
   la carte ; voir `_attribution_layer` dans
   `scripts/make_situation_map.py`.
 
+Les étendues datées rangées sous `assets/historical-extents/` que les
+planches de changement et les planches Israël / Palestine prennent à
+OpenHistoricalMap (`ohm-*.geojson`) sont dans le domaine public (CC0, la renonciation Creative Commons qui verse une
+œuvre au domaine public). Les couches prises chez OCHA oPt à côté d'elles
+(`ocha-*.geojson`) ne déclarent aucune licence ; elles sont employées telles que publiées
+et créditées « © OCHA oPt » dans la ligne de source de chaque planche qui
+les dessine.
+
 ### Crédités par courtoisie, non par obligation
 
 Rien de ce qui suit n'est embarqué ici et rien n'exige de crédit. Si ces
@@ -948,7 +1011,8 @@ vous voulez la chose réelle plutôt que nos démonstrations synthétiques :
 
 ## Licence
 
-BSD-3-Clause.
+Licence BSD 3-Clause. Copyright (c) 2026, Warith HARCHAOUI
+(warithmetics@deraison.ai).
 
 ## Auteur
 

@@ -4,7 +4,7 @@ Written 2026-10-27, from the standpoint of somebody who would use these
 plates in work that gets argued with: a conflict analyst, a desk officer, a
 political geographer. The reference standard is the New York Times graphics
 desk, with the Institute for the Study of War (ISW) for the evidence model
-and the UNHCR mapping guidelines for the furniture.
+and the UNHCR (United Nations High Commissioner for Refugees, the UN agency that protects refugees) mapping guidelines for the furniture.
 
 The short version of the finding: **the renderer already implements most of
 what is missing. No plate uses it.** Locator insets, the
@@ -95,8 +95,8 @@ line. "Control" means something specific and the plate should say which.
 
 ## 3. Precision is a number, not an adjective
 
-ACLED codes `geo_precision` 1 to 3 and `time_precision` 1 to 3, where 1 is
-exact and 3 is "the region is all anybody knows". UCDP GED carries seven
+ACLED (Armed Conflict Location & Event Data, a worldwide log of political violence) codes `geo_precision` 1 to 3 and `time_precision` 1 to 3, where 1 is
+exact and 3 is "the region is all anybody knows". The GED (Georeferenced Event Dataset) of the UCDP (Uppsala Conflict Data Program, a Swedish university's count of armed conflicts) carries seven
 values of `where_prec`. These are the standard vocabularies. A plate that
 ingests either should keep the code rather than flatten it.
 
@@ -126,7 +126,7 @@ A5 plate and 20mm on A4, with 2mm margins, showing the mapped area in red. No
 plate in this package has one. A reader who does not already know where the
 Donbas is cannot place it.
 
-**Requirement F2. A date stamp under the title**, in the form "as of DD Month
+**Requirement F2. A date stamp under the title**, in the form "as of DD (the day in two digits) Month
 YYYY". The guidelines put it there; the current plates put the date in the
 subtitle, where it competes with the editorial line.
 
@@ -163,7 +163,7 @@ On a Crimea plate, the difference between the two lines is the subject.
 
 ---
 
-## 6. Label hierarchy, which is most of what makes a NYT map look like one
+## 6. Label hierarchy, which is most of what makes a New York Times map look like one
 
 The UNHCR examples show the hierarchy plainly: the mapped country in
 letterspaced capitals at the largest size, neighbouring countries in grey
@@ -191,7 +191,7 @@ both.
 
 ## 7. Terrain, because it explains the front
 
-The package already carries GMTED2010 relief and draws it well. What is
+The package already carries GMTED2010 (Global Multi-resolution Terrain Elevation Data 2010, a world grid of land heights) relief and draws it well. What is
 missing is the military reading of it.
 
 **Requirement T1.** Rivers classed by whether they are crossable, which is a
@@ -211,7 +211,7 @@ the generalisation is a `former` and `seasonal` state for any water body.
 `small_multiples` is implemented and unused.
 
 **Requirement C1.** Two or three frames on one plate, same projection, same
-extent, with the dates in the frame. This is the NYT house move and it
+extent, with the dates in the frame. This is the house move of the NYT (The New York Times) and it
 carries more than any arrow.
 
 **Requirement C2.** A difference layer: ground gained, ground lost, ground
@@ -231,21 +231,21 @@ of the three.
 | Layer | Source | Licence |
 |---|---|---|
 | Small scale basemap | Natural Earth | public domain |
-| Administrative boundaries, humanitarian standard | OCHA Common Operational Datasets | varies, usually open |
-| Administrative boundaries, open | geoBoundaries | CC BY |
+| Administrative boundaries, humanitarian standard | OCHA (UN Office for the Coordination of Humanitarian Affairs) Common Operational Datasets | varies, usually open |
+| Administrative boundaries, open | geoBoundaries | `CC BY` (Creative Commons Attribution: reuse freely, with credit) |
 | Conflict events | ACLED | free for non-commercial, attribution and registration |
-| Conflict events, academic | UCDP GED | CC BY |
-| Terrain | GMTED2010, Copernicus DEM | public domain, open |
+| Conflict events, academic | UCDP GED | `CC BY` |
+| Terrain | GMTED2010, Copernicus DEM (digital elevation model, a grid of ground heights) | public domain, open |
 | Roads, rail, ports, airfields | OpenStreetMap | ODbL, share-alike, which infects derived data |
-| Population | WorldPop, GHSL | CC BY |
-| Damage assessment | UNOSAT, Copernicus EMS | varies |
+| Population | WorldPop, GHSL (Global Human Settlement Layer, the European Commission's map of built-up areas and population) | `CC BY` |
+| Damage assessment | UNOSAT (the UN satellite centre's analysis of imagery), Copernicus EMS (Emergency Management Service, Europe's rapid mapping after disasters) | varies |
 | Areas of control | ISW, no machine readable feed | non-commercial reuse with attribution |
 
 Two things to flag for a package that ships figures.
 
-**The OpenStreetMap share-alike does not reach the SVG. This package
+**The OpenStreetMap share-alike does not reach the SVG (Scalable Vector Graphics, the text-described image file a plate is). This package
 already knew that.** The first draft of this document said that shipping an
-SVG with an OSM layer puts the ODbL on the output. That is wrong. ODbL
+SVG with an OSM (OpenStreetMap, the open map anyone can edit) layer puts the ODbL on the output. That is wrong. ODbL
 distinguishes a *Derivative Database* from a *Produced Work*: share-alike
 binds the first; a rendered map is the second; a produced work carries
 any licence its author likes. What is owed is attribution.
