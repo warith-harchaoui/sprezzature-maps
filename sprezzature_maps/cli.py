@@ -56,7 +56,6 @@ from typing import Any
 import click
 
 from sprezzature_maps._skill import skill_command
-
 from sprezzature_maps.data import parse_mapping, read_choropleth_rows
 from sprezzature_maps.kinds import kind as kind_of
 from sprezzature_maps.kinds import kind_names
