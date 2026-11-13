@@ -335,6 +335,18 @@ def audit(svg: str) -> list[Finding]:
             "schematic; a map with neither is read as current, forever, "
             "including years after it stopped being so",
         ))
+    # The starter (`make-map situation-new`) writes its method and source as
+    # "REPLACE ME: ..." so the plate renders before they are known. Its own
+    # "as of" date then satisfies the check above, and a plate whose footer
+    # still asks to be filled in passed as one that says how it was made.
+    unfilled = [t for t in labels if "REPLACE ME" in t.upper()]
+    if unfilled:
+        findings.append(Finding(
+            "no-provenance",
+            "the footer still carries the starter's placeholder "
+            f"({unfilled[0][:60]!r}); name the method and the sources in the "
+            "config's method: and source: before publishing",
+        ))
 
     findings.extend(_situation_findings(text, labels))
     findings.extend(_legibility_findings(svg))

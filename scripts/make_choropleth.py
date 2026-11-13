@@ -53,7 +53,7 @@ import json
 import math
 import statistics
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -495,7 +495,6 @@ def _load_countries() -> list[dict[str, Any]]:
     return countries
 
 
-
 #: Water blue, the cartographic convention; muted so rivers describe the land
 #: without competing with the choropleth painted over them.
 _RIVER_COLOR = "#7FA3C0"
@@ -507,11 +506,8 @@ def _line_segments(geometry: dict[str, Any]) -> list[list[tuple[float, float]]]:
     if kind == "LineString":
         return [[(float(x), float(y)) for x, y in geometry["coordinates"]]]
     if kind == "MultiLineString":
-        return [
-            [(float(x), float(y)) for x, y in line] for line in geometry["coordinates"]
-        ]
+        return [[(float(x), float(y)) for x, y in line] for line in geometry["coordinates"]]
     return []
-
 
 
 def _classed_legend(
@@ -552,7 +548,7 @@ def _classed_legend(
     strip_end = x0 + len(class_colors) * (swatch_w + gap)
     parts.append(
         f'<text x="{x0:.1f}" y="{swatch_top - 4:.1f}" font-size="9" fill="{SECONDARY}">'
-        f'{len(class_colors)} classes, {METHOD_LABELS[method]}</text>'
+        f"{len(class_colors)} classes, {METHOD_LABELS[method]}</text>"
     )
     parts.append(
         f'<rect x="{no_data_x:.1f}" y="{swatch_top:.1f}" width="14" height="12" '
@@ -681,71 +677,144 @@ def seam_segments(
     return [[project(lon, lat) for lon, lat in piece] for piece in pieces]
 
 
-def _land_mask(
-    countries: Sequence[dict[str, Any]],
-    project: Any,
-    side_margin: float,
-    top_margin: float,
-    plot_w: int,
-    plot_h: int,
-) -> np.ndarray:
-    """Return a 0/1 grid of the plot area that the drawn countries cover.
+def _country_path(
+    country: dict[str, Any],
+    project: Callable[[float, float], tuple[float, float]],
+    simplify: float,
+) -> tuple[str, list[tuple[float, float]]]:
+    """Return one country's SVG path data, and the ring its hover bubble anchors on.
 
-    The relief raster is rectangular and the world is not, so the shading
-    needs an alpha channel saying where ground actually is. Rasterising
-    *the same projected rings this map draws* gives one that cannot drift:
-    a coastline borrowed from a coarser atlas would leave a halo of
-    hillshade a pixel or two outside every country, which against a white
-    sea is more visible than the texture it was meant to carry.
+    Written once and read twice: by the country fill, and by the clip that
+    keeps the relief on land. The two used to be computed apart -- the relief
+    was cut by a raster mask the size of the plot area -- and a raster edge
+    is not the vector edge it was rasterised from. Seen at any size above
+    the canvas's own, every coast carried a stair-stepped fringe of
+    hillshade outside its outline, and every islet a square speck of it:
+    khaki on the sea, the colour the duotone gives flat ground at sea level.
+    One path for both means the relief stops exactly where the land does, at
+    every zoom.
 
-    Interior rings are filled rather than punched out. A country's holes
-    are enclaves and lakes -- ground either way, as far as a hillshade is
-    concerned -- and the fills drawn on top cover them regardless.
+    Parameters
+    ----------
+    country : dict
+        Decoded atlas record with a ``rings`` list of (lon, lat).
+    project : callable
+        ``(lon, lat) -> (x, y)`` in canvas coordinates.
+    simplify : float
+        Vertex-thinning tolerance in output pixels, as :func:`simplify_ring`.
+
+    Returns
+    -------
+    tuple
+        ``(path_d, anchor_seg)``; ``path_d`` is empty when no ring survives.
+
+    Examples
+    --------
+    >>> square = {"rings": [[(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]]}
+    >>> d, anchor = _country_path(square, lambda lon, lat: (lon, lat), 0.0)
+    >>> d.startswith("M 0.0,0.0") and d.endswith(" Z")
+    True
+    """
+    path_d_parts: list[str] = []
+    # Anchor for the hover bubble: centroid of the largest ring/segment
+    # (the main landmass), not a naive average across every ring -- a
+    # country with far-flung islands (or an antimeridian-split ring like
+    # Russia/Fiji) would otherwise anchor somewhere over open ocean.
+    anchor_seg: list[tuple[float, float]] = []
+    for ring in country["rings"]:
+        if len(ring) < 3:
+            continue
+        # Antimeridian wrap (Russia, Fiji and Antarctica all cross
+        # lon +-180): break into a fresh subpath at the seam instead
+        # of drawing a line straight across the map. See
+        # :func:`seam_segments` for why the test is in longitude and
+        # not, as it was, in projected x.
+        for seg in seam_segments(ring, project):
+            if len(seg) < 3:
+                continue
+            # Drop the vertices this canvas cannot show before writing
+            # them. At the default size 97% of the segments in this
+            # atlas are shorter than one unit; they are ~1.5 MB of path
+            # data per map that no reader can ever see. See _simplify.
+            drawn = simplify_ring(seg, simplify)
+            path_d_parts.append("M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in drawn) + " Z")
+            if len(seg) > len(anchor_seg):
+                # The hover anchor is a centroid, so it uses the full
+                # ring: a simplified ring would move the bubble for no
+                # benefit.
+                anchor_seg = seg
+    return " ".join(path_d_parts), anchor_seg
+
+
+def _country_id_index(countries: Sequence[dict[str, Any]]) -> dict[str, str]:
+    """Map every spelling a reader's table uses for a country to the atlas id.
+
+    The atlas keys countries by ISO 3166-1 *numeric* code, zero-padded
+    (``"250"`` for France), and a table almost never does: it says ``FRA``,
+    ``FR`` or ``France``. Matched literally, such a table drew every country
+    as no-data grey while the description still counted its rows as
+    "countries with data" -- a finished-looking map that showed nothing.
 
     Parameters
     ----------
     countries : sequence of dict
-        Decoded atlas records, each with a ``rings`` list of (lon, lat).
-    project : callable
-        ``(lon, lat) -> (x, y)`` in canvas coordinates, the map's own.
-    side_margin, top_margin : float
-        Canvas offset of the plot area, subtracted so the mask is in the
-        raster's own coordinates.
-    plot_w, plot_h : int
-        Mask size in pixels, matching the relief raster exactly.
+        Atlas records with ``id`` and ``name``.
 
     Returns
     -------
-    numpy.ndarray
-        ``(plot_h, plot_w)`` of 0.0 / 1.0, ready to multiply into alpha.
+    dict
+        Lower-cased spelling -> atlas id, for numeric codes with or without
+        padding, alpha-3, alpha-2, ISO names and the atlas's own names.
 
     Examples
     --------
-    A single square degree-aligned country, projected by an identity-ish
-    transform, covers its own quarter of a tiny canvas and nothing else:
-
-    >>> square = [{"rings": [[(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]]}]
-    >>> mask = _land_mask(square, lambda lon, lat: (lon, lat), 0, 0, 8, 8)
-    >>> mask.shape
-    (8, 8)
-    >>> bool(mask[1, 1]), bool(mask[6, 6])
-    (True, False)
+    >>> index = _country_id_index([{"id": "250", "name": "France"}])
+    >>> index["fra"], index["fr"], index["france"], index["250"]
+    ('250', '250', '250', '250')
     """
-    from PIL import Image, ImageDraw
-
-    canvas = Image.new("1", (plot_w, plot_h), 0)
-    pen = ImageDraw.Draw(canvas)
+    atlas_ids = {str(c["id"]) for c in countries}
+    index: dict[str, str] = {}
+    table = json.loads((geo_dir() / "iso3166-1.json").read_text(encoding="utf-8"))
+    for entry in table["countries"]:
+        numeric = entry["numeric"]
+        if numeric not in atlas_ids:
+            continue
+        for key in ("alpha_2", "alpha_3", "name", "common_name"):
+            if entry.get(key):
+                index.setdefault(entry[key].lower(), numeric)
     for country in countries:
-        for ring in country["rings"]:
-            if len(ring) < 3:
-                continue
-            for seg in seam_segments(ring, project):
-                if len(seg) < 3:
-                    continue
-                pen.polygon(
-                    [(x - side_margin, y - top_margin) for x, y in seg], fill=1
-                )
-    return np.asarray(canvas, dtype=np.float32)
+        cid = str(country["id"])
+        index[cid.lower()] = cid
+        index.setdefault(str(country.get("name", "")).lower(), cid)
+        if cid.isdigit():
+            index.setdefault(str(int(cid)), cid)
+    return index
+
+
+def _resolve_ids(
+    rows: Sequence[dict[str, Any]], countries: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Rewrite each row's ``id`` to the atlas's own, and refuse a table that matches nothing.
+
+    Examples
+    --------
+    >>> atlas = [{"id": "250", "name": "France"}]
+    >>> _resolve_ids([{"id": "FRA", "value": 1.0}], atlas)[0]["id"]
+    '250'
+    """
+    index = _country_id_index(countries)
+    resolved = []
+    for row in rows:
+        raw = str(row["id"]).strip()
+        resolved.append({**row, "id": index.get(raw.lower(), raw)})
+    if rows and not any(r["id"] in index.values() for r in resolved):
+        sample = ", ".join(str(r["id"]) for r in rows[:5])
+        raise ValueError(
+            f"no row matches a country on the map (first ids: {sample}). "
+            "Give each country as an ISO 3166-1 code -- numeric (250), "
+            "alpha-3 (FRA) or alpha-2 (FR) -- or by its English name (France)."
+        )
+    return resolved
 
 
 def build_svg(
@@ -865,6 +934,7 @@ def build_svg(
             if not data
             else "No data in grey"
         )
+    rows = _resolve_ids(rows, _load_countries())
     values_by_id = {str(r["id"]): float(r["value"]) for r in rows}
     # One NaN poisons everything downstream: min/max both come out nan, so
     # the ramp is computed over a nan span, every class is garbage, and the
@@ -875,9 +945,7 @@ def build_svg(
     # Not dropped silently either: a country with no value is already a
     # first-class state here -- it renders grey and the subtitle says so --
     # and the caller is the only one who can say which of the two they meant.
-    unusable = sorted(
-        key for key, value in values_by_id.items() if not math.isfinite(value)
-    )
+    unusable = sorted(key for key, value in values_by_id.items() if not math.isfinite(value))
     if unusable:
         raise ValueError(
             "these ids carry a value that is not a finite number "
@@ -899,9 +967,7 @@ def build_svg(
         # whose subject is actually down there (station coverage, ice
         # extent, treaty claims).
         countries = [c for c in countries if str(c["id"]) != _ANTARCTICA_ID]
-        values_by_id = {
-            cid: v for cid, v in values_by_id.items() if cid != _ANTARCTICA_ID
-        }
+        values_by_id = {cid: v for cid, v in values_by_id.items() if cid != _ANTARCTICA_ID}
     all_values = list(values_by_id.values())
     v_min, v_max = (min(all_values), max(all_values)) if all_values else (0.0, 1.0)
     v_span = (v_max - v_min) or 1.0
@@ -1102,6 +1168,10 @@ def build_svg(
         f'<text x="40" y="66" font-size="13" fill="{SECONDARY}">{xml_escape(subtitle)}</text>'
     )
 
+    # One entry per country, in drawing order -- a list, not a dict keyed by
+    # id, because the atlas does not promise its ids are unique.
+    country_paths = [_country_path(country, project, simplify) for country in countries]
+
     if relief:
         # ---- relief: a faint desaturated hillshade texture under
         # everything else (graticule and countries both paint on top of
@@ -1133,12 +1203,8 @@ def build_svg(
         # raster -- on the Himalaya, 2.8x its contrast; the Andes 2.7x;
         # the Alps 3.0x. Ridge structure at continental scale is exactly
         # what a scale-invariant operator is for.
-        shade, shade_bounds = terrain_shade_for_bbox(
-            -180.0, -90.0, 180.0, 90.0, plot_w, plot_h
-        )
-        relief_rgba = sample_terrain_shade(
-            lon_grid, lat_grid, valid_grid, shade, shade_bounds
-        )
+        shade, shade_bounds = terrain_shade_for_bbox(-180.0, -90.0, 180.0, 90.0, plot_w, plot_h)
+        relief_rgba = sample_terrain_shade(lon_grid, lat_grid, valid_grid, shade, shade_bounds)
         # Terrain shading is a statement about *ground*, and this raster
         # covered the whole plot rectangle, so it painted the sea too:
         # every ocean pixel came out (190, 200, 186), the khaki the duotone
@@ -1152,33 +1218,34 @@ def build_svg(
         # all, got the same confident fill, which is where the warm band
         # across the top and bottom of every plate came from.
         #
-        # Masked to the countries this map actually draws, the sea becomes
-        # the page -- which is what a world choropleth's sea is.
-        land = _land_mask(
-            countries, project, side_margin, top_margin,
-            int(plot_w), int(plot_h),
-        )
+        # Clipped to the countries this map actually draws, the sea becomes
+        # the page -- which is what a world choropleth's sea is. The clip is
+        # the countries' own path data, not a raster of it: see
+        # :func:`_country_path` for the khaki fringe a raster mask left.
+        #
         # Flatten the shading onto the page colour here, in the raster,
         # rather than letting the canvas do it: with no backdrop rect there
         # is no page left to flatten against, and a 55%-alpha hillshade over
         # a transparent canvas would hand the land's lightness to whatever
-        # is behind the plate. Composited onto BG and then made opaque
-        # exactly where the countries are, this one <image> is both the
-        # terrain texture and the land's paper -- so every land pixel comes
-        # out the value it had against a white page, and every sea pixel
-        # comes out empty.
+        # is behind the plate. Composited onto BG and made opaque, then
+        # clipped to the land, this one <image> is both the terrain texture
+        # and the land's paper -- so every land pixel comes out the value it
+        # had against a white page, and every sea pixel comes out empty.
         alpha = relief_rgba[..., 3:4].astype(np.float32) / 255.0
-        white = np.array(
-            [int(BG[1:3], 16), int(BG[3:5], 16), int(BG[5:7], 16)], dtype=np.float32
-        )
+        white = np.array([int(BG[1:3], 16), int(BG[3:5], 16), int(BG[5:7], 16)], dtype=np.float32)
         relief_rgba[..., :3] = (
-            relief_rgba[..., :3].astype(np.float32) * alpha + white * (1.0 - alpha)
-        ).round().astype(np.uint8)
-        relief_rgba[..., 3] = (land * 255.0).astype(np.uint8)
+            (relief_rgba[..., :3].astype(np.float32) * alpha + white * (1.0 - alpha))
+            .round()
+            .astype(np.uint8)
+        )
+        relief_rgba[..., 3] = np.where(valid_grid, 255, 0).astype(np.uint8)
+        land_d = " ".join(d for d, _ in country_paths if d)
+        parts.append(f'<clipPath id="cx-land"><path d="{land_d}"/></clipPath>')
         parts.append(
             f'<image x="{side_margin:.1f}" y="{top_margin:.1f}" '
             f'width="{int(plot_w)}" height="{int(plot_h)}" '
-            f'href="{rgba_to_data_uri(relief_rgba)}" preserveAspectRatio="none"/>'
+            f'href="{rgba_to_data_uri(relief_rgba)}" preserveAspectRatio="none" '
+            'clip-path="url(#cx-land)"/>'
         )
 
     # ---- graticule: 30-degree meridians/parallels, drawn UNDER the
@@ -1210,44 +1277,13 @@ def build_svg(
     # off there is nothing under the countries but the (now transparent)
     # canvas, so a translucent fill would read the page instead of the data.
     fill_opacity = _COUNTRY_FILL_OPACITY if relief else 1.0
-    for country in countries:
+    for country, (path_d, anchor_seg) in zip(countries, country_paths, strict=True):
         cid = str(country["id"])
         # None is a real answer here -- a country the data simply does not
         # cover -- and is what drives the no-data fill further down.
         value: float | None = values_by_id.get(cid)
-        path_d_parts: list[str] = []
-        # Anchor for the hover bubble: centroid of the largest ring/segment
-        # (the main landmass), not a naive average across every ring -- a
-        # country with far-flung islands (or an antimeridian-split ring like
-        # Russia/Fiji) would otherwise anchor somewhere over open ocean.
-        anchor_seg: list[tuple[float, float]] = []
-        for ring in country["rings"]:
-            if len(ring) < 3:
-                continue
-            # Antimeridian wrap (Russia, Fiji and Antarctica all cross
-            # lon +-180): break into a fresh subpath at the seam instead
-            # of drawing a line straight across the map. See
-            # :func:`seam_segments` for why the test is in longitude and
-            # not, as it was, in projected x.
-            for seg in seam_segments(ring, project):
-                if len(seg) < 3:
-                    continue
-                # Drop the vertices this canvas cannot show before writing
-                # them. At the default size 97% of the segments in this
-                # atlas are shorter than one unit; they are ~1.5 MB of path
-                # data per map that no reader can ever see. See _simplify.
-                drawn = simplify_ring(seg, simplify)
-                path_d_parts.append(
-                    "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in drawn) + " Z"
-                )
-                if len(seg) > len(anchor_seg):
-                    # The hover anchor is a centroid, so it uses the full
-                    # ring: a simplified ring would move the bubble for no
-                    # benefit.
-                    anchor_seg = seg
-        if not path_d_parts:
+        if not path_d:
             continue
-        path_d = " ".join(path_d_parts)
         if value is None:
             fill, edge = NO_DATA, NO_DATA_EDGE
             tip = f"{country['name']}: no data"
@@ -1317,9 +1353,7 @@ def build_svg(
                 # drawn with rivers, which is the default.
                 stroke_w = 1.6 if rank <= 1 else (1.1 if rank == 2 else 0.8)
                 for line in _line_segments(feature["geometry"]):
-                    points = simplify_screen(
-                        [project(lon, lat) for lon, lat in line], simplify
-                    )
+                    points = simplify_screen([project(lon, lat) for lon, lat in line], simplify)
                     if len(points) < 2:
                         continue
                     d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in points)

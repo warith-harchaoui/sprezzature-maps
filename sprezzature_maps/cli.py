@@ -175,6 +175,18 @@ def audit_cmd(target: str, fmt: str) -> None:
     "current directory.",
 )
 @click.option("--title", default=None, help="Chart title.")
+# The audit's `no-provenance` rule asks every plate to say when it was true,
+# or that it is illustrative, and the subtitle is where a choropleth says it.
+# Without this option a map made from the reader's own file could not pass
+# the audit this same command group runs on it.
+@click.option(
+    "--subtitle",
+    default=None,
+    help=(
+        "The line under the title: say when the data was true and where it "
+        'comes from, e.g. "World Bank, 2024". The audit asks for it.'
+    ),
+)
 @click.option(
     "--diverging/--no-diverging",
     default=None,
@@ -242,6 +254,7 @@ def choropleth_cmd(
     mappings: tuple[str, ...],
     out: str | None,
     title: str | None,
+    subtitle: str | None,
     diverging: bool | None,
     relief: bool,
     simplify: float | None,
@@ -265,6 +278,8 @@ def choropleth_cmd(
         raise click.ClickException("--map only applies with --data.")
     if title:
         kwargs["title"] = title
+    if subtitle:
+        kwargs["subtitle"] = subtitle
     if out:
         kwargs["out"] = out
     result = _render(make_choropleth, **kwargs)
