@@ -4,6 +4,31 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-11-13
+
+### Fixed
+
+- **No khaki on the sea.** The choropleth's relief was cut to land by a
+  raster mask the size of the plot area, so at any zoom above the canvas
+  every coast carried a stair-stepped khaki fringe and every islet a khaki
+  speck. It is now clipped by the countries' own vector paths, the same
+  ones the fills draw.
+- **A table of `FRA`, `FR` or `France` draws.** Rows were matched to the
+  atlas by ISO 3166-1 numeric code only, so any other spelling drew every
+  country as no-data grey while the description counted the rows as data.
+  Numeric, alpha-3, alpha-2 and English names now resolve (table vendored
+  in `assets/geo/iso3166-1.json`), and a table that matches no country is
+  refused with a message.
+- **The audit reads the starter's placeholder.** A plate whose footer still
+  says "REPLACE ME", as `make-map situation-new` writes it, now fails
+  `no-provenance`; its own "as of" date had let it pass.
+
+### Added
+
+- `make-map choropleth --subtitle`: the source and the year, which the
+  audit asks for and the command could not say.
+
+
 ## [1.4.0] — 2026-11-12
 
 ### Added
