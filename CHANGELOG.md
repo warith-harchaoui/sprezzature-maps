@@ -4,6 +4,8 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-11-14
+
 ### Added
 
 - **A plate's layers travel to a GIS and back.** `make-map export --config
