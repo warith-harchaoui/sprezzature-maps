@@ -44,7 +44,7 @@ is.
 Usage example
 -------------
 >>> from _geo_colors import sequential_ramp_hex
->>> sequential_ramp_hex(0.0, ((0.0, "#EAF3FF"), (0.62, "#007AFF"), (1.0, "#0A4DA0")))
+>>> sequential_ramp_hex(0.0, ((0.0, "#EAF3FF"), (0.62, "#0088FF"), (1.0, "#0A4DA0")))
 '#EAF3FF'
 
 Author
@@ -165,8 +165,8 @@ def _parse_hex(hex_color: str) -> tuple[int, int, int]:
 
     Examples
     --------
-    >>> _parse_hex("#007AFF")
-    (0, 122, 255)
+    >>> _parse_hex("#0088FF")
+    (0, 136, 255)
     >>> _parse_hex("fff")
     (255, 255, 255)
     """
@@ -541,9 +541,9 @@ def sequential_ramp_hex(t: float, stops: Sequence[RampStop]) -> str:
 
     Examples
     --------
-    >>> stops = ((0.0, "#EAF3FF"), (0.62, "#007AFF"), (1.0, "#0A4DA0"))
+    >>> stops = ((0.0, "#EAF3FF"), (0.62, "#0088FF"), (1.0, "#0A4DA0"))
     >>> sequential_ramp_hex(0.62, stops)
-    '#007AFF'
+    '#0088FF'
     """
     # Clamp once here so every caller downstream (including the two
     # helpers below) can assume t is already in range.

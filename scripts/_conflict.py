@@ -103,7 +103,7 @@ OKABE_ITO: tuple[str, ...] = (
     "#0072B2",  # blue
     "#E69F00",  # orange
     "#56B4E9",  # sky blue
-    "#D55E00",  # vermillion
+    "#E73121",  # vermillion
     "#CC79A7",  # reddish purple
     "#009E73",  # bluish green
     "#000000",  # black

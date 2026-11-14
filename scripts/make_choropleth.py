@@ -251,7 +251,7 @@ def _equal_earth_invert_batch(
 # RGB lerp -- see that module's docstring for why the difference matters).
 _RAMP: tuple[tuple[float, str], ...] = (
     (0.00, "#EAF3FF"),
-    (0.62, "#007AFF"),
+    (0.62, "#0088FF"),
     (1.00, "#0A4DA0"),
 )
 

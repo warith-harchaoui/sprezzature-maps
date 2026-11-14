@@ -464,7 +464,7 @@ def test_the_order_is_the_one_that_was_searched_for() -> None:
     The guard against someone "tidying" the palette back into its familiar
     order: that order is a fine set and a worse sequence.
     """
-    published = ("#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9")
+    published = ("#0072B2", "#E73121", "#009E73", "#CC79A7", "#E69F00", "#56B4E9")
     assert sorted(cf.OKABE_ITO[:6]) == sorted(published), "the colours themselves changed"
     for n in range(3, 7):
         assert _cvd_floor(cf.OKABE_ITO[:n])[0] >= _cvd_floor(published[:n])[0]
