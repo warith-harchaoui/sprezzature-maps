@@ -315,6 +315,13 @@ Chrome and provenance
     ``"none"`` (default) or ``"full"``, a provenance block on the plate.
 ``method``, ``source``, ``as_of``
     The three lines a ``caption: full`` prints.
+``layers``
+    A layer library: a list of GeoJSON or KML files, relative to the config,
+    whose features are folded into this plate before it is drawn -- a point
+    joins ``events``, a line ``arrows``, a polygon ``areas_of_control``, and
+    a feature written by ``make-map export`` goes back to the block it came
+    from. A checkpoint traced once is drawn by every plate that names its
+    file; see :mod:`sprezzature_maps.gis`.
 ``provenance``
     Off by default. ``true`` stamps the file (not the drawing: it goes in
     ``<metadata>`` and occupies no pixels) with the package version and a
@@ -3506,6 +3513,16 @@ def build_map(cfg: dict[str, Any]) -> str:
     # the MCP tool -- rather than through a second generator they would
     # each have to learn about. The recursion terminates because the panel
     # configs are built without this key.
+    if cfg.get("layers"):
+        # A layer library: files of features a cabinet keeps across plates,
+        # folded into this plate's own blocks before anything is drawn. The
+        # mutation is in place on purpose -- the small-multiples path and the
+        # provenance stamp both read `cfg` after this.
+        from sprezzature_maps.gis import merge_layers
+
+        merged = merge_layers(dict(cfg), Path(cfg.get("_config_dir", ".")))
+        cfg.clear()
+        cfg.update(merged)
     _apply_style(cfg)
     if cfg.get("small_multiples"):
         return build_small_multiples(cfg)
@@ -6583,25 +6600,87 @@ def _catmull_rom(points: list[tuple[float, float]], per_segment: int = 14) -> li
     """
     if len(points) < 3:
         return list(points)
-    # Duplicate the endpoints so the first and last segments are defined.
-    pad = [points[0], *points, points[-1]]
+    # Monotone, not uniform. The uniform spline weights every leg the same
+    # whatever its length, so at a turn between a short leg and a long one it
+    # swings out past the corner: on the Amdjarass -> al-Tina -> El Fasher
+    # flow (120 km, then 300) it went 22 units west of al-Tina -- into Chad
+    # -- and came back, and the researcher it was drawn for said "in real
+    # life there is no reason to go that low to climb back up". The
+    # centripetal variant halves that and does not remove it: rounding a
+    # sharp corner smoothly always leaves its box. A monotone cubic Hermite
+    # per axis (Fritsch-Carlson tangents), parameterised by chord length,
+    # passes through every point and never goes past either end of a leg on
+    # either axis, so a turn is rounded inside the corner, never outside.
+    s = [0.0]
+    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
+        s.append(s[-1] + max(math.hypot(x1 - x0, y1 - y0), 1e-9))
+
+    def tangents(v: list[float]) -> list[float]:
+        h = [s[i + 1] - s[i] for i in range(len(v) - 1)]
+        d = [(v[i + 1] - v[i]) / h[i] for i in range(len(v) - 1)]
+        m = [d[0]] + [
+            0.0 if d[i - 1] * d[i] <= 0 else (d[i - 1] + d[i]) / 2 for i in range(1, len(v) - 1)
+        ] + [d[-1]]
+        for i in range(len(d)):
+            if d[i] == 0:
+                m[i] = m[i + 1] = 0.0
+                continue
+            a_, b_ = m[i] / d[i], m[i + 1] / d[i]
+            r = a_ * a_ + b_ * b_
+            if r > 9:
+                k = 3 / math.sqrt(r)
+                m[i], m[i + 1] = k * a_ * d[i], k * b_ * d[i]
+        return m
+
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    mx, my = tangents(xs), tangents(ys)
     out: list[tuple[float, float]] = []
-    for i in range(len(pad) - 3):
-        p0, p1, p2, p3 = pad[i], pad[i + 1], pad[i + 2], pad[i + 3]
+    for i in range(len(points) - 1):
+        h = s[i + 1] - s[i]
         for step in range(per_segment):
-            t = step / per_segment
-            t2, t3 = t * t, t * t * t
+            u = step / per_segment
+            h00 = 2 * u**3 - 3 * u**2 + 1
+            h10 = u**3 - 2 * u**2 + u
+            h01 = -2 * u**3 + 3 * u**2
+            h11 = u**3 - u**2
             out.append(
                 (
-                    0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t
-                           + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
-                           + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
-                    0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t
-                           + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
-                           + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+                    h00 * xs[i] + h10 * h * mx[i] + h01 * xs[i + 1] + h11 * h * mx[i + 1],
+                    h00 * ys[i] + h10 * h * my[i] + h01 * ys[i + 1] + h11 * h * my[i + 1],
                 )
             )
     out.append(points[-1])
+    return out
+
+
+def _bend_path(points: list[tuple[float, float]], bend: float) -> list[tuple[float, float]]:
+    """Bow each leg of ``points`` sideways by ``bend`` times its own length.
+
+    A flow drawn from A to B is a straight shaft unless somebody types the
+    curve in as extra coordinates, and hand-placed coordinates are how a
+    flow comes to wander where nothing travelled. ``bend`` asks for the
+    curve in one word: each leg gains one point at its middle, pushed off
+    the chord by ``bend`` x its length -- positive to the left of the
+    direction of travel, negative to the right -- and the spline passes
+    through it. The given points stay on the path, so a named checkpoint is
+    still crossed exactly.
+
+    Examples
+    --------
+    >>> _bend_path([(0.0, 0.0), (10.0, 0.0)], 0.2)
+    [(0.0, 0.0), (5.0, -2.0), (10.0, 0.0)]
+    >>> _bend_path([(0.0, 0.0), (10.0, 0.0)], 0.0)
+    [(0.0, 0.0), (10.0, 0.0)]
+    """
+    if not bend or len(points) < 2:
+        return list(points)
+    out = [points[0]]
+    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
+        dx, dy = x1 - x0, y1 - y0
+        # Plate y grows downward, so "left of travel" is (dy, -dx).
+        out.append((x0 + dx / 2 + dy * bend, y0 + dy / 2 - dx * bend))
+        out.append((x1, y1))
     return out
 
 
@@ -6722,7 +6801,9 @@ def _arrows_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
 
     Each entry in ``cfg["arrows"]`` takes ``line`` (a list of ``[lon, lat]``,
     tail first), and optionally ``color``, ``width`` (shaft half-width at the
-    head, in ``ts`` units), ``label``, ``legend_label``, ``opacity``, and
+    head, in ``ts`` units), ``label``, ``legend_label``, ``opacity``,
+    ``bend`` (bow each leg by this fraction of its length, positive to the
+    left of travel: a curved flow without hand-placed control points), and
     ``style``: ``"solid"`` for an assessed advance, ``"dashed"`` for a
     reported or projected one -- a distinction worth drawing, since the two
     are not the same claim and a reader of a plate like this will act on it.
@@ -6741,7 +6822,7 @@ def _arrows_layer(cfg: dict[str, Any], proj: Transformer, vp: dict[str, Any]) ->
         if len(line) < 2:
             continue
         plate = [vp["to_svg"](*proj.transform(float(lon), float(lat))) for lon, lat in line]
-        curve = _catmull_rom(plate)
+        curve = _catmull_rom(_bend_path(plate, float(arrow.get("bend", 0.0))))
         head_w = float(arrow.get("width", 6.0)) * ts
         shaft, head = _tapered_arrow_path(
             curve,
@@ -9826,7 +9907,7 @@ CONFIG_KEYS: frozenset[str] = frozenset({
     "legend_position", "marker_legend", "method", "padding", "projection",
     "cities", "region", "rivers", "simplify", "source", "subtitle", "title",
     "legend_title", "print_width", "small_multiples", "provenance", "values",
-    "change", "detail_area", "style", "north_arrow", "animate",
+    "change", "detail_area", "style", "north_arrow", "animate", "layers",
 })
 
 #: Keys the loaders set themselves; a caller never writes these.

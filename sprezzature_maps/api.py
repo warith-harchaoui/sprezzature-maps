@@ -441,6 +441,53 @@ def render_choropleth(body: ChoroplethRequest = ChoroplethRequest()) -> Response
     return _render_to_response(make_choropleth, kwargs, body.format, "choropleth")
 
 
+class ExportLayersRequest(BaseModel):
+    """Body for ``POST /v1/export-layers``."""
+
+    config: dict[str, Any] = Field(
+        description="A situation-plate config, the same shape the --config YAML uses.",
+    )
+
+
+@app.post(
+    "/v1/export-layers",
+    tags=["actions"],
+    operation_id="export_layers",
+    summary="Hand a plate's layers to a GIS as GeoJSON",
+)
+def export_layers_route(body: ExportLayersRequest) -> dict[str, Any]:
+    """Return a plate's thematic layers as one GeoJSON FeatureCollection.
+
+    This is the tool for "export to QGIS", "give me the layers", "reuse this
+    map's data", « exporter vers un SIG », « récupérer les couches ». Every
+    arrow, front, event, annotation, place and zone of control comes back in
+    longitude and latitude with all its properties, plus the plate's title,
+    date, source and method -- so the next plate, at another scale or in
+    another projection, starts from it instead of from nothing. A zone given
+    as a file path is not read: send it inline.
+
+    Parameters
+    ----------
+    body : ExportLayersRequest
+        The plate's config.
+
+    Returns
+    -------
+    dict
+        The FeatureCollection.
+    """
+    from sprezzature_maps.gis import export_layers
+
+    cfg = dict(body.config)
+    source = (cfg.get("areas_of_control") or {}).get("source")
+    if isinstance(source, str):
+        raise HTTPException(
+            status_code=422,
+            detail="areas_of_control.source is a file path; send the FeatureCollection inline",
+        )
+    return export_layers(cfg)
+
+
 @app.post(
     "/v1/situation-map",
     tags=["actions"],

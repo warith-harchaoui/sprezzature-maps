@@ -552,15 +552,97 @@ def situation_map_cmd(config_path: str | None, out: str | None, title: str | Non
     """Render a layered areas-of-control situation map."""
     kwargs: dict[str, Any] = {}
     if config_path:
-        import yaml
-
-        kwargs["config"] = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+        kwargs["config"] = _read_config(config_path)
     if title:
         kwargs["title"] = title
     if out:
         kwargs["out"] = out
     result = _render(make_situation_map, **kwargs)
     click.echo(result)
+
+
+def _read_config(config_path: str) -> dict[str, Any]:
+    """A plate config, anchored to its own directory.
+
+    Without ``_config_dir`` every relative path in the YAML -- a zone's
+    ``source:``, a ``layers:`` library -- resolved against wherever the
+    command was typed, so a config that rendered from its own folder lost its
+    layers from any other.
+    """
+    import yaml
+
+    cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8")) or {}
+    cfg["_config_dir"] = str(Path(config_path).resolve().parent)
+    return cfg
+
+
+@main.command("export")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="The plate's YAML config.",
+)
+@click.option(
+    "--out",
+    required=True,
+    help="Layer file to write: .geojson (QGIS, ArcGIS) or .kml (Google Earth).",
+)
+def export_cmd(config_path: str, out: str) -> None:
+    """Write a plate's layers as GeoJSON or KML, for a GIS or the next plate.
+
+    Every arrow, front, event, annotation, place and zone of control, in
+    longitude and latitude with all its properties, plus the plate's title,
+    date, source and method. Nothing depends on the projection or the frame,
+    so the next plate -- another scale, another projection -- starts from it.
+    """
+    from sprezzature_maps.gis import export_layers, to_kml
+
+    cfg = _read_config(config_path)
+    collection = export_layers(cfg, cfg["_config_dir"])
+    dest = Path(out)
+    if dest.suffix.lower() == ".kml":
+        dest.write_text(to_kml(collection), encoding="utf-8")
+    elif dest.suffix.lower() in (".geojson", ".json"):
+        dest.write_text(json.dumps(collection, ensure_ascii=False, indent=1), encoding="utf-8")
+    else:
+        raise click.ClickException("--out must end in .geojson, .json or .kml")
+    click.echo(f"{dest}  ({len(collection['features'])} features)")
+
+
+@main.command("import")
+@click.argument("layer_file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--out", default=None, help="Write the YAML blocks here. Omit for stdout.")
+def import_cmd(layer_file: str, out: str | None) -> None:
+    """Turn a GeoJSON or KML layer into the YAML blocks a plate reads.
+
+    A file exported by `make-map export` goes back to its own blocks; a layer
+    from elsewhere is placed by geometry (point -> events, line -> arrows,
+    polygon -> areas_of_control). To reuse a layer across plates without
+    copying it, name the file under `layers:` in each config instead.
+    """
+    import yaml
+
+    from sprezzature_maps.gis import import_layers, read_features
+
+    try:
+        blocks = import_layers(read_features(layer_file))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    areas = (blocks.get("areas_of_control") or {}).get("source", {}).get("features", [])
+    if any("confidence" not in (f.get("properties") or {}) for f in areas):
+        click.echo(
+            "note: some zones carry no `confidence`; the plate draws those as assessed, "
+            "the strongest claim. Add assessed / reported / claimed before publishing.",
+            err=True,
+        )
+    text = yaml.safe_dump(blocks, allow_unicode=True, sort_keys=False)
+    if out:
+        Path(out).write_text(text, encoding="utf-8")
+        click.echo(out)
+    else:
+        click.echo(text, nl=False)
 
 
 # The argparse front door spelled this sub-command `situation_map`, and

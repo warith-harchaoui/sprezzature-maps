@@ -83,6 +83,8 @@ repository; if it is a layout convention, that one.
 | `acled_events`, `ucdp_events` | Turn a conflict export into the marker layer of a situation map, keeping precision codes |
 | `classification_methods` | List the class-break methods a choropleth accepts: `quantile`, `equal`, `jenks`, `headtail` |
 | `make-map audit` | Say whether a finished plate states how it was made (eleven static rules) |
+| `export_layers` / `make-map export` / `export_layers` (MCP) | Hand a plate's layers to a GIS (geographic information system, such as QGIS or Google Earth) as GeoJSON or KML (Keyhole Markup Language, Google Earth's format), every property kept, so the next plate reuses them: « exporter vers QGIS », « récupérer les couches » |
+| `import_layers` / `make-map import` | Turn a GeoJSON or KML layer from a GIS into the blocks a plate reads; or name the file under `layers:` to reuse it across plates without copying |
 | `make-map improve` | Render a map, read it with a vision model, apply only the repairs that cannot change what it says |
 | `article_sidecar` | Give the page around a plate its alt text, caption, zones, markers and numbered callouts, read from the SVG |
 | `plate_provenance`, `replay_report` | Say whether a stamped plate was drawn from a given config and files |
@@ -109,6 +111,8 @@ The command-line interface (CLI) is the program typed in a terminal.
 | A region config to start one from | none | `make-map situation_new --country Sudan --out sudan.yaml` | none | none |
 | Density | `make_density` | `make-map density --points e.json --out where.svg` | `render_density` | `POST /v1/density` |
 | Audit a finished plate | `sprezzature_maps.audit.audit` (reads SVG text) | `make-map audit plate.svg` | none | none |
+| A plate's layers out to a GIS | `export_layers` | `make-map export --config r.yaml --out layers.geojson` (or `.kml`) | `export_layers` | `POST /v1/export-layers` |
+| A GIS layer into a plate | `import_layers`, `merge_layers` | `make-map import layers.kml`, or `layers: [layers.geojson]` in the config | none | none |
 | Render it, look at it, repair what is safe | none | `make-map improve --kind density --points e.json --out m.png` | none | none |
 | Which kinds exist | `kind_names` | `make-map list` | `list_kinds` | `GET /v1/kinds` |
 | Is the server up | none | none | `health` | `GET /health` |

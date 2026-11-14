@@ -4,6 +4,33 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **A plate's layers travel to a GIS and back.** `make-map export --config
+  plate.yaml --out layers.geojson` (or `.kml`) writes every arrow, front,
+  event, annotation, place and zone of control in longitude and latitude,
+  every property kept, with the plate's date, source and method; QGIS and
+  Google Earth open it as is. `make-map import` reads a GeoJSON or KML layer
+  back as the YAML blocks a plate uses, and a `layers:` list in the config
+  folds library files into the plate, so the next commission at another scale
+  or projection reuses the work instead of redrawing it. Library:
+  `export_layers`, `import_layers`, `merge_layers`; HTTP: `POST
+  /v1/export-layers`; MCP: `export_layers`. Asked for by a geopolitics
+  researcher: "never any loss".
+- **`bend` on an arrow** curves a flow in one word: each leg bows by that
+  fraction of its length, the given points stay on the path.
+
+### Fixed
+
+- **A curved arrow no longer wanders.** The uniform Catmull-Rom spline swung
+  past a turn between a short leg and a long one (22 units west of al-Tina,
+  into Chad, on an Amdjarass → El Fasher flow) and came back. Arrows now use a
+  monotone cubic per axis, which passes through every point and never leaves
+  a leg's own box.
+- **`make-map situation-map --config` anchors relative paths to the
+  config's folder.** It dropped the directory, so a zone's `source:` file
+  resolved against wherever the command was typed.
+
 ## [1.5.0] — 2026-11-13
 
 ### Fixed

@@ -235,6 +235,7 @@ def replay_report(svg: str, cfg: Any, files: Any = ()) -> dict[str, Any]:
 
 
 from sprezzature_maps._skill import skill_path  # noqa: E402
+from sprezzature_maps.gis import export_layers, import_layers, merge_layers  # noqa: E402
 
 __all__ = [
     "skill_path",
@@ -243,6 +244,9 @@ __all__ = [
     "acled_events",
     "article_sidecar",
     "classification_methods",
+    "export_layers",
+    "import_layers",
+    "merge_layers",
     "make_choropleth",
     "make_density",
     "make_situation_map",

@@ -465,6 +465,34 @@ vendored atlases and importing — paid once per process, so a server renders
 its second plate faster than its first — and the rest is real geometry.
 `basemap: {relief: false}` removes the terrain cost if you do not need it.
 
+### Never redraw what was already drawn
+
+A commission over the same ground comes back at another scale, in another
+projection, with other priorities. Everything a plate asserts is already in
+longitude and latitude in its YAML, so it does not have to be traced again:
+
+```bash
+make-map export --config darfur.yaml --out darfur-layers.geojson   # or .kml
+```
+
+writes every arrow, front, event, annotation, place and zone of control,
+with all its properties and the plate's date, source and method, as one
+GeoJSON file that QGIS opens as is (a `.kml` goes to Google Earth). The next
+plate names it and draws it, whatever its frame:
+
+```yaml
+region: {bbox: [17.0, 11.5, 28.5, 25.0]}   # wider, another scale
+layers: [darfur-layers.geojson]            # nothing retraced
+```
+
+A layer from a GIS (geographic information system, such as QGIS or ArcGIS)
+comes in the same way, or as YAML to edit with `make-map import layer.kml`:
+a point becomes an event, a line an arrow, a polygon a zone of control. The
+import says when a zone carries no `confidence`, which the plate would
+otherwise draw as assessed. A flow given by two points curves with one key,
+`bend: 0.1` (positive bows to the left of travel), and every arrow passes
+through its points without overshooting them.
+
 ### Proving which inputs drew a plate
 
 A plate already prints `method`, `source` and `as_of` — what it was drawn

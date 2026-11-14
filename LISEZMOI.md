@@ -492,6 +492,36 @@ deuxième planche plus vite que la première — et le reste est de la géométr
 réelle. `basemap: {relief: false}` supprime le coût du relief si vous n'en
 avez pas besoin.
 
+### Ne jamais retracer ce qui a déjà été tracé
+
+Une commande sur le même terrain revient à une autre échelle, dans une autre
+projection, avec d'autres priorités. Tout ce qu'une planche affirme est déjà
+en longitude et latitude dans son YAML ; rien n'a donc à être retracé :
+
+```bash
+make-map export --config darfour.yaml --out darfour-couches.geojson   # ou .kml
+```
+
+écrit chaque flèche, front, événement, annotation, lieu et zone de contrôle,
+avec toutes ses propriétés ainsi que la date, la source et la méthode de la
+planche, dans un seul fichier GeoJSON que QGIS ouvre tel quel (un `.kml` va
+dans Google Earth). La planche suivante le nomme et le dessine, quel que soit
+son cadrage :
+
+```yaml
+region: {bbox: [17.0, 11.5, 28.5, 25.0]}   # plus large, autre échelle
+layers: [darfour-couches.geojson]          # rien n'est retracé
+```
+
+Une couche venue d'un SIG (système d'information géographique, comme QGIS ou
+ArcGIS) entre de la même façon, ou en YAML à retoucher avec
+`make-map import couche.kml` : un point devient un événement, une ligne une
+flèche, un polygone une zone de contrôle. L'import signale une zone sans
+`confidence`, que la planche dessinerait sinon comme évaluée. Un flux donné
+par deux points se courbe avec une seule clé, `bend: 0.1` (positif : vers la
+gauche du sens de marche), et chaque flèche passe par ses points sans les
+dépasser.
+
 ### Prouver quelles entrées ont dessiné une planche
 
 Une planche imprime déjà `method`, `source` et `as_of` : ce dont elle a été
