@@ -68,7 +68,7 @@ approaches:
     axis_1: 3.2523
     axis_2: 3.6353
   role: best
-  color: '#FF3B30'
+  color: '#FF383C'
   attributes:
     Qualité de publication sans reprise: 5.0
     Fichier lisible sans moteur: 5.0
@@ -332,7 +332,7 @@ approaches:
     axis_1: -3.2523
     axis_2: -2.4044
   role: worst
-  color: '#A52A2A'
+  color: '#AC7F5E'
   attributes:
     Qualité de publication sans reprise: 3.0
     Fichier lisible sans moteur: 1.0
@@ -420,7 +420,7 @@ approaches:
     axis_1: 3.2523
     axis_2: -0.938
   role: right
-  color: '#007AFF'
+  color: '#0088FF'
   attributes:
     Qualité de publication sans reprise: 5.0
     Fichier lisible sans moteur: 3.0
@@ -574,7 +574,7 @@ approaches:
     axis_1: -0.3807
     axis_2: 3.6353
   role: top
-  color: '#AF52DE'
+  color: '#CB30E0'
   attributes:
     Qualité de publication sans reprise: 5.0
     Fichier lisible sans moteur: 5.0
