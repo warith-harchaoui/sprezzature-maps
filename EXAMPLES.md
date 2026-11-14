@@ -7,9 +7,8 @@ This file covers the project's surfaces: the Python library, the command
 line, the HTTP (Hypertext Transfer Protocol, the language a browser and a
 server speak) API (application programming interface, the routes another
 program calls), the MCP (Model Context Protocol, the protocol through which
-AI agents call tools in English) server, the agent skill, the gallery page,
-and the editor, the editor a person opens with `sprezzature-maps`
-(described in full in the README). Every plate is an SVG (Scalable Vector
+AI agents call tools in English) server, the agent skill and the gallery
+page. Every plate is an SVG (Scalable Vector
 Graphics, an image written as shapes in text, so it stays sharp at any
 zoom). The three example images below are not hand-picked
 screenshots; they are the actual output of `make_choropleth()`,
@@ -296,18 +295,6 @@ make-map skill                                    # the same command, as a sub-c
 from sprezzature_maps import skill_path
 skill_path()   # .../site-packages/sprezzature_maps/skill
 ```
-
-## the editor
-
-```bash
-sprezzature-maps                  # http://127.0.0.1:8010/
-sprezzature-maps --port 8020 --reload
-```
-
-`http://127.0.0.1:8010/?kind=density&example=1` opens the density tab with
-an example in the data box; `?kind=situation_map&country=Mali` writes a
-starter framed on Mali. After a render the plate downloads as SVG, PNG, PDF
-or JPG, and the audit sits beside it.
 
 ## Conflict event data: ACLED and UCDP GED
 

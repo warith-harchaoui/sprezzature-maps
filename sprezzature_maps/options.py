@@ -102,7 +102,7 @@ def _classification_choices() -> tuple[str, ...]:
     return classification_methods()
 
 
-#: Every option a loop or an editor panel may touch, in reporting order.
+#: Every option a loop or an editor may touch, in reporting order.
 #:
 #: Not every keyword the renderers accept: ``data``, ``points``, ``config`` and
 #: ``out`` are the call itself, ``mode`` and ``provenance`` are output-format
@@ -239,7 +239,7 @@ OPTIONS: tuple[MapOption, ...] = (
 #:
 #: Named rather than left out, so :data:`OPTIONS` plus this set can be required
 #: to account for every keyword the renderers take. A new keyword then has to
-#: be classified by somebody, instead of being invisible to the editor and to
+#: be classified by somebody, instead of being invisible to an editor and to
 #: every loop.
 NOT_AN_OPTION: dict[str, str] = {
     "data": "the call itself: the rows or the configuration being drawn",

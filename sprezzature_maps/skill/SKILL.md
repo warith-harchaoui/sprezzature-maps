@@ -323,11 +323,6 @@ One `pip install sprezzature-maps` installs all of them; there are no extras.
 | MCP (Model Context Protocol, the protocol through which AI agents call tools in English) | `sprezzature-maps-mcp`, endpoint `/mcp`. Six tools named by the routes' `operation_id`: `health`, `list_kinds`, `render_choropleth`, `render_situation_map`, `render_density`, `export_layers`. The audit, the starter and `improve` have no MCP tool: they work on files on the caller's disk |
 | Skill | this file, shipped in the package at `sprezzature_maps/skill/` (`sprezzature_maps.skill_path()` returns the folder). `sprezzature-maps-skill` (or `sprezzature-maps skill`) reports whether the installed copy is in step with the package; `--install` copies it into `~/.claude/skills`, `--agent opencode` into `~/.opencode/skills`; `--path` prints where pip put it |
 
-A person can also open the editor, `sprezzature-maps`
-(`http://127.0.0.1:8010/`), to paste data or start from an example or a
-country, set the options, render, download the plate as SVG, PNG, PDF or
-JPG, and read its audit, in a browser. It is not an agent call.
-
 All three render routes take every field as optional: send an empty body and
 you get the demo map.
 

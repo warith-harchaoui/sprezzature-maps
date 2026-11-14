@@ -48,7 +48,7 @@ en:
   outcome:
     label: A plate a reader can argue with, because it says what it did to the numbers
     note: "The rendering primitives are shared with sprezzature-figures rather than copied: the faces embedded in the file so it looks the same on a machine without them, and the choice between a self-contained SVG and one that links out."
-  footer: This used to be a set of chart kinds inside sprezzature-figures. It was split out because a map on a real projection is a different product from a chart, with its own release schedule and its own editor, the editor.
+  footer: This used to be a set of chart kinds inside sprezzature-figures. It was split out because a map on a real projection is a different product from a chart, with its own release schedule.
 
 fr:
   title: Comment fonctionne sprezzature-maps
@@ -90,4 +90,4 @@ fr:
   outcome:
     label: Une planche avec laquelle un lecteur peut discuter, parce qu'elle dit ce qu'elle a fait aux nombres
     note: "Les primitives de rendu sont partagées avec sprezzature-figures plutôt que recopiées : les fontes embarquées dans le fichier pour qu'il ait le même aspect sur une machine qui ne les a pas, et le choix entre un SVG autonome et un SVG qui pointe vers l'extérieur."
-  footer: Ceci était autrefois un jeu de types de figures dans sprezzature-figures. La séparation a eu lieu parce qu'une carte sur une vraie projection est un autre produit qu'un graphique, avec son propre rythme de versions et son propre éditeur, l'éditeur.
+  footer: Ceci était autrefois un jeu de types de figures dans sprezzature-figures. La séparation a eu lieu parce qu'une carte sur une vraie projection est un autre produit qu'un graphique, avec son propre rythme de versions.

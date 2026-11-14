@@ -45,7 +45,7 @@ pip install sprezzature-maps
 
 Une seule ligne, et elle installe tout : les trois générateurs, la
 bibliothèque, la ligne de commande, l'API (Application Programming Interface, la porte où frappent les autres programmes : un script envoie ses chiffres et reçoit une carte) servie en HTTP (Hypertext Transfer Protocol, la langue derrière chaque adresse web : celle que parle votre navigateur pour aller chercher une page), le serveur
-MCP (Model Context Protocol, le protocole par lequel les agents IA appellent des outils en français), le skill d'agent et l'éditeur.
+MCP (Model Context Protocol, le protocole par lequel les agents IA appellent des outils en français) et le skill d'agent.
 Il n'y a pas d'extra de fonctionnalité. `[dev]` porte l'outillage de test
 (pytest, ruff, mypy et le reste) et n'ajoute aucune fonctionnalité. Python 3.10
 à 3.13.
@@ -149,7 +149,7 @@ n'expose pas, comme `breaks`, `cities`, `rivers`, `width` et `height` pour un
 choroplèthe, ou `bbox`, `width` et `caption` pour une carte de densité. Sans
 `bbox`, la bibliothèque et la route HTTP découpent sur la fenêtre de la
 démonstration, les États-Unis contigus, et écartent ce qui tombe dehors ;
-`make-map density --points` et l'éditeur cadrent sur les points reçus. Le titre
+`make-map density --points` cadre sur les points reçus. Le titre
 sur la foudre et la légende « synthétique » appartiennent à la démonstration :
 vos propres points n'y ont pas droit, donc une planche ne dit d'où viennent ses
 événements que si vous passez `caption`, et `make-map audit` le signale sinon.
@@ -217,27 +217,6 @@ place est mise de côté dans `~/.claude/skills-superseded/` (ou
 `~/.opencode/skills-superseded/`), pas effacée. `-V` (ou `--version`)
 affiche la version. Le skill oriente un agent vers les appels ci-dessus, et
 [`TRIGGERS.md`](TRIGGERS.md) porte les règles de routage qu'il suit.
-
-### Et l'éditeur, pour une personne
-
-`sprezzature-maps` ouvre un éditeur sur `http://127.0.0.1:8010/`
-(`--host`, `--port`, `--reload`), un onglet par type de carte. On y colle des
-lignes, une configuration ou des points, ou l'on presse « Fill in an
-example », ou encore, pour une planche de situation, « Start from a
-country », qui écrit la même configuration de départ que `situation-new`. On
-nomme les colonnes de l'identifiant et de la valeur (le `--map` de la ligne
-de commande), on tape un titre et, là où le moteur de rendu les prend, un
-sous-titre et une ligne de source. On règle les options, qui viennent du même
-registre que celui d'`improve` et se rangent en « Look » (ce qui ne change
-que le dessin) et « Meaning » (ce qui peut changer ce que dit la carte). On
-rend : une ligne d'attente compte les secondes, parce qu'une planche de
-situation peut prendre une minute. On télécharge la planche en SVG, PNG, PDF
-ou JPG, convertie depuis le fichier rendu plutôt que redessinée. On lit
-l'audit à côté, sous « Before you publish ». Et, si un modèle de vision est
-joignable, on lance la même boucle de relecture et de réparation
-qu'`improve`. C'est une page qu'une personne ouvre plutôt qu'une surface
-qu'un programme appelle. La raison de son existence à part de l'éditeur
-de figures est expliquée [plus bas](#pourquoi-un-dépôt-séparé-plutôt-quun-type-de-graphique-dans-sprezzature-figures).
 
 ## Recettes
 
@@ -578,35 +557,18 @@ figures en résolution d'impression, compilé avec `xelatex`/`biber`
 
 `choropleth` et `situation_map` vivaient autrefois dans le catalogue de
 `sprezzature-figures` (126 types à l'époque ; `density` est né ici, après
-la scission). Les en extraire a été une
-décision de produit délibérée : the editor, l'éditeur de
-graphiques conversationnel livré avec `sprezzature-figures`, ne gagnera
-pas le support des cartes. Les cartes ont donc le leur, séparé, et il est
-ici :
-
-```sh
-sprezzature-maps          # http://127.0.0.1:8010/
-```
-
-Ce qui sépare les deux, c'est la donnée et non l'image de marque. un éditeur de
-graphiques peut supposer un tableau et demander quelle colonne joue quel rôle.
+la scission). Les en extraire a été une décision de produit délibérée, et ce
+qui sépare les deux, c'est la donnée et non l'image de marque. Un graphique
+peut supposer un tableau et demander quelle colonne joue quel rôle.
 Ces trois types prennent trois choses différentes — des lignes par territoire
 pour un choroplèthe, une *configuration* de région sans aucun tableau dedans
 pour une carte de situation, et une liste nue de positions `[lon, lat]` pour
 une carte de densité. Apprendre les trois à un seul panneau d'entrée aurait
-rendu l'éditeur des graphiques moins bon en graphiques pour le rendre médiocre
+rendu un outil de graphiques moins bon en graphiques pour le rendre médiocre
 en cartes.
 
-Il est en FastAPI et HTML rendu côté serveur, et non en NiceGUI comme celui de
-figures. Mesuré avant de décider : NiceGUI coûte **20 paquets** que rien
-d'autre dans ce graphe n'apporte, soit une pile websocket pour la vue d'une
-seule surface, alors que FastAPI et uvicorn sont déjà en dépendances de base
-ici. Et les chiffres de l'éditeur de figures disent que la vue est la moitié bon
-marché à choisir : 117 de ses 5397 lignes touchent NiceGUI, et ses
-sous-paquets `ingest`, `recommendation`, `export` et `ralph` le touchent dans
-**0 fichier sur 34**. C'est cette séparation qu'il faut copier, donc tout ce
-qui *décide* quelque chose dans `sprezzature_maps.editor` est importable et
-testable sans serveur.
+Tout ce qui *décide* quelque chose ici est importable et testable sans
+serveur.
 
 ## État du projet
 

@@ -87,10 +87,10 @@ dependencies = [
     "fastapi-mcp>=0.3",
     "mcp<2.0",
 
-    # the editor's model layer, `sprezzature_maps/editor/assistant/`. It is the
+    # The model layer behind `make-map improve`, `sprezzature_maps/assistant/`. It is the
     # one path to a model: nothing here names a backend, a model tag or an
     # Ollama port, and `client.py` imports this package *lazily*, inside the
-    # call, so the editor's editor and every test of the assistant work with it
+    # call, so the command line and every test of the assistant work with it
     # absent.
     #
     # The floor matches `sprezzature-figures`, which carries the same layer —
@@ -144,11 +144,6 @@ sprezzature-maps-skill = "sprezzature_maps._skill:main"
 make-map = "sprezzature_maps.cli:main"
 sprezzature-maps = "sprezzature_maps.cli:main"
 sprezzature-maps-mcp = "sprezzature_maps.mcp:main"
-# the editor: the editor, on a local address. Separate from
-# `sprezzature-maps` because it is a thing you open rather than a
-# sub-command you script, and from `-mcp` because that one is a server
-# for an agent and this one is a page for a person.
-sprezzature-maps = "sprezzature_maps.editor.cli:main"
 
 [project.urls]
 Homepage = "https://sprezzature.ai/"
@@ -157,9 +152,8 @@ Repository = "https://github.com/warith-harchaoui/sprezzature-maps"
 [tool.setuptools]
 packages = [
     "sprezzature_maps",
-    "sprezzature_maps.editor",
-    "sprezzature_maps.editor.assistant",
-    "sprezzature_maps.editor.ralph",
+    "sprezzature_maps.assistant",
+    "sprezzature_maps.ralph",
     "sprezzature_maps_scripts",
     "sprezzature_maps_geo",
 ]

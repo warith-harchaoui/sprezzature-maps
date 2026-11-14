@@ -67,7 +67,7 @@ def _parse_mapping(pairs: tuple[str, ...]) -> dict[str, str]:
     """``--map role=column`` into a dict, in Click's vocabulary.
 
     The parsing moved to :func:`sprezzature_maps.data.parse_mapping` so the
-    Editor reads files the same way this does; what stays here is the
+    library reads files the same way this does; what stays here is the
     translation. A library function raises :class:`ValueError`; a command line
     prints ``Error: ...`` and exits 2, and the reader of a terminal should not
     be shown a traceback for a mistyped flag.
@@ -316,10 +316,10 @@ def density_cmd(
     """Accumulation map: point events binned to a luminous field, no coastline."""
     kwargs: dict[str, Any] = {}
     if points_path:
-        from sprezzature_maps.editor.render import infer_bbox
+        from sprezzature_maps.render import infer_bbox
 
         kwargs["points"] = [tuple(point) for point in json.loads(Path(points_path).read_text())]
-        # Framed on the events, as the editor does: this command has no
+        # Framed on the events, as `render` does: this command has no
         # --bbox, and the generator's own default window is the contiguous
         # United States, so events anywhere else ended in "no point fell
         # inside the bbox" and events partly outside were cropped unsaid.
@@ -400,9 +400,9 @@ def improve_cmd(
 
     Needs a model that `best-engine-ai-helper` can reach.
     """
+    from sprezzature_maps.assistant import default_client
     from sprezzature_maps.data import read_density_points, read_situation_config
-    from sprezzature_maps.editor.assistant import default_client
-    from sprezzature_maps.editor.ralph import improve
+    from sprezzature_maps.ralph import improve
 
     kind = kind_of(kind_name)
     #: shape -> (the option the user passes, what they passed, how to read it)

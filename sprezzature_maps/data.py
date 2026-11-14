@@ -22,7 +22,7 @@ Why this module exists rather than a second reader
 --------------------------------------------------
 ``read_choropleth_rows`` and :func:`parse_mapping` were ``cli.py``'s private
 ``_load_choropleth_rows`` and ``_parse_mapping``. Moved, not copied: the
-Editor needs exactly the same reading, and a second implementation of "what
+library needs exactly the same reading, and a second implementation of "what
 counts as a usable choropleth file" is two answers to one question — the day
 one gains a format or an error message, the other quietly stays behind.
 

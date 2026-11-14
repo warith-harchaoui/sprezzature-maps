@@ -43,7 +43,7 @@ pip install sprezzature-maps
 
 One line, and it is everything: the three generators, the library, the
 command line, the API (application programming interface, the door other programs knock on: a script sends its numbers and gets a map back) served over HTTP (Hypertext Transfer Protocol, the language behind every web address: what your browser speaks to fetch a page), the
-MCP (Model Context Protocol, the protocol through which AI agents call tools in English) server, the agent skill and the editor. There
+MCP (Model Context Protocol, the protocol through which AI agents call tools in English) server and the agent skill. There
 are no feature extras. `[dev]` holds the test toolchain (pytest, ruff, mypy and
 the rest) and adds no feature. Python 3.10 to 3.13.
 
@@ -145,7 +145,7 @@ expose, such as `breaks`, `cities`, `rivers`, `width` and `height` for a
 choropleth, or `bbox`, `width` and `caption` for a density map. Without a
 `bbox`, the library and the HTTP route bin over the demo's window, the
 contiguous United States, and drop what falls outside it; `make-map density
---points` and the editor frame the points they are given. The lightning title
+--points` frames the points it is given. The lightning title
 and the "synthetic" caption belong to the demo: your own points get neither,
 so a plate from them says where its events came from only if you pass
 `caption`, and `make-map audit` reports it otherwise.
@@ -213,24 +213,6 @@ deleted. `-V` (or `--version`) prints the version. The
 skill routes an agent to the calls above, and
 [`TRIGGERS.md`](https://github.com/warith-harchaoui/sprezzature-maps/blob/main/TRIGGERS.md)
 holds the routing rules it follows.
-
-### And the editor, for a person
-
-`sprezzature-maps` opens an editor on `http://127.0.0.1:8010/`
-(`--host`, `--port`, `--reload`), one tab per map kind. Paste rows, a config
-or points, or press "Fill in an example", or, for a situation plate, "Start
-from a country", which writes the same starter as `situation-new`. Name the
-id and value columns of your rows (the `--map` of the command line), type a
-title, and, where the renderer takes them, a subtitle and a source line. Set
-the options, which come from the same registry as `improve` and are split
-into "Look" (what only changes the drawing) and "Meaning" (what can change
-what the map says). Render: a busy line counts the seconds, because a
-situation plate can take a minute. Download the plate as SVG, PNG, PDF or
-JPG, converted from the rendered file rather than drawn again. Read the
-audit beside it, under "Before you publish". And, if a vision model is
-reachable, run the same look-and-repair loop as `improve`. It is a page a
-person opens rather than a surface a program calls. Why it exists apart
-from the editor is explained [below](#why-a-separate-repo-not-a-chart-type-in-sprezzature-figures).
 
 ## Recipes
 
@@ -547,32 +529,17 @@ Unicode-aware typesetter and its bibliography tool) into
 `choropleth` and `situation_map` used to sit inside `sprezzature-figures`'
 catalogue, 126 chart kinds at the time (`density` was born here, after the
 split).
-Splitting them out was a deliberate product decision:
-the editor, the conversational chart editor that ships with
-`sprezzature-figures`, will not grow map support. Maps got their own,
-separate Editor instead, and it ships here:
-
-```sh
-sprezzature-maps          # http://127.0.0.1:8010/
-```
-
-The reason the two are separate is the data, not the branding. A chart Editor
-can assume a table and ask which column plays which role. These three kinds
+Splitting them out was a deliberate product decision, and the reason is the
+data, not the branding. A chart can assume a table and ask which column plays
+which role. These three kinds
 take three different things — rows per territory for a choropleth, a region
 *configuration* with no table in it for a situation map, and a bare list of
 `[lon, lat]` positions for a density map — and teaching one input panel all
-three would have made the chart Editor worse at charts to make it mediocre at
+three would have made a chart tool worse at charts to make it mediocre at
 maps.
 
-It is FastAPI and server-rendered HTML rather than NiceGUI, which the figures
-Editor uses. Measured before deciding: NiceGUI costs **20 packages** nothing
-else in this graph brings, a websocket stack for one surface's view, while
-FastAPI and uvicorn are already base dependencies here. And the figures
-editor's own numbers say the view is the cheap half to choose — 117 of its
-5397 lines touch NiceGUI, and its ingest, recommendation, export and Ralph
-subpackages touch it in **0 of 34 files**. That separation is what is worth
-copying, so everything in `sprezzature_maps.editor` that *decides* anything
-is importable and testable without a server.
+Everything here that *decides* anything is importable and testable without a
+server.
 
 ## Status
 

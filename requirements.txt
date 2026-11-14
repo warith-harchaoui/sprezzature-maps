@@ -4,6 +4,6 @@
 # a dependency's version bound changes.
 #
 # There are no feature extras since 2026-11-01: the Click command line, the
-# FastAPI HTTP surface (with the gallery page), the MCP server and the editor
-# are all in the base install.
+# FastAPI HTTP surface (with the gallery page) and the MCP server are all in
+# the base install.
 -e .

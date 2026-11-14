@@ -55,7 +55,7 @@ class MapKind:
         The kind's identifier, as the library and ``list`` spell it
         (``snake_case``, e.g. ``situation_map``).
     label : str
-        Human title, for a gallery tile or an editor menu.
+        Human title, for a gallery tile or a menu.
     description : str
         One paragraph saying what the kind is *for*, in the gallery's voice.
         Moved here from ``gui.py``'s ``_TILES`` rather than rewritten: the
@@ -74,8 +74,8 @@ class MapKind:
         to carry: one of ``"rows"``, ``"config"`` or ``"points"``. A
         choropleth takes per-territory rows bound through roles, a situation
         map takes a region configuration with no table in it, and a density
-        map takes a bare list of positions. Added when the editor needed to
-        choose an input panel — one list, so the editor does not become the
+        map takes a bare list of positions. Added when an editor needed to
+        choose an input panel — one list, so an editor does not become the
         sixth place that knows which kind eats what.
     data_option : str
         The command-line option that supplies it, for an error message or a

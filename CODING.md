@@ -4,8 +4,7 @@ Adapted from [sprezzature-figures](https://github.com/warith-harchaoui/sprezzatu
 own `CODING.md` (the repo `sprezzature-maps` was split out of). The two files
 are kept in sync in spirit, by hand, not by an automated check, since the two
 repos have since diverged on which surfaces they expose (this repository has
-its own map Editor rather than the figures one, and no dataviz dependency
-tier).
+no dataviz dependency tier).
 
 ## Language
 
@@ -166,7 +165,7 @@ Declare every runtime dependency in `pyproject.toml`, under
 HTTP (Hypertext Transfer Protocol) API (application programming interface,
 the routes another program calls), the MCP (Model Context Protocol, the
 protocol through which AI agents call tools in English) server, the command
-line, the editor and the agent skill are all in the base install.
+line and the agent skill are all in the base install.
 `[project.optional-dependencies]` holds only `dev`, the test and lint
 toolchain. Use a `>=` lower bound rather than an exact pin; a ceiling is
 allowed when it is argued in a comment beside it (`mcp<2.0`, `mypy<3`).
@@ -233,20 +232,9 @@ Where they part, and why — each stated in the code that parts:
 - **Schematic place-shaped charts stay there.** Hex maps, dot density, spike
   maps and binned grids plot points or cells; this repo draws real coastlines
   under a real projection. `TRIGGERS.md` routes on exactly that question.
-- **the editor here is its own, not the figures one extended.** That was the
-  standing decision — "maps get their own when there is one" — and since
-  2026-11-01 there is one: `sprezzature_maps.editor`, opened by
-  `sprezzature-maps`. The reason it is separate is the data: a chart
-  Editor can assume a table and ask which column plays which role, and these
-  three kinds take rows, a configuration and a list of positions.
-
-  It is FastAPI and server-rendered HTML, not NiceGUI, and that was measured
-  rather than preferred: NiceGUI costs 20 packages nothing else here brings,
-  FastAPI and uvicorn are already base dependencies, and `gui.py` already
-  serves hand-written markup for the reason it states. What *is* copied from
-  the editor is its accidental best property — 117 of its 5397 lines
-  touch NiceGUI, and its engine subpackages touch it in 0 of 34 files — so
-  everything here that decides anything is importable without a server.
+- **Everything that decides anything is importable without a server.** The
+  engine, the assistant and the improve loop import no web framework, so any
+  interface can sit on top of them.
 
 A pattern proven on one side is the default for the other. That includes the
 unglamorous ones: `TRIGGERS.md` is machine-read on both sides, and

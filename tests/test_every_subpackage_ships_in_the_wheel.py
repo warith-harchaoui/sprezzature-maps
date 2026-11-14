@@ -2,9 +2,8 @@
 Every sub-package of ``sprezzature_maps`` is listed for the wheel.
 
 ``[tool.setuptools] packages`` is an explicit list, and setuptools does not
-follow it downwards: ``sprezzature_maps.editor`` and its two children sat
-outside it, so the 1.1.0 wheel installed a ``sprezzature-maps`` command
-whose first import failed. Every test passed, because a checkout imports the
+follow it downwards: a subpackage left out of it is missing from the wheel,
+and the 1.1.0 wheel installed a command whose first import failed. Every test passed, because a checkout imports the
 folder, not the wheel; only the release script's fresh venv saw it.
 
 The check walks the tree for ``__init__.py`` files and asks that each dotted

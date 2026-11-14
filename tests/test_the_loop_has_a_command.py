@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from sprezzature_maps.assistant import FakeLLMClient, MapIssue, MapReading
 from sprezzature_maps.cli import main
-from sprezzature_maps.editor.assistant import FakeLLMClient, MapIssue, MapReading
 
 POINTS = [[2.35, 48.85], [13.4, 52.52], [-0.12, 51.5]]
 
@@ -48,7 +48,7 @@ def test_the_command_exists_and_is_not_only_a_function() -> None:
 
 def test_it_renders_and_reports(points_file: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "sprezzature_maps.editor.assistant.default_client",
+        "sprezzature_maps.assistant.default_client",
         _fake([MapReading(kind_seen="density", legend_present=True, legend_readable=True)]),
     )
     out = tmp_path / "m.png"
@@ -65,7 +65,7 @@ def test_it_renders_and_reports(points_file: Path, tmp_path: Path, monkeypatch) 
 
 def test_a_safe_repair_is_reported_as_applied(points_file: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "sprezzature_maps.editor.assistant.default_client",
+        "sprezzature_maps.assistant.default_client",
         _fake([
             MapReading(kind_seen="density", legend_present=True, legend_readable=False),
             MapReading(kind_seen="density", legend_present=True, legend_readable=True),
@@ -91,7 +91,7 @@ def test_an_unsafe_repair_is_printed_for_a_person(tmp_path: Path, monkeypatch) -
         issues=[MapIssue(severity="blocking", what="two bands are the same colour")],
     )
     monkeypatch.setattr(
-        "sprezzature_maps.editor.assistant.default_client", _fake([stuck, stuck]),
+        "sprezzature_maps.assistant.default_client", _fake([stuck, stuck]),
     )
     result = CliRunner().invoke(
         main,
@@ -124,7 +124,7 @@ def test_no_data_at_all_says_which_flag(tmp_path: Path) -> None:
 
 def test_a_non_png_destination_is_refused_with_a_reason(points_file: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "sprezzature_maps.editor.assistant.default_client",
+        "sprezzature_maps.assistant.default_client",
         _fake([MapReading(legend_present=True, legend_readable=True)]),
     )
     result = CliRunner().invoke(

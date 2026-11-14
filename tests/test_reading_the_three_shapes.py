@@ -5,7 +5,7 @@ Why this file exists
 --------------------
 ``sprezzature_maps.data`` holds what used to be ``cli.py``'s private
 ``_parse_mapping`` and ``_load_choropleth_rows``, plus readers for the other
-two shapes. Moved rather than copied: the editor needs exactly the same
+two shapes. Moved rather than copied: the library needs exactly the same
 reading, and a second implementation of "what counts as a usable choropleth
 file" is two answers to one question.
 

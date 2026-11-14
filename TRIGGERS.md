@@ -90,7 +90,6 @@ repository; if it is a layout convention, that one.
 | `plate_provenance`, `replay_report` | Say whether a stamped plate was drawn from a given config and files |
 | `list_kinds` / `make-map list` | Name the three kinds this package draws |
 | `health` | Check that the HTTP (Hypertext Transfer Protocol, the language a browser and a server speak) or MCP server is up. Call it only to diagnose a connection |
-| `sprezzature-maps` | A person wants to paste data or start from an example or a country, set options, render, download the plate and read its audit, in a browser. Not an agent call |
 | `sprezzature-maps-skill` / `make-map skill` | Say whether the skill an agent reads is in step with the installed package; `--install` copies it into `~/.claude/skills` (`--agent opencode` for `~/.opencode/skills`). Not a map request |
 
 ---

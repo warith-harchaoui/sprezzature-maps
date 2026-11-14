@@ -20,6 +20,15 @@ All notable changes to sprezzature-maps are documented here.
 - **`bend` on an arrow** curves a flow in one word: each leg bows by that
   fraction of its length, the given points stay on the path.
 
+### Changed
+
+- **Colours follow [deraison.ai/colors](https://deraison.ai/colors/)**, the
+  source of truth for every colour in the suite: the blue of the
+  sequential ramps is `#0088FF` (Apple's system blue of June 9, 2025, was
+  `#007AFF`), and the dot-map categories take the academic palette's
+  vermilion `#E73121` (the Colour Universal Design (CUD) one, was Okabe and
+  Ito's `#D55E00`); the order searched for separability is unchanged.
+
 ### Fixed
 
 - **A curved arrow no longer wanders.** The uniform Catmull-Rom spline swung
@@ -94,21 +103,6 @@ All notable changes to sprezzature-maps are documented here.
 
 ### Changed
 
-- **the editor became a tool for making a map, not only for rendering one.**
-  Judged by driving it in a browser. Fixed: every kind tab answered 405
-  after the first render (the links resolved against `/render`); the title
-  and code were set in Times and Courier because `--serif` and `--mono` were
-  never defined (now in the shared theme). Added: an options panel generated
-  from `options.py`, split into "Look" and "Meaning"; id and value column
-  fields (`--map` on the command line); subtitle and source line where the
-  renderer takes them; "Fill in an example" and, for a situation plate,
-  "Start from a country" (the `situation-new` starter, framed on the
-  country; both are addressable as `?example=1` and `?country=`); downloads
-  in SVG (Scalable Vector Graphics), PNG, PDF and JPG (`/download/<token>.<format>`) converted from
-  the plate on disk; the audit beside every map, under "Before you
-  publish", plus a note when your own rows carry the demo's title; a busy
-  line with elapsed seconds during a render that can take a minute; the
-  frame fitted to the plate's ratio.
 - **The website shows situation plates only.** `scripts/publish_gallery.py`
   no longer publishes the choropleths (they left sprezzature.ai on
   2026-11-11); the `choropleth` generator stays in the package and on every
@@ -118,7 +112,7 @@ All notable changes to sprezzature-maps are documented here.
 - **The documentation says what the code does today.** The skill is
   described as shipped in the package, not in the hub; the command-line
   table gains `skill`, the library table `skill_path()`, the route table
-  `/docs-redirect`; the editor is described as it now is; the worked plates
+  `/docs-redirect`; the worked plates
   are counted again (twenty-one, twelve thematic, not seventeen, and the
   French text no longer says six thematic where the English said eight);
   the status no longer claims the CI (continuous integration) runs type
@@ -291,8 +285,7 @@ All notable changes to sprezzature-maps are documented here.
 - **`make-map density --points` works outside the United States.** The
   command has no `--bbox` and binned over the demo's window, so events
   elsewhere ended in `no point fell inside the bbox` and events partly
-  outside were cropped without a word. It now frames the points, as the
-  Editor already did. The library and the HTTP route keep their default and
+  outside were cropped without a word. It now frames the points. The library and the HTTP route keep their default and
   can state a `bbox`.
 - `make-map choropleth`, `density` and `situation-map` report a refused input
   as `Error: ...` and exit 1, instead of a traceback of the drawing code.
@@ -375,8 +368,8 @@ All notable changes to sprezzature-maps are documented here.
   lane also said the audit checks the scale bar and the data credits; no rule
   does. It now names what the rules check (the method and its breaks, the
   missing values, the date, how sure a control map is), says the two-unit scale
-  bar belongs to a regional plate, and its footer names the editor instead of
-  an editor "to come". Spec redrawn; README and LISEZMOI alt text follow it.
+  bar belongs to a regional plate, and its footer no longer promises an
+  editor "to come". Spec redrawn; README and LISEZMOI alt text follow it.
 - README and LISEZMOI list `.html` among the `--out` formats, and the CI line
   names the type checks and the Python 3.10 install job. The `--out` help of
   `choropleth`, `density` and `situation-map` lists every format the writer
@@ -394,10 +387,10 @@ All notable changes to sprezzature-maps are documented here.
 
 ## [1.1.0] — 2026-11-04: click everywhere, and the documentation says what the code does
 
-**The wheel ships the editor.** `sprezzature_maps.editor` and its two
-sub-packages were missing from the explicit `[tool.setuptools] packages` list,
-so the installed `sprezzature-maps` failed on its first import. Only the
-release's fresh venv saw it; a test now asks that every sub-package be listed.
+**The wheel ships every sub-package.** Three were missing from the explicit
+`[tool.setuptools] packages` list, so an installed command failed on its first
+import. Only the release's fresh venv saw it; a test now asks that every
+sub-package be listed.
 
 ### Changed
 
@@ -442,20 +435,20 @@ command, flag, route and count checked against the source or `--help`.
 - **A "Five ways in" section** in the README and LISEZMOI: the library's
   exports, every sub-command with its options (`density`, `improve`, `list`
   and `situation-new` were missing or only mentioned in passing), every HTTP
-  route with its `operation_id`, Docker and compose, the MCP server, the
-  skill (shipped from the hub, not from here) and the editor.
+  route with its `operation_id`, Docker and compose, the MCP server
+  and the skill (shipped from the hub, not from here).
 - **LISEZMOI caught up with README.** It had no French for the conflict
   loaders, the small multiples or the provenance stamp, and its install
   block still showed two `pip install` lines for what is one.
 - **`TRIGGERS.md` routes on the three data shapes** (`rows`, `config`,
   `points`, the registry's own `data_shape`) and a finished plate, with
   phrasings as confirmation only. It now lists every tool, including
-  `health`, `classification_methods`, `article_sidecar` and the editor, and
+  `health`, `classification_methods` and `article_sidecar`, and
   its surface table has a library and an HTTP column.
 - **`CONTRIBUTING.md`** said neither package was on PyPI and that `slow`
   tests were excluded by default. Both are on PyPI, and `addopts` deselects
   nothing. Its doctest and lint commands now match CI, mypy included.
-- **`CODING.md`** said there was no Editor here, and described
+- **`CODING.md`** described
   `requirements.txt` as choosing extras that no longer exist.
 - **`LANDSCAPE.md` / `PAYSAGE.md`** said choropleth paths carry no `data-*`
   attributes. They carry `data-name`, `data-id` and `data-value`.
@@ -467,54 +460,11 @@ command, flag, route and count checked against the source or `--help`.
   `sprezzature-maps-audit` command that does not exist; the
   `render_choropleth` description, which MCP hosts read, gave it a Lambert
   conformal conic projection instead of Equal Earth; `mcp.py` listed three
-  tools out of five and described the server without density; the editor's
-  module docstring counted three routes out of five.
-
-### Added — the editor opens: `sprezzature-maps`
-
-Three routes and a page, and the promise `CODING.md`, `README.md` and
-`LISEZMOI.md` had all been carrying — "maps get their own when there is one" —
-is kept. All three said there was no editor here; they say what there is now.
-
-`GET /` is the editor for one kind, chosen by `?kind=`, so a kind is an
-address that can be shared, bookmarked and tested with one request. An unknown
-`?kind=` is a 404 naming the kinds that exist: falling back to the first one
-would be friendlier and wrong, because a reader with a stale bookmark would
-spend a while wondering why the page looks unfamiliar.
-
-**The pasted text is read by the command line's own readers.** The textarea's
-content is written to a temporary file with the right suffix and handed to
-`sprezzature_maps.data` — the very functions `--data`, `--config` and
-`--points` call. It costs one write per render, which is nothing beside
-projecting a coastline, and it buys the property that matters: the editor
-cannot come to a different conclusion than the command line about the same
-bytes. It also inherits every message already written for a terminal, and a
-test asserts one of them arrives unchanged in a web page — "Row 0: missing
-column 'id' or 'value' (available: …). Use --map id=<col>" — which is the
-point rather than a coincidence.
-
-**A refusal returns 200 with the same page**, carrying the message and
-everything that was typed. A 4xx with a bare detail would be correct for an
-API and wrong here: the reader is mid-edit, and losing the paste in order to
-see the error is a worse outcome than the error. Two tests assert exactly
-that, because it is the kind of behaviour a later refactor tidies into a
-proper status code.
-
-The rendered map is served from a route rather than inlined — a situation
-plate is 2.2 MB of SVG, and inlining that into every re-render makes the page
-heavier than the map. Tokens are random and looked up in a dict, so a crafted
-token cannot name a path; traversal is the obvious thing to try on a route
-ending `.svg`, and a test tries it.
-
-No JavaScript, because the page does not need any: choosing a kind is a link,
-supplying data is a form, and the input panel differs per kind from
-`data_shape` — so the branch happens where the knowledge is instead of being
-shipped to the browser to happen again.
+  tools out of five and described the server without density.
 
 ### Changed — one palette, two pages
 
-`gui.THEME_CSS` and `gui.font_face_css` are extracted and public. the editor
-needed the same tokens and the same three Roboto families, and two pages with
+`gui.THEME_CSS` and `gui.font_face_css` are extracted and public: two pages with
 two hand-kept copies of one palette is the same defect as the five hand-kept
 lists of three map kinds `kinds.py` exists to end, in a different register.
 
@@ -529,41 +479,22 @@ that repeat it and say nothing: "as an HTTP API (`sprezzature-maps`)", "under
 `sprezzature-maps`", `## HTTP API (`sprezzature-maps`)`, `## MCP
 (`sprezzature-maps`)`. One body still read "this extra exposes the same HTTP
 routes". All five are rewritten to name the command or the server that
-actually answers, and the surfaces paragraph counts five ways instead of four
-now that the editor is one of them.
+actually answers, and the surfaces paragraph counts the ways in again.
 
-### Added — `sprezzature_maps.editor`, and its rendering core
+### Added — `sprezzature_maps.render`, one call for any kind
 
-The separate Editor `CODING.md` and `LISEZMOI.md` both promised before a line
-of it existed: "maps get their own when there is one". This is the first part
-of that one — the engine, interface-free.
-
-`editor.render.render(kind, payload, out=...)` renders **any** kind through
-one call, and contains no `if kind ==`. The three generators each named their
-data parameter for their own shape — `make_choropleth(data=...)`,
+`render(kind, payload, out=...)` renders **any** kind through one call, and
+contains no `if kind ==`. The three generators each named their data parameter
+for their own shape — `make_choropleth(data=...)`,
 `make_situation_map(config=...)`, `make_density(points=...)` — which is
 reasonable in isolation and leaves every caller dispatching on the kind. So
 `MapKind` gains `payload_keyword`, and the dispatch is a table lookup. A guard
 introspects the **real signature** of each loaded generator, so a renamed
 parameter fails a test rather than a render; read from the signature and not
 the docstring, because a docstring would keep saying the old name for as long
-as nobody re-read it.
+as nobody re-read it. Nothing in it imports a web framework.
 
-**No NiceGUI**, and the measurement that decided it rather than a preference.
-NiceGUI costs **20 packages** nothing else in the graph brings —
-`python-socketio`, `python-engineio`, `aiohttp`, `bidict`, `wsproto`,
-`simple-websocket`, `orjson`, `markdown2`, `docutils`, `tinycss2` and the rest
-— a websocket stack for one surface's view. FastAPI and uvicorn are already
-base dependencies here, and `gui.py` already serves hand-written HTML for the
-reason it states in its own docstring. And `sprezzature-figures`' Editor says
-the view is the cheap half to choose: 117 of its 5397 lines touch NiceGUI
-(**2.2%**), and its `assistant`, `export`, `ingest`, `ralph` and
-`recommendation` subpackages are at **0 of 34 files**. The engine was already
-portable. That separation is the pattern worth copying, not the toolkit — so
-everything here that *decides* anything is importable and testable without a
-server.
-
-### Added — the editor frames what it is given
+### Added — `render` frames what it is given
 
 `make_density`'s own default bounding box is the continental United States,
 which is right for a generator with a demo dataset and no way to ask. It is
@@ -572,7 +503,7 @@ writing this was Paris, London and Berlin, and the answer was `ValueError: no
 point fell inside the bbox; nothing to draw` — accurate, and a dead end, with
 nothing wrong with the data.
 
-`editor.render.infer_bbox` frames the points, widened by a margin so the
+`render.infer_bbox` frames the points, widened by a margin so the
 outermost events are not sitting on the edge where the binning has half a cell
 of neighbours. A single point, or several at one address, gives a zero-extent
 box no projection can scale, so it is widened to a minimum span instead. An
@@ -659,7 +590,7 @@ of **points**.
 
 `read_choropleth_rows` and `parse_mapping` were `cli.py`'s private
 `_load_choropleth_rows` and `_parse_mapping`. **Moved, not copied** — the
-Editor needs exactly the same reading, and a second implementation of "what
+library needs exactly the same reading, and a second implementation of "what
 counts as a usable choropleth file" is two answers to one question. What
 changed in the move is the exception: a function that can only be called from
 a Click command is not a library function, so these raise `ValueError` and
@@ -704,7 +635,7 @@ files nothing is wrong with.
 
 `MapKind` gains `data_shape` and `data_option`, and `DATA_SHAPES` names the
 three. The guard checks that `data_shape` is one of them — a free-form string
-would let `"row"` through and the editor's input panel would fall to its
+would let `"row"` through and a caller's input panel would fall to its
 default branch, which is a map read by the wrong reader rather than an error —
 and that `data_option` is an option the Click command **really takes**, read
 off the command's parameters rather than its help text, because prose would

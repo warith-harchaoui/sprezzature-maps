@@ -92,7 +92,7 @@ _TILES: tuple[dict[str, str], ...] = tuple(
 
 #: The palette and the typographic base, shared by every page this package
 #: serves. Extracted from the gallery's own stylesheet on 2026-11-01, when the
-#: Editor needed the same tokens: two pages with two hand-kept copies of one
+#: editor needed the same tokens: two pages with two hand-kept copies of one
 #: palette is the same defect as the five hand-kept lists of three map kinds
 #: that `kinds.py` exists to end, in a different register.
 #:
@@ -107,7 +107,7 @@ THEME_CSS: str = f"""
     --fg-secondary: #6e6e73;
     --border: #e5e5ea;
     --card-bg: #fafafa;
-    --accent: #007aff;
+    --accent: #0088ff;
     --sans: {SANS_STACK};
     --serif: {SERIF_STACK};
     --mono: {MONO_STACK};

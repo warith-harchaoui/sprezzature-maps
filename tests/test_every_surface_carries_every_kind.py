@@ -178,7 +178,7 @@ def test_triggers_routes_every_kind(entry) -> None:
 def test_every_kind_declares_a_shape_that_exists(entry) -> None:
     """``data_shape`` has to be one of the three, not a typo of one.
 
-    A free-form string would let ``"row"`` through, and the editor's input
+    A free-form string would let ``"row"`` through, and a caller's input
     panel would then fall through to whatever its default branch is — which is
     a map drawn from the wrong reader rather than an error.
     """
@@ -213,7 +213,7 @@ def test_every_kind_names_the_keyword_its_renderer_takes(entry) -> None:
     The three generators each named their data parameter for their own shape —
     ``data``, ``config``, ``points`` — which is reasonable in isolation and
     leaves every caller dispatching on the kind.
-    :mod:`sprezzature_maps.editor.render` looks it up here instead, so it has
+    :mod:`sprezzature_maps.render` looks it up here instead, so it has
     no ``if kind ==`` in it.
 
     Introspected from the loaded generator rather than read from its

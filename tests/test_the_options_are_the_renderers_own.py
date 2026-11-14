@@ -1,7 +1,7 @@
 """
 The option registry must describe the renderers, not a memory of them.
 
-``sprezzature_maps/options.py`` exists so that the editor, the assistant and
+``sprezzature_maps/options.py`` exists so that an editor, the assistant and
 any automatic loop stop carrying their own lists of what the renderers accept.
 That only helps while the list is true. A registry that has drifted from the
 signatures is worse than none: it proposes a keyword that raises three layers

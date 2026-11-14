@@ -9,7 +9,7 @@ coloured by which side holds it, plus markers for forces, events, and
 infrastructure. This module reverse-engineers that plate structure (works
 out its underlying recipe by studying real examples, rather than
 following a published specification, since professional cartography
-studios do not publish one) into a single generator that takes
+houses do not publish one) into a single generator that takes
 parameters instead of being redrawn by hand each time. From one YAML
 configuration file (YAML is a human-readable text format for structured
 data) describing a region, a map projection, thematic "areas of control"
@@ -4610,7 +4610,7 @@ _VALUE_SOURCES: dict[str, Any] = {
 #: greyscale and under colour-vision deficiency.
 _VALUE_RAMP: tuple[tuple[float, str], ...] = (
     (0.00, "#EAF3FF"),
-    (0.62, "#007AFF"),
+    (0.62, "#0088FF"),
     (1.00, "#0A4DA0"),
 )
 
@@ -10277,7 +10277,7 @@ def make_situation_map(
     """Render a situation map and write it to ``out``.
 
     The standard ``make_<kind>`` entry the figure registry dispatches to, so
-    ``make-figure situation_map`` and the editor work like every other figure.
+    ``make-figure situation_map`` works like every other figure.
     With no ``config`` it renders the bundled Western-Europe demo (a neutral
     reference basemap, no invented thematic layers); pass a config dict -- the
     same schema the ``--config`` YAML uses -- to build a real analysis map.
