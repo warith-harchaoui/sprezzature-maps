@@ -1,7 +1,7 @@
 """
 The client interface to a language model (LLM) or vision-language model
-(VLM, a model that can also look at an image) used by ``make-map
-improve``, plus its real implementation: a thin wrapper over
+(VLM, a model that can also look at an image), plus its real
+implementation: a thin wrapper over
 best_engine_ai_helper.llm.chat(). Nothing in this package calls Ollama (a
 tool for running language models on your own machine) or any other backend
 directly; best-engine-ai-helper resolves which model and backend to use,
