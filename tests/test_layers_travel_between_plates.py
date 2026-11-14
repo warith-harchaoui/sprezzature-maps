@@ -143,3 +143,73 @@ def test_the_cli_exports_and_imports(tmp_path: Path) -> None:
     imported = runner.invoke(main, ["import", str(out)])
     assert imported.exit_code == 0, imported.output
     assert yaml.safe_load(imported.output)["events"] == _PLATE["events"]
+
+
+def test_a_layer_in_another_crs_is_refused_not_read_as_degrees(tmp_path: Path) -> None:
+    """A Lambert-93 file read as degrees lands nowhere, without a word."""
+    import pytest
+
+    from sprezzature_maps.gis import read_features
+
+    lambert = {
+        "type": "FeatureCollection",
+        "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::2154"}},
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [652000, 6862000]},
+                "properties": {"name": "Paris"},
+            }
+        ],
+    }
+    path = tmp_path / "paris.geojson"
+    path.write_text(json.dumps(lambert), encoding="utf-8")
+    with pytest.raises(ValueError, match="EPSG::2154"):
+        read_features(path)
+
+
+def test_a_features_own_id_survives_the_trip(tmp_path: Path) -> None:
+    from sprezzature_maps.gis import read_features
+
+    path = tmp_path / "ids.geojson"
+    path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "id": "cp-7",
+                        "geometry": {"type": "Point", "coordinates": [22.8, 15.0]},
+                        "properties": {"name": "checkpoint"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    events = import_layers(read_features(path))["events"]
+    assert events[0]["id"] == "cp-7"
+    again = export_layers({"events": events})["features"][0]["properties"]
+    assert again["id"] == "cp-7"
+
+
+def test_exported_zones_wind_by_the_right_hand_rule() -> None:
+    clockwise = [[[23, 13], [23, 14], [24, 14], [24, 13], [23, 13]]]
+    plate = {
+        "areas_of_control": {
+            "source": {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Polygon", "coordinates": clockwise},
+                        "properties": {"actor": "X", "confidence": "reported"},
+                    }
+                ],
+            }
+        }
+    }
+    ring = export_layers(plate)["features"][0]["geometry"]["coordinates"][0]
+    area = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1], strict=True))
+    assert area > 0, "the exterior ring must run counter-clockwise (RFC 7946)"

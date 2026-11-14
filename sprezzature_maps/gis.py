@@ -131,7 +131,7 @@ def export_layers(cfg: dict[str, Any], base: Path | str = ".") -> dict[str, Any]
     aoc = cfg.get("areas_of_control") or {}
     for feat in _load_features(aoc.get("source"), base):
         props = dict(feat.get("properties") or {})
-        features.append(_feature("area", feat["geometry"], props))
+        features.append(_feature("area", _right_hand(feat["geometry"]), props))
     meta = {k: cfg[k] for k in _PROVENANCE_KEYS if cfg.get(k)}
     bbox = (cfg.get("region") or {}).get("bbox")
     if bbox:
@@ -268,12 +268,92 @@ def read_features(path: Path | str) -> list[dict[str, Any]]:
     suffix = path.suffix.lower()
     if suffix in (".geojson", ".json"):
         data = json.loads(path.read_text(encoding="utf-8"))
+        _refuse_foreign_crs(data, path.name)
         if data.get("type") == "Feature":
-            return [data]
-        return list(data.get("features", []))
+            return [_keep_id(data)]
+        return [_keep_id(f) for f in data.get("features", [])]
     if suffix == ".kml":
         return from_kml(path.read_text(encoding="utf-8"))
     raise ValueError(f"{path.name}: a layer file is .geojson, .json or .kml")
+
+
+#: The names a pre-2016 GeoJSON ``crs`` member may give WGS84 longitude and
+#: latitude, the only coordinates RFC 7946 allows.
+_WGS84_NAMES = {
+    "urn:ogc:def:crs:ogc:1.3:crs84",
+    "urn:ogc:def:crs:epsg::4326",
+    "epsg:4326",
+    "crs84",
+    "http://www.opengis.net/def/crs/ogc/1.3/crs84",
+}
+
+
+def _refuse_foreign_crs(data: dict[str, Any], name: str) -> None:
+    """Refuse a file whose ``crs`` member says its coordinates are not degrees.
+
+    RFC 7946 removed the ``crs`` member: a GeoJSON file is WGS84 longitude
+    and latitude. Files from older tools still carry one, and a layer in
+    Lambert-93 (EPSG:2154) read as degrees lands in the sea off Africa, or
+    nowhere, without a word. A plate drawn from it would look finished.
+
+    >>> _refuse_foreign_crs({"crs": {"type": "name", "properties": {"name": "EPSG:2154"}}}, "x.geojson")
+    Traceback (most recent call last):
+    ...
+    ValueError: x.geojson declares its coordinates in EPSG:2154, not WGS84 longitude and latitude; reproject it (for instance ogr2ogr -t_srs EPSG:4326) before using it here
+    >>> _refuse_foreign_crs({"crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}}, "x.geojson")
+    """
+    crs = data.get("crs")
+    if not crs:
+        return
+    declared = str((crs.get("properties") or {}).get("name", "")).strip()
+    if declared.lower() in _WGS84_NAMES:
+        return
+    raise ValueError(
+        f"{name} declares its coordinates in {declared or 'an unnamed CRS'}, not WGS84 "
+        "longitude and latitude; reproject it (for instance ogr2ogr -t_srs EPSG:4326) "
+        "before using it here"
+    )
+
+
+def _keep_id(feature: dict[str, Any]) -> dict[str, Any]:
+    """Carry a Feature's own ``id`` into its properties, so it survives the trip.
+
+    GeoJSON puts an object's identifier beside ``properties``, and the plate
+    reads only properties: an ``id`` a GIS gave every object was dropped on
+    the way in, so the next export could no longer be joined to its source.
+    """
+    if "id" in feature and "id" not in (feature.get("properties") or {}):
+        return {**feature, "properties": {**(feature.get("properties") or {}), "id": feature["id"]}}
+    return feature
+
+
+def _ring_area(ring: list[list[float]]) -> float:
+    """Signed shoelace area: positive when the ring runs counter-clockwise."""
+    return 0.5 * sum(
+        x0 * y1 - x1 * y0 for (x0, y0, *_), (x1, y1, *_) in zip(ring, ring[1:] + ring[:1], strict=True)
+    )
+
+
+def _right_hand(geometry: dict[str, Any]) -> dict[str, Any]:
+    """Wind polygons as RFC 7946 asks: exterior counter-clockwise, holes clockwise.
+
+    >>> square_cw = [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]
+    >>> _right_hand({"type": "Polygon", "coordinates": square_cw})["coordinates"][0][1]
+    [1, 0]
+    """
+    def fix(rings: list[Any]) -> list[Any]:
+        out = []
+        for i, ring in enumerate(rings):
+            ccw = _ring_area([list(p) for p in ring]) > 0
+            out.append(list(ring) if ccw == (i == 0) else list(reversed(ring)))
+        return out
+
+    gtype = geometry.get("type")
+    if gtype == "Polygon":
+        return {**geometry, "coordinates": fix(geometry["coordinates"])}
+    if gtype == "MultiPolygon":
+        return {**geometry, "coordinates": [fix(p) for p in geometry["coordinates"]]}
+    return geometry
 
 
 def to_kml(collection: dict[str, Any]) -> str:
